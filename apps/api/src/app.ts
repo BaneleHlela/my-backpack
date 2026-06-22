@@ -1,0 +1,66 @@
+// Express app entry point — wires up all middleware, routes, and connects to DB
+import 'dotenv/config';
+import express, { Application } from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import passport from 'passport';
+import rateLimit from 'express-rate-limit';
+
+import { connectDB } from './config/db';
+import { configurePassport } from './config/passport';
+import authRouter from './modules/auth/auth.routes';
+import profileRouter from './modules/profile/profile.routes';
+
+const app: Application = express();
+
+// Security
+app.use(helmet());
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL ?? 'http://localhost:5173',
+    credentials: true,
+  })
+);
+
+// Parsing
+app.use(express.json());
+app.use(cookieParser());
+
+// Passport (no sessions — JWT only)
+configurePassport();
+app.use(passport.initialize());
+
+// Rate limiting on auth routes
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please try again later' },
+});
+app.use('/api/auth', authLimiter);
+
+// Routes
+app.use('/api/auth', authRouter);
+app.use('/api/profiles', profileRouter);
+
+// Health check
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
+const PORT = parseInt(process.env.PORT ?? '5000', 10);
+
+connectDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`API server running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to connect to MongoDB:', err);
+    process.exit(1);
+  });
+
+export default app;

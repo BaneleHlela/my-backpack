@@ -1,0 +1,12 @@
+{
+  "name": "@my-backpack/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./types/account": "./types/account.ts",
+    "./types/profile": "./types/profile.ts",
+    "./types/auth": "./types/auth.ts"
+  }
+}
