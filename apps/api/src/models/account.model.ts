@@ -15,6 +15,10 @@ export interface IAccountDocument extends Document {
   profiles: Types.ObjectId[];
   activeProfile?: Types.ObjectId;
   isEmailVerified: boolean;
+  verificationToken?: string;
+  verificationTokenExpiresAt?: Date;
+  passwordResetToken?: string;
+  passwordResetExpiresAt?: Date;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidate: string): Promise<boolean>;
@@ -36,6 +40,10 @@ const accountSchema = new Schema<IAccountDocument>(
     profiles: [{ type: Schema.Types.ObjectId, ref: 'Profile' }],
     activeProfile: { type: Schema.Types.ObjectId, ref: 'Profile' },
     isEmailVerified: { type: Boolean, default: false },
+    verificationToken: { type: String },
+    verificationTokenExpiresAt: { type: Date },
+    passwordResetToken: { type: String },
+    passwordResetExpiresAt: { type: Date },
   },
   { timestamps: true }
 );

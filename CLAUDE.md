@@ -49,7 +49,7 @@ my-backpack/
 - [x] CLAUDE.md created
 - [x] Google Cloud Storage bucket set up
 - [x] Backend auth system (Account + Profile models, JWT, Passport, OAuth2 scaffold)
-- [ ] Web auth UI (login, register, profile selector)
+- [ ] Web auth UI (login, register, forgot password, reset password, email verification)
 - [ ] Mobile auth UI
 - [ ] Profile management screens (create, edit, delete, PIN)
 - [ ] Vocab mini-app

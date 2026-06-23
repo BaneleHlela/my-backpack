@@ -7,6 +7,13 @@ import {
   refreshAccessToken,
   upsertOAuthAccount,
   getProfilesForAccount,
+  sendVerificationCode,
+  verifyEmail,
+  forgotPassword,
+  resetPassword,
+  deleteAccount,
+  resendVerificationEmail,
+  EmailNotVerifiedError,
 } from './auth.service';
 import { sendSuccess, sendError } from '../../utils/response';
 import { signPartialToken } from '../../utils/jwt';
@@ -38,8 +45,7 @@ export async function register(req: Request, res: Response): Promise<void> {
 
   try {
     const result = await registerLocal({ email, password, displayName, ageGroup });
-    setRefreshCookie(res, result.refreshToken);
-    sendSuccess(res, { accessToken: result.accessToken, profile: result.profile }, 201);
+    sendSuccess(res, { email: result.email }, 201);
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Registration failed');
   }
@@ -58,6 +64,10 @@ export async function login(req: Request, res: Response): Promise<void> {
     setRefreshCookie(res, result.refreshToken);
     sendSuccess(res, { partialToken: result.partialToken, profiles: result.profiles });
   } catch (err) {
+    if (err instanceof EmailNotVerifiedError) {
+      res.status(403).json({ needsVerification: true, email: err.email });
+      return;
+    }
     sendError(res, err instanceof Error ? err.message : 'Login failed', 401);
   }
 }
@@ -100,6 +110,91 @@ export async function refresh(req: Request, res: Response): Promise<void> {
     sendSuccess(res, { accessToken: result.accessToken });
   } catch {
     sendError(res, 'Invalid or expired refresh token', 401);
+  }
+}
+
+export async function sendVerificationHandler(req: Request, res: Response): Promise<void> {
+  const accountId = req.account?._id.toString();
+  if (!accountId) {
+    sendError(res, 'Unauthorized', 401);
+    return;
+  }
+  try {
+    await sendVerificationCode(accountId);
+    sendSuccess(res, { message: 'Verification code sent' });
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Failed to send verification code');
+  }
+}
+
+export async function verifyEmailHandler(req: Request, res: Response): Promise<void> {
+  const { token } = req.body as { token: string };
+  if (!token) {
+    sendError(res, 'token is required');
+    return;
+  }
+  try {
+    await verifyEmail(token);
+    sendSuccess(res, { message: 'Email verified successfully' });
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Verification failed', 400);
+  }
+}
+
+export async function forgotPasswordHandler(req: Request, res: Response): Promise<void> {
+  const { email } = req.body as { email: string };
+  if (!email) {
+    sendError(res, 'email is required');
+    return;
+  }
+  try {
+    await forgotPassword(email);
+    sendSuccess(res, { message: 'If that email exists, a reset link has been sent' });
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Request failed');
+  }
+}
+
+export async function resetPasswordHandler(req: Request, res: Response): Promise<void> {
+  const { token, password } = req.body as { token: string; password: string };
+  if (!token || !password) {
+    sendError(res, 'token and password are required');
+    return;
+  }
+  try {
+    await resetPassword(token, password);
+    sendSuccess(res, { message: 'Password reset successfully' });
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Reset failed', 400);
+  }
+}
+
+export async function deleteAccountHandler(req: Request, res: Response): Promise<void> {
+  const accountId = req.account?._id.toString();
+  if (!accountId) {
+    sendError(res, 'Unauthorized', 401);
+    return;
+  }
+  try {
+    await deleteAccount(accountId);
+    res.clearCookie(REFRESH_COOKIE, { httpOnly: true, sameSite: 'strict' });
+    sendSuccess(res, { message: 'Account deleted' });
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Delete failed');
+  }
+}
+
+export async function resendVerificationEmailHandler(req: Request, res: Response): Promise<void> {
+  const { email } = req.body as { email: string };
+  if (!email) {
+    sendError(res, 'email is required');
+    return;
+  }
+  try {
+    await resendVerificationEmail(email);
+    sendSuccess(res, { message: 'If that email exists and is unverified, a verification link has been sent.' });
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Failed to send verification email');
   }
 }
 

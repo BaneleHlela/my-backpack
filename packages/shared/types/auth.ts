@@ -8,6 +8,7 @@ export interface ProfileSummary {
   avatarUrl?: string;
   ageGroup: AgeGroup;
   isOwner: boolean;
+  hasPin?: boolean;
 }
 
 // POST /api/auth/register
@@ -19,8 +20,11 @@ export interface RegisterRequest {
 }
 
 export interface RegisterResponse {
-  accessToken: string;
-  profile: ProfileSummary;
+  email: string;
+}
+
+export interface ResendVerificationRequest {
+  email: string;
 }
 
 // POST /api/auth/login

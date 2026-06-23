@@ -1,12 +1,17 @@
 // Business logic for auth: register, login, profile selection, token refresh, OAuth upsert
+import crypto from 'crypto';
 import Account, { IAccountDocument } from '../../models/account.model';
 import Profile, { IProfileDocument, AgeGroup } from '../../models/profile.model';
+import {
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+  sendWelcomeEmail,
+} from '../../utils/email';
 import {
   signPartialToken,
   signFullToken,
   signRefreshToken,
   verifyRefreshToken,
-  FullTokenPayload,
 } from '../../utils/jwt';
 
 export interface ProfileSummary {
@@ -15,6 +20,7 @@ export interface ProfileSummary {
   avatarUrl?: string;
   ageGroup: AgeGroup;
   isOwner: boolean;
+  hasPin: boolean;
 }
 
 export interface RegisterInput {
@@ -24,10 +30,17 @@ export interface RegisterInput {
   ageGroup: AgeGroup;
 }
 
+export class EmailNotVerifiedError extends Error {
+  email: string;
+  constructor(email: string) {
+    super('EMAIL_NOT_VERIFIED');
+    this.name = 'EmailNotVerifiedError';
+    this.email = email;
+  }
+}
+
 export interface RegisterResult {
-  accessToken: string;
-  refreshToken: string;
-  profile: ProfileSummary;
+  email: string;
 }
 
 export interface LoginResult {
@@ -47,6 +60,7 @@ function toProfileSummary(profile: IProfileDocument): ProfileSummary {
     avatarUrl: profile.avatarUrl,
     ageGroup: profile.ageGroup,
     isOwner: profile.isOwner,
+    hasPin: !!profile.pin,
   };
 }
 
@@ -69,18 +83,17 @@ export async function registerLocal(input: RegisterInput): Promise<RegisterResul
   });
   await profile.save();
 
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  account.verificationToken = verificationToken;
+  account.verificationTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   account.profiles.push(profile._id);
   account.activeProfile = profile._id;
   await account.save();
 
-  const accessToken = signFullToken({
-    accountId: account._id.toString(),
-    profileId: profile._id.toString(),
-    ageGroup: profile.ageGroup,
-  });
-  const refreshToken = signRefreshToken({ accountId: account._id.toString() });
+  const verificationUrl = `${process.env.CLIENT_URL ?? 'http://localhost:5173'}/verify-email?token=${verificationToken}`;
+  await sendVerificationEmail(input.email, verificationUrl);
 
-  return { accessToken, refreshToken, profile: toProfileSummary(profile) };
+  return { email: input.email };
 }
 
 export async function loginLocal(
@@ -89,9 +102,13 @@ export async function loginLocal(
 ): Promise<LoginResult> {
   const account = await Account.findOne({ email: email.toLowerCase() });
   if (!account) throw new Error('Invalid email or password');
-
+  
   const valid = await account.comparePassword(password);
   if (!valid) throw new Error('Invalid email or password');
+
+  if (!account.isEmailVerified) {
+    throw new EmailNotVerifiedError(account.email ?? email);
+  }
 
   const profiles = await Profile.find({ _id: { $in: account.profiles } });
 
@@ -213,4 +230,86 @@ export async function getProfilesForAccount(accountId: string): Promise<ProfileS
   if (!account) throw new Error('Account not found');
   const profiles = await Profile.find({ _id: { $in: account.profiles } });
   return profiles.map(toProfileSummary);
+}
+
+export async function sendVerificationCode(accountId: string): Promise<void> {
+  const account = await Account.findById(accountId);
+  if (!account) throw new Error('Account not found');
+  if (!account.email) throw new Error('Account has no email address');
+  if (account.isEmailVerified) throw new Error('Email is already verified');
+
+  const token = crypto.randomBytes(32).toString('hex');
+  account.verificationToken = token;
+  account.verificationTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  await account.save();
+
+  const verificationUrl = `${process.env.CLIENT_URL ?? 'http://localhost:5173'}/auth/verify-email?token=${token}`;
+  await sendVerificationEmail(account.email, verificationUrl);
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  const account = await Account.findOne({
+    verificationToken: token,
+    verificationTokenExpiresAt: { $gt: new Date() },
+  });
+
+  if (!account) throw new Error('Invalid or expired verification token');
+
+  account.isEmailVerified = true;
+  account.verificationToken = undefined;
+  account.verificationTokenExpiresAt = undefined;
+  await account.save();
+
+  if (account.email) {
+    const ownerProfile = await Profile.findOne({ accountId: account._id, isOwner: true });
+    // await sendWelcomeEmail(account.email, ownerProfile?.displayName ?? 'there');
+  }
+}
+
+export async function resendVerificationEmail(email: string): Promise<void> {
+  const account = await Account.findOne({ email: email.toLowerCase() });
+  if (!account?.email || account.isEmailVerified) return; // silent — avoid enumeration
+
+  const token = crypto.randomBytes(32).toString('hex');
+  account.verificationToken = token;
+  account.verificationTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  await account.save();
+
+  const verificationUrl = `${process.env.CLIENT_URL ?? 'http://localhost:5173'}/verify-email?token=${token}`;
+  await sendVerificationEmail(account.email, verificationUrl);
+}
+
+export async function forgotPassword(email: string): Promise<void> {
+  const account = await Account.findOne({ email: email.toLowerCase() });
+  if (!account?.email) return; // silent — avoid user enumeration
+
+  const token = crypto.randomBytes(32).toString('hex');
+  account.passwordResetToken = token;
+  account.passwordResetExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  await account.save();
+
+  const resetUrl = `${process.env.CLIENT_URL ?? 'http://localhost:5173'}/auth/reset-password?token=${token}`;
+  await sendPasswordResetEmail(account.email, resetUrl);
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  const account = await Account.findOne({
+    passwordResetToken: token,
+    passwordResetExpiresAt: { $gt: new Date() },
+  });
+
+  if (!account) throw new Error('Invalid or expired reset token');
+
+  account.password = newPassword; // pre-save hook hashes it
+  account.passwordResetToken = undefined;
+  account.passwordResetExpiresAt = undefined;
+  await account.save();
+}
+
+export async function deleteAccount(accountId: string): Promise<void> {
+  const account = await Account.findById(accountId);
+  if (!account) throw new Error('Account not found');
+
+  await Profile.deleteMany({ _id: { $in: account.profiles } });
+  await account.deleteOne();
 }

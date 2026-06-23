@@ -8,6 +8,12 @@ import {
   logout,
   refresh,
   handleOAuthCallback,
+  sendVerificationHandler,
+  verifyEmailHandler,
+  forgotPasswordHandler,
+  resetPasswordHandler,
+  deleteAccountHandler,
+  resendVerificationEmailHandler,
 } from './auth.controller';
 import { requireAccount } from './auth.middleware';
 import { IAccountDocument } from '../../models/account.model';
@@ -21,6 +27,18 @@ router.post('/login', login);
 router.post('/select-profile', requireAccount, selectProfileHandler);
 router.post('/logout', logout);
 router.post('/refresh', refresh);
+
+// Email verification
+router.post('/send-verification', requireAccount, sendVerificationHandler);
+router.post('/resend-verification', resendVerificationEmailHandler);
+router.post('/verify-email', verifyEmailHandler);
+
+// Password reset
+router.post('/forgot-password', forgotPasswordHandler);
+router.post('/reset-password', resetPasswordHandler);
+
+// Account deletion
+router.delete('/account', requireAccount, deleteAccountHandler);
 
 // Google OAuth
 router.get(
