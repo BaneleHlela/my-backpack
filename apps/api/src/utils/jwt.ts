@@ -1,6 +1,6 @@
-// JWT signing and verification for partial tokens, full tokens, and refresh tokens
+﻿// JWT signing and verification for partial tokens, full tokens, and refresh tokens
 import jwt from 'jsonwebtoken';
-import { AgeGroup } from '../models/profile.model';
+import { AgeGroup } from '../models/core/profile.model';
 
 export interface PartialTokenPayload {
   accountId: string;

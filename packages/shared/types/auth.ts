@@ -1,6 +1,11 @@
 // Request and response types for all auth API endpoints
 import { AgeGroup } from './profile';
 
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+}
+
 // Shown in the profile selector after login
 export interface ProfileSummary {
   id: string;
@@ -8,6 +13,7 @@ export interface ProfileSummary {
   avatarUrl?: string;
   ageGroup: AgeGroup;
   isOwner: boolean;
+  isSetupComplete: boolean;
   hasPin?: boolean;
 }
 

@@ -3,10 +3,6 @@ import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import type { AppStore } from '../app/store';
 import { logout, setAccessToken } from '../features/auth/authSlice';
 
-interface RefreshResponse {
-  accessToken: string;
-}
-
 interface RetryableRequest extends InternalAxiosRequestConfig {
   _retry?: boolean;
 }
@@ -23,9 +19,10 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const accessToken = store?.getState().auth.accessToken;
-  if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`;
+  const authState = store?.getState().auth;
+  const token = authState?.accessToken || authState?.partialToken;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
@@ -38,13 +35,14 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
-        const { data } = await axios.post<RefreshResponse>(
+        const { data } = await axios.post<{ success: boolean; data: { accessToken: string } }>(
           `${import.meta.env.VITE_API_URL}/auth/refresh`,
           {},
           { withCredentials: true }
         );
-        store?.dispatch(setAccessToken(data.accessToken));
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        const newToken = data.data.accessToken;
+        store?.dispatch(setAccessToken(newToken));
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return api(originalRequest);
       } catch {
         store?.dispatch(logout());

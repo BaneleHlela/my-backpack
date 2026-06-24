@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { Mail, Lock, Loader2 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { ASSETS } from '@my-backpack/shared';
 import Input from '../components/auth/Input';
 import SocialLoginButtons from '../components/auth/SocialLoginButtons';
 import { login, clearError } from '../features/auth/authSlice';

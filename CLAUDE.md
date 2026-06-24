@@ -49,9 +49,12 @@ my-backpack/
 - [x] CLAUDE.md created
 - [x] Google Cloud Storage bucket set up
 - [x] Backend auth system (Account + Profile models, JWT, Passport, OAuth2 scaffold)
-- [ ] Web auth UI (login, register, forgot password, reset password, email verification)
+- [x] Web auth UI (login, register, forgot password, reset password, email verification)
+- [x] Profile setup flow (ProfileSetupPage with personal + education details, isSetupComplete flag)
+- [x] Dashboard skeleton (greeting, mini-app cards, profile dropdown)
+- [x] Profile module API (CRUD, setup, PIN — profile.service/controller/routes)
 - [ ] Mobile auth UI
-- [ ] Profile management screens (create, edit, delete, PIN)
+- [ ] Profile management screens (edit profile, manage profiles under an account)
 - [ ] Vocab mini-app
 
 
@@ -75,6 +78,38 @@ One Account handles authentication (email, password, OAuth). An Account can have
 **Account** — authentication only (email, password, OAuth providers, profile refs)
 
 **Profile** — app usage (displayName, ageGroup, education, preferences, progress, optional PIN)
+
+## Model Structure
+
+Models live under `apps/api/src/models/` and are organised into three layers:
+
+```
+models/
+├── core/                        ← app-wide foundational models
+│   ├── account.model.ts
+│   ├── profile.model.ts
+│   ├── subject.model.ts
+│   ├── topic.model.ts
+│   └── miniApp.model.ts
+├── learning/                    ← shared across all mini-apps
+│   ├── learningRecord.model.ts
+│   ├── adaptiveProfile.model.ts
+│   ├── quizSession.model.ts
+│   └── answerRecord.model.ts
+└── apps/
+    └── language/
+        └── vocabulary/
+            ├── term.model.ts
+            ├── definition.model.ts
+            ├── question.model.ts
+            ├── termBucket.model.ts
+            └── bucketEntry.model.ts
+```
+
+**Rule of thumb for placing new models:**
+- Exists before any learning starts → `core/`
+- Tracks learning but subject-agnostic → `learning/`
+- Specific to one mini-app's content → `apps/<subject>/<miniapp>/`
 
 ## Education Levels
 

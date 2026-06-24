@@ -1,6 +1,15 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
-import type { IAccount, ProfileSummary, LoginResponse, RegisterResponse, SelectProfileResponse } from '@my-backpack/shared';
+import type {
+  IAccount,
+  ProfileSummary,
+  LoginResponse,
+  RegisterResponse,
+  SelectProfileResponse,
+  ApiResponse,
+  IProfile,
+  ProfileSetupDto,
+} from '@my-backpack/shared';
 import type { AxiosError } from 'axios';
 import axios from 'axios';
 import api from '../../lib/axios';
@@ -8,10 +17,11 @@ import api from '../../lib/axios';
 interface AuthState {
   account: IAccount | null;
   profiles: ProfileSummary[];
-  activeProfile: ProfileSummary | null;
+  activeProfile: IProfile | null;
   partialToken: string | null;
   accessToken: string | null;
   isLoading: boolean;
+  isLoadingProfile: boolean;
   error: string | null;
   successMessage: string | null;
   isCheckingAuth: boolean;
@@ -25,6 +35,7 @@ const initialState: AuthState = {
   partialToken: null,
   accessToken: null,
   isLoading: false,
+  isLoadingProfile: false,
   error: null,
   successMessage: null,
   isCheckingAuth: true,
@@ -51,12 +62,13 @@ function resetState(state: AuthState) {
   state.error = null;
   state.successMessage = null;
   state.isLoading = false;
+  state.isLoadingProfile = false;
 }
 
 // --- Async thunks ---
 
-export const checkAuth = createAsyncThunk<RefreshResponse>('auth/checkAuth', async () => {
-  const { data } = await axios.post<RefreshResponse>(
+export const checkAuth = createAsyncThunk<ApiResponse<RefreshResponse>>('auth/checkAuth', async () => {
+  const { data } = await axios.post<ApiResponse<RefreshResponse>>(
     `${import.meta.env.VITE_API_URL}/auth/refresh`,
     {},
     { withCredentials: true }
@@ -64,12 +76,35 @@ export const checkAuth = createAsyncThunk<RefreshResponse>('auth/checkAuth', asy
   return data;
 });
 
+export const fetchActiveProfile = createAsyncThunk(
+  'auth/fetchActiveProfile',
+  async (_, { rejectWithValue }) => {
+    try {
+      const { data } = await api.get<ApiResponse<IProfile>>('/profiles/me');
+      return data.data;
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error, 'Failed to load profile'));
+    }
+  }
+);
+
+export const completeProfileSetup = createAsyncThunk(
+  'auth/completeProfileSetup',
+  async (payload: ProfileSetupDto, { rejectWithValue }) => {
+    try {
+      const { data } = await api.patch<ApiResponse<IProfile>>('/profiles/me/setup', payload);
+      return data.data;
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error, 'Setup failed'));
+    }
+  }
+);
 
 export const login = createAsyncThunk(
   'auth/login',
   async ({ email, password }: { email: string; password: string }, { rejectWithValue }) => {
     try {
-      const { data } = await api.post<LoginResponse>('/auth/login', { email, password });
+      const { data } = await api.post<ApiResponse<LoginResponse>>('/auth/login', { email, password });
       return data;
     } catch (error) {
       const axiosError = error as import('axios').AxiosError<{ message?: string; needsVerification?: boolean; email?: string }>;
@@ -88,7 +123,7 @@ export const register = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const { data } = await api.post<RegisterResponse>('/auth/register', {
+      const { data } = await api.post<ApiResponse<RegisterResponse>>('/auth/register', {
         email,
         password,
         displayName,
@@ -105,7 +140,7 @@ export const selectProfile = createAsyncThunk(
   'auth/selectProfile',
   async ({ profileId, pin }: { profileId: string; pin?: string }, { rejectWithValue }) => {
     try {
-      const { data } = await api.post<SelectProfileResponse>('/auth/select-profile', { profileId, pin });
+      const { data } = await api.post<ApiResponse<SelectProfileResponse>>('/auth/select-profile', { profileId, pin });
       return data;
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error, 'Failed to select profile'));
@@ -181,7 +216,7 @@ const authSlice = createSlice({
     setProfiles(state, action: PayloadAction<ProfileSummary[]>) {
       state.profiles = action.payload;
     },
-    setActiveProfile(state, action: PayloadAction<ProfileSummary | null>) {
+    setActiveProfile(state, action: PayloadAction<IProfile | null>) {
       state.activeProfile = action.payload;
     },
     setPartialToken(state, action: PayloadAction<string | null>) {
@@ -211,15 +246,39 @@ const authSlice = createSlice({
       })
       .addCase(checkAuth.fulfilled, (state, action) => {
         state.isCheckingAuth = false;
-        if (action.payload.accessToken) {
-          state.accessToken = action.payload.accessToken;
+        if (action.payload.data.accessToken) {
+          state.accessToken = action.payload.data.accessToken;
           state.isAuthenticated = true;
-        } else if (action.payload.partialToken) {
-          state.partialToken = action.payload.partialToken;
+        } else if (action.payload.data.partialToken) {
+          state.partialToken = action.payload.data.partialToken;
         }
       })
       .addCase(checkAuth.rejected, (state) => {
         state.isCheckingAuth = false;
+      })
+      // fetchActiveProfile
+      .addCase(fetchActiveProfile.pending, (state) => {
+        state.isLoadingProfile = true;
+      })
+      .addCase(fetchActiveProfile.fulfilled, (state, action) => {
+        state.isLoadingProfile = false;
+        state.activeProfile = action.payload;
+      })
+      .addCase(fetchActiveProfile.rejected, (state) => {
+        state.isLoadingProfile = false;
+      })
+      // completeProfileSetup
+      .addCase(completeProfileSetup.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(completeProfileSetup.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.activeProfile = action.payload;
+      })
+      .addCase(completeProfileSetup.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
       })
       // login
       .addCase(login.pending, (state) => {
@@ -228,8 +287,8 @@ const authSlice = createSlice({
       })
       .addCase(login.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.partialToken = action.payload.partialToken;
-        state.profiles = action.payload.profiles;
+        state.partialToken = action.payload.data.partialToken;
+        state.profiles = action.payload.data.profiles;
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
@@ -260,11 +319,9 @@ const authSlice = createSlice({
       })
       .addCase(selectProfile.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.accessToken = action.payload.accessToken;
+        state.accessToken = action.payload.data.accessToken;
         state.isAuthenticated = true;
         state.partialToken = null;
-        const profile = state.profiles.find((p) => p.id === action.meta.arg.profileId);
-        if (profile) state.activeProfile = profile;
       })
       .addCase(selectProfile.rejected, (state, action) => {
         state.isLoading = false;

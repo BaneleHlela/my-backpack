@@ -1,7 +1,7 @@
-// Business logic for auth: register, login, profile selection, token refresh, OAuth upsert
+﻿// Business logic for auth: register, login, profile selection, token refresh, OAuth upsert
 import crypto from 'crypto';
-import Account, { IAccountDocument } from '../../models/account.model';
-import Profile, { IProfileDocument, AgeGroup } from '../../models/profile.model';
+import Account, { IAccountDocument } from '../../models/core/account.model';
+import Profile, { IProfileDocument, AgeGroup } from '../../models/core/profile.model';
 import {
   sendVerificationEmail,
   sendPasswordResetEmail,
@@ -20,6 +20,7 @@ export interface ProfileSummary {
   avatarUrl?: string;
   ageGroup: AgeGroup;
   isOwner: boolean;
+  isSetupComplete: boolean;
   hasPin: boolean;
 }
 
@@ -60,6 +61,7 @@ function toProfileSummary(profile: IProfileDocument): ProfileSummary {
     avatarUrl: profile.avatarUrl,
     ageGroup: profile.ageGroup,
     isOwner: profile.isOwner,
+    isSetupComplete: profile.isSetupComplete,
     hasPin: !!profile.pin,
   };
 }
@@ -111,6 +113,7 @@ export async function loginLocal(
   }
 
   const profiles = await Profile.find({ _id: { $in: account.profiles } });
+  console.log('loginLocal profiles', profiles.map((p) => p.displayName));
 
   const partialToken = signPartialToken({ accountId: account._id.toString() });
   const refreshToken = signRefreshToken({ accountId: account._id.toString() });

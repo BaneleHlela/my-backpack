@@ -2,11 +2,17 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { PlusCircle, LogOut, Loader2 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { ASSETS } from '@my-backpack/shared';
 import type { ProfileSummary } from '@my-backpack/shared';
 import ProfileCard from '../components/auth/ProfileCard';
 import PinModal from '../components/auth/PinModal';
-import { selectProfile, logoutAsync, clearError } from '../features/auth/authSlice';
+import {
+  selectProfile,
+  fetchActiveProfile,
+  logoutAsync,
+  clearError,
+} from '../features/auth/authSlice';
 import type { AppDispatch, RootState } from '../app/store';
 
 export default function SelectProfilePage() {
@@ -14,8 +20,20 @@ export default function SelectProfilePage() {
   const [pinError, setPinError] = useState<string | null>(null);
 
   const dispatch = useDispatch<AppDispatch>();
+  const navigate = useNavigate();
   const { profiles, isLoading, error } = useSelector((state: RootState) => state.auth);
   const { isDarkMode } = useSelector((state: RootState) => state.theme);
+
+  const doSelectAndNavigate = async (profileId: string, pin?: string) => {
+    const result = await dispatch(selectProfile({ profileId, pin }));
+    if (!selectProfile.fulfilled.match(result)) return;
+
+    const profileResult = await dispatch(fetchActiveProfile());
+    if (fetchActiveProfile.fulfilled.match(profileResult)) {
+      const destination = profileResult.payload.isSetupComplete ? '/dashboard' : '/profile-setup';
+      navigate(destination, { replace: true });
+    }
+  };
 
   const handleProfileClick = (profile: ProfileSummary) => {
     dispatch(clearError());
@@ -23,7 +41,7 @@ export default function SelectProfilePage() {
       setPendingProfile(profile);
       setPinError(null);
     } else {
-      dispatch(selectProfile({ profileId: profile.id }));
+      void doSelectAndNavigate(profile.id);
     }
   };
 
@@ -33,8 +51,13 @@ export default function SelectProfilePage() {
     const result = await dispatch(selectProfile({ profileId: pendingProfile.id, pin }));
     if (selectProfile.rejected.match(result)) {
       setPinError(result.payload as string);
-    } else {
-      setPendingProfile(null);
+      return;
+    }
+    setPendingProfile(null);
+    const profileResult = await dispatch(fetchActiveProfile());
+    if (fetchActiveProfile.fulfilled.match(profileResult)) {
+      const destination = profileResult.payload.isSetupComplete ? '/dashboard' : '/profile-setup';
+      navigate(destination, { replace: true });
     }
   };
 

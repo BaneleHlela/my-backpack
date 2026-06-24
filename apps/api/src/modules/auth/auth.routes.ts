@@ -1,4 +1,4 @@
-// Auth router — local and OAuth routes
+﻿// Auth router — local and OAuth routes
 import { Router, IRouter } from 'express';
 import passport from 'passport';
 import {
@@ -16,7 +16,7 @@ import {
   resendVerificationEmailHandler,
 } from './auth.controller';
 import { requireAccount } from './auth.middleware';
-import { IAccountDocument } from '../../models/account.model';
+import { IAccountDocument } from '../../models/core/account.model';
 import { Response } from 'express';
 
 const router: IRouter = Router();

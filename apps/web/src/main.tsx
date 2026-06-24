@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { store } from './app/store';
 import type { AppDispatch } from './app/store';
 import { injectStore } from './lib/axios';
-import { checkAuth } from './features/auth/authSlice';
+import { checkAuth, fetchActiveProfile } from './features/auth/authSlice';
 
 import AuthLayout from './layouts/AuthLayout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -16,7 +16,8 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import SelectProfilePage from './pages/SelectProfilePage';
-import HomePage from './pages/HomePage';
+import ProfileSetupPage from './pages/ProfileSetupPage';
+import DashboardPage from './pages/DashboardPage';
 
 import './index.css';
 
@@ -26,10 +27,15 @@ function AppRoutes() {
   const dispatch = useDispatch<AppDispatch>();
 
   useEffect(() => {
-    dispatch(checkAuth());
+    const init = async () => {
+      const result = await dispatch(checkAuth());
+      // If we got a full token back (returning user with active profile), load the profile
+      if (checkAuth.fulfilled.match(result) && result.payload.data.accessToken) {
+        dispatch(fetchActiveProfile());
+      }
+    };
+    void init();
   }, [dispatch]);
-
-  
 
   return (
     <BrowserRouter>
@@ -52,10 +58,28 @@ function AppRoutes() {
         />
 
         <Route
+          path="/profile-setup"
+          element={
+            <ProtectedRoute>
+              <ProfileSetupPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/"
           element={
             <ProtectedRoute>
-              <HomePage />
+              <DashboardPage />
             </ProtectedRoute>
           }
         />

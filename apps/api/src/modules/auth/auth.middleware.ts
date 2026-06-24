@@ -1,8 +1,8 @@
-// Express middleware for JWT-based auth: requireAccount, requireProfile, requireOwner
+﻿// Express middleware for JWT-based auth: requireAccount, requireProfile, requireOwner
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, FullTokenPayload } from '../../utils/jwt';
-import Account from '../../models/account.model';
-import Profile from '../../models/profile.model';
+import Account from '../../models/core/account.model';
+import Profile from '../../models/core/profile.model';
 import { sendError } from '../../utils/response';
 
 export async function requireAccount(

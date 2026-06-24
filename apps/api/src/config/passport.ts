@@ -1,9 +1,9 @@
-// Passport strategies: LocalStrategy, GoogleStrategy, FacebookStrategy
+﻿// Passport strategies: LocalStrategy, GoogleStrategy, FacebookStrategy
 import passport from 'passport';
 import { Strategy as LocalStrategy } from 'passport-local';
 import { Strategy as GoogleStrategy, Profile as GoogleProfile } from 'passport-google-oauth20';
 import { Strategy as FacebookStrategy, Profile as FacebookProfile } from 'passport-facebook';
-import Account from '../models/account.model';
+import Account from '../models/core/account.model';
 import { upsertOAuthAccount } from '../modules/auth/auth.service';
 
 export function configurePassport(): void {
