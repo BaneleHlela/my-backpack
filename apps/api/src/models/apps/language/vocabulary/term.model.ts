@@ -34,6 +34,8 @@ const termSchema = new Schema<ITermDocument>(
   { timestamps: true }
 );
 
+termSchema.index({ miniAppId: 1, word: 1 });
+
 const Term: Model<ITermDocument> = mongoose.model<ITermDocument>('Term', termSchema);
 
 export default Term;

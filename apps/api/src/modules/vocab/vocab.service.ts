@@ -1,5 +1,6 @@
-﻿// Business logic for the vocabulary mini-app: word search, bucket management.
+﻿// Business logic for the vocabulary mini-app: word search, bucket management, and A-Z dictionary browsing.
 // Coordinates the dictionaryApi, questionGenerator, and adaptiveLearning services.
+import { Types } from 'mongoose';
 import { searchWord, parseAndStoreTerm } from '../../services/dictionaryApi.service';
 import { generateAutoQuestions } from '../../services/questionGenerator.service';
 import TermBucket from '../../models/apps/language/vocabulary/termBucket.model';
@@ -13,6 +14,9 @@ import {
   BucketEntryWithDetails,
   PaginatedBucketResponse,
   TermDetailResult,
+  DictionaryBrowseResponse,
+  AlphabetAvailabilityResponse,
+  TrendingTermResult,
 } from './vocab.types';
 import { ContentPrefs } from '../../middleware/ageGroup.middleware';
 
@@ -159,6 +163,173 @@ export async function getTermDetail(
     learningRecord: learningRecord ?? null,
     inBucket,
   };
+}
+
+// Internal type for the A-Z browse aggregation result.
+interface BrowseAggregationResult {
+  _id: Types.ObjectId;
+  word: string;
+  phonetic?: string;
+  audioUrl?: string;
+  definitionCount: number;
+}
+
+// Internal type for the trending aggregation result.
+interface TrendingAggregationResult {
+  term: {
+    _id: Types.ObjectId;
+    word: string;
+    phonetic?: string;
+    audioUrl?: string;
+  };
+  primaryDefinition: string | null;
+  bucketCount: number;
+}
+
+// Returns terms starting with a given letter, paginated, with definition counts (no auth required).
+export async function browseByLetter(
+  miniAppId: string,
+  letter: string,
+  page: number,
+  limit: number
+): Promise<DictionaryBrowseResponse> {
+  const miniAppObjectId = new Types.ObjectId(miniAppId);
+  const matchFilter = {
+    miniAppId: miniAppObjectId,
+    word: { $regex: `^${letter}`, $options: 'i' },
+  };
+
+  const [terms, total] = await Promise.all([
+    Term.aggregate<BrowseAggregationResult>([
+      { $match: matchFilter },
+      { $sort: { word: 1 } },
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: 'definitions',
+          localField: '_id',
+          foreignField: 'termId',
+          as: 'definitions',
+        },
+      },
+      {
+        $project: {
+          word: 1,
+          phonetic: 1,
+          audioUrl: 1,
+          definitionCount: { $size: '$definitions' },
+        },
+      },
+    ]),
+    Term.countDocuments(matchFilter),
+  ]);
+
+  return {
+    terms: terms.map((t) => ({
+      _id: t._id.toString(),
+      word: t.word,
+      phonetic: t.phonetic,
+      audioUrl: t.audioUrl,
+      definitionCount: t.definitionCount,
+    })),
+    pagination: {
+      total,
+      page,
+      limit,
+      hasMore: page * limit < total,
+    },
+    letter,
+  };
+}
+
+// Returns which letters of the alphabet have at least one term for the given mini-app (no auth required).
+export async function getAlphabet(miniAppId: string): Promise<AlphabetAvailabilityResponse> {
+  const miniAppObjectId = new Types.ObjectId(miniAppId);
+
+  const results = await Term.aggregate<{ _id: string }>([
+    { $match: { miniAppId: miniAppObjectId } },
+    {
+      $group: {
+        _id: { $toLower: { $substr: ['$word', 0, 1] } },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]);
+
+  return { available: results.map((r) => r._id) };
+}
+
+// Returns the most-bucketed terms for a mini-app with a primary definition preview (no auth required).
+export async function getTrending(
+  miniAppId: string,
+  limit: number
+): Promise<TrendingTermResult[]> {
+  const miniAppObjectId = new Types.ObjectId(miniAppId);
+
+  const results = await BucketEntry.aggregate<TrendingAggregationResult>([
+    {
+      $lookup: {
+        from: 'terms',
+        localField: 'termId',
+        foreignField: '_id',
+        as: 'termDoc',
+      },
+    },
+    { $unwind: '$termDoc' },
+    { $match: { 'termDoc.miniAppId': miniAppObjectId } },
+    {
+      $group: {
+        _id: '$termId',
+        bucketCount: { $sum: 1 },
+        term: { $first: '$termDoc' },
+      },
+    },
+    { $sort: { bucketCount: -1 } },
+    { $limit: limit },
+    {
+      $lookup: {
+        from: 'definitions',
+        let: { termId: '$_id' },
+        pipeline: [
+          { $match: { $expr: { $eq: ['$termId', '$$termId'] } } },
+          { $sort: { order: 1 } },
+          { $limit: 1 },
+        ],
+        as: 'primaryDef',
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        term: {
+          _id: '$term._id',
+          word: '$term.word',
+          phonetic: '$term.phonetic',
+          audioUrl: '$term.audioUrl',
+        },
+        primaryDefinition: {
+          $cond: {
+            if: { $gt: [{ $size: '$primaryDef' }, 0] },
+            then: { $substr: [{ $arrayElemAt: ['$primaryDef.definition', 0] }, 0, 100] },
+            else: null,
+          },
+        },
+        bucketCount: 1,
+      },
+    },
+  ]);
+
+  return results.map((r) => ({
+    term: {
+      _id: r.term._id.toString(),
+      word: r.term.word,
+      phonetic: r.term.phonetic,
+      audioUrl: r.term.audioUrl,
+    },
+    primaryDefinition: r.primaryDefinition,
+    bucketCount: r.bucketCount,
+  }));
 }
 
 // Returns paginated bucket entries with term details and learning status.

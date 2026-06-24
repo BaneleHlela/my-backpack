@@ -53,3 +53,53 @@ export interface TermDetailResult {
   learningRecord: ILearningRecordDocument | null;
   inBucket: boolean;
 }
+
+export interface DictionaryBrowseQuery {
+  miniAppId: string;
+  letter?: string;
+  page?: string;
+  limit?: string;
+}
+
+export interface AlphabetQuery {
+  miniAppId: string;
+}
+
+export interface TrendingQuery {
+  miniAppId: string;
+  limit?: string;
+}
+
+export interface DictionaryTermPreview {
+  _id: string;
+  word: string;
+  phonetic?: string;
+  audioUrl?: string;
+  definitionCount: number;
+}
+
+export interface DictionaryBrowseResponse {
+  terms: DictionaryTermPreview[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    hasMore: boolean;
+  };
+  letter: string;
+}
+
+export interface AlphabetAvailabilityResponse {
+  available: string[];
+}
+
+export interface TrendingTermResult {
+  term: {
+    _id: string;
+    word: string;
+    phonetic?: string;
+    audioUrl?: string;
+  };
+  primaryDefinition: string | null;
+  bucketCount: number;
+}

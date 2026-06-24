@@ -8,11 +8,17 @@ import {
   removeFromBucket,
   getBucket,
   getTermDetail,
+  browseByLetter,
+  getAlphabet,
+  getTrending,
 } from './vocab.service';
 import {
   SearchVocabQuery,
   AddToBucketDto,
   GetBucketQuery,
+  DictionaryBrowseQuery,
+  AlphabetQuery,
+  TrendingQuery,
 } from './vocab.types';
 
 export const searchHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
@@ -100,4 +106,37 @@ export const getBucketHandler = catchAsync(async (req: Request, res: Response): 
   } catch (err) {
     throw new AppError(err instanceof Error ? err.message : 'Failed to fetch bucket', 500);
   }
+});
+
+export const browseByLetterHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
+  const { miniAppId, letter = 'a', page = '1', limit = '20' } =
+    req.query as Partial<DictionaryBrowseQuery>;
+  if (!miniAppId) throw new AppError('miniAppId query parameter is required', 400);
+
+  const normalizedLetter = (letter ?? 'a').toLowerCase();
+  if (!/^[a-z]$/.test(normalizedLetter)) throw new AppError('letter must be a single a-z character', 400);
+
+  const resolvedPage = Math.max(1, parseInt(page ?? '1', 10));
+  const resolvedLimit = Math.min(50, Math.max(1, parseInt(limit ?? '20', 10)));
+
+  const result = await browseByLetter(miniAppId, normalizedLetter, resolvedPage, resolvedLimit);
+  sendSuccess(res, result);
+});
+
+export const getAlphabetHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
+  const { miniAppId } = req.query as Partial<AlphabetQuery>;
+  if (!miniAppId) throw new AppError('miniAppId query parameter is required', 400);
+
+  const result = await getAlphabet(miniAppId);
+  sendSuccess(res, result);
+});
+
+export const getTrendingHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
+  const { miniAppId, limit = '10' } = req.query as Partial<TrendingQuery>;
+  if (!miniAppId) throw new AppError('miniAppId query parameter is required', 400);
+
+  const resolvedLimit = Math.min(50, Math.max(1, parseInt(limit ?? '10', 10)));
+
+  const result = await getTrending(miniAppId, resolvedLimit);
+  sendSuccess(res, result);
 });

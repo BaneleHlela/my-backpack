@@ -93,7 +93,7 @@ export async function registerLocal(input: RegisterInput): Promise<RegisterResul
   await account.save();
 
   const verificationUrl = `${process.env.CLIENT_URL ?? 'http://localhost:5173'}/verify-email?token=${verificationToken}`;
-  await sendVerificationEmail(input.email, verificationUrl);
+  //await sendVerificationEmail(input.email, verificationUrl);
 
   return { email: input.email };
 }
