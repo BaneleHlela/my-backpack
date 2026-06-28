@@ -6,9 +6,12 @@
     "dev": "nodemon src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
-    "seed": "ts-node src/seed.ts"
+    "seed": "ts-node src/seed.ts",
+    "generate-questions": "ts-node src/scripts/generateQuestions.ts",
+    "cleanup-questions": "ts-node src/scripts/cleanupQuestions.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.106.0",
     "@upstash/redis": "^1.38.0",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",

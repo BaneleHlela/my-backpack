@@ -33,7 +33,7 @@ export function signPartialToken(payload: PartialTokenPayload): string {
 }
 
 export function signFullToken(payload: FullTokenPayload): string {
-  return jwt.sign(payload, accessSecret(), { expiresIn: '15m' });
+  return jwt.sign(payload, accessSecret(), { expiresIn: process.env.NODE_ENV === 'production' ? '15m' : '1d' });
 }
 
 export function signRefreshToken(payload: RefreshTokenPayload): string {

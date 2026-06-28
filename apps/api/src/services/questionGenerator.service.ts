@@ -1,100 +1,144 @@
-﻿// Auto-generates a starter set of questions for a vocabulary term based on its definitions.
-// Called the first time any profile adds a term to their bucket.
+// Auto-generates a starter set of questions for a specific definition of a vocabulary term.
+// Called when a profile adds a definition to their bucket (fire-and-forget).
 //
-// Questions created per term (all with source: 'auto'):
-//   — Up to 3 WORD→DEF questions, one per definition ordered by 'order' field
-//   — 1 DEF→WORD question using the primary (order=0) definition
-//   — 1 TRUE_FALSE question using a synonym (statement: true) or antonym (statement: false)
-//     from the primary definition, skipped if neither is available
+// This is the lightweight bootstrap generator. The full generic question set (with AI questions)
+// is generated separately via services/questionGeneration/index.ts triggered from admin routes.
 //
-// generateAutoQuestions() is idempotent: if the term already has active questions it returns
-// them immediately without creating duplicates.
+// Questions created per definition:
+//   — 1 text_input_def: shown definition, type the term
+//   — 1 mcq_term_to_def: show term, pick correct definition (requires 3 distractors)
+//   — 1 true_false_term_def: synonym statement (true) or antonym statement (false)
 import Question, { IQuestionDocument, DEFAULT_MAX_POINTS } from '../models/apps/language/vocabulary/question.model';
 import Definition from '../models/apps/language/vocabulary/definition.model';
 import Term from '../models/apps/language/vocabulary/term.model';
 
-export async function generateAutoQuestions(termId: string): Promise<IQuestionDocument[]> {
-  const existing = await Question.find({ termId, isActive: true });
+const textHelpers = {
+  autoReadPrompt: false,
+  autoReadOptions: false,
+  autoSubmit: true,
+  hintsAllowed: 0,
+  hintDelaySeconds: 0,
+};
+
+export async function generateAutoQuestions(
+  termId: string,
+  definitionId: string
+): Promise<IQuestionDocument[]> {
+  const existing = await Question.find({ termId, definitionId, isActive: true });
   if (existing.length > 0) return existing;
 
   const term = await Term.findById(termId);
   if (!term) throw new Error('Term not found');
 
-  const definitions = await Definition.find({ termId }).sort({ order: 1 }).limit(3);
-  if (definitions.length === 0) return [];
+  const definition = await Definition.findById(definitionId);
+  if (!definition) throw new Error('Definition not found');
 
   const questions: IQuestionDocument[] = [];
   const miniAppId = term.miniAppId;
   const word = term.word;
 
-  // WORD→DEF — one per definition (up to 3)
-  for (const def of definitions) {
-    const q = new Question({
-      termId,
-      miniAppId,
-      type: 'word_to_def',
-      prompt: `What does "${word}" mean?`,
-      correctAnswer: def.definition,
-      explanation: def.examples[0] ? `Example: ${def.examples[0]}` : undefined,
-      maxPoints: DEFAULT_MAX_POINTS['word_to_def'],
-      pointsCanBePartial: false,
-      source: 'auto',
-    });
-    await q.save();
-    questions.push(q);
-  }
-
-  // DEF→WORD — primary definition only
-  const primary = definitions[0];
-  if (primary) {
-    const q = new Question({
-      termId,
-      miniAppId,
-      type: 'def_to_word',
-      prompt: `Which word matches this definition: "${primary.definition}"?`,
+  // text_input_def — shown definition, type the term
+  const textInput = new Question({
+    termId,
+    definitionId,
+    miniAppId,
+    type: 'text_input_def',
+    maxPoints: DEFAULT_MAX_POINTS['text_input_def'],
+    pointsCanBePartial: false,
+    source: 'auto',
+    content: {
+      prompt: `${definition.definition}\n\nType the word that matches this definition.`,
       correctAnswer: word,
-      maxPoints: DEFAULT_MAX_POINTS['def_to_word'],
-      pointsCanBePartial: false,
-      source: 'auto',
-    });
-    await q.save();
-    questions.push(q);
-  }
+      explanation: definition.examples[0] ? `Example: ${definition.examples[0]}` : undefined,
+      defaultHelpers: textHelpers,
+    },
+  });
+  await textInput.save();
+  questions.push(textInput);
 
-  // TRUE_FALSE — prefer synonym (true statement), fall back to antonym (false statement)
-  const synonym = primary?.synonyms[0];
-  const antonym = primary?.antonyms[0];
+  // true_false_term_def — prefer synonym (true), fall back to antonym (false)
+  const synonym = definition.synonyms[0];
+  const antonym = definition.antonyms[0];
 
   if (synonym) {
-    const q = new Question({
+    const tf = new Question({
       termId,
+      definitionId,
       miniAppId,
-      type: 'true_false',
-      prompt: `"${synonym}" is a synonym of "${word}".`,
-      options: ['true', 'false'],
-      correctAnswer: 'true',
-      explanation: `"${synonym}" and "${word}" share a similar meaning.`,
-      maxPoints: DEFAULT_MAX_POINTS['true_false'],
+      type: 'true_false_term_def',
+      maxPoints: DEFAULT_MAX_POINTS['true_false_term_def'],
       pointsCanBePartial: false,
       source: 'auto',
+      content: {
+        prompt: `True or false: "${synonym}" is a synonym of "${word}".`,
+        options: ['True', 'False'],
+        correctAnswer: 'True',
+        explanation: `"${synonym}" and "${word}" share a similar meaning.`,
+        defaultHelpers: textHelpers,
+      },
     });
-    await q.save();
-    questions.push(q);
+    await tf.save();
+    questions.push(tf);
   } else if (antonym) {
-    const q = new Question({
+    const tf = new Question({
       termId,
+      definitionId,
       miniAppId,
-      type: 'true_false',
-      prompt: `"${antonym}" is a synonym of "${word}".`,
-      options: ['true', 'false'],
-      correctAnswer: 'false',
-      explanation: `"${antonym}" is actually an antonym of "${word}", not a synonym.`,
-      maxPoints: DEFAULT_MAX_POINTS['true_false'],
+      type: 'true_false_term_def',
+      maxPoints: DEFAULT_MAX_POINTS['true_false_term_def'],
       pointsCanBePartial: false,
       source: 'auto',
+      content: {
+        prompt: `True or false: "${antonym}" is a synonym of "${word}".`,
+        options: ['True', 'False'],
+        correctAnswer: 'False',
+        explanation: `"${antonym}" is actually an antonym of "${word}", not a synonym.`,
+        defaultHelpers: textHelpers,
+      },
     });
-    await q.save();
-    questions.push(q);
+    await tf.save();
+    questions.push(tf);
+  }
+
+  // mcq_term_to_def — show term, pick correct definition; needs 3 distractors
+  const otherSameTerm = await Definition.find({
+    termId,
+    _id: { $ne: definition._id },
+  }).limit(3);
+
+  let distractors = otherSameTerm.map((d) => d.definition);
+
+  if (distractors.length < 3) {
+    const needed = 3 - distractors.length;
+    const otherTermDefs = await Definition.find({
+      termId: { $ne: definition.termId },
+    })
+      .sort({ _id: -1 })
+      .limit(needed);
+    distractors = distractors.concat(otherTermDefs.map((d) => d.definition));
+  }
+
+  if (distractors.length >= 3) {
+    const options = [definition.definition, ...distractors.slice(0, 3)].sort(
+      () => Math.random() - 0.5
+    );
+    const mcq = new Question({
+      termId,
+      definitionId,
+      miniAppId,
+      type: 'mcq_term_to_def',
+      maxPoints: DEFAULT_MAX_POINTS['mcq_term_to_def'],
+      pointsCanBePartial: false,
+      source: 'auto',
+      content: {
+        prompt: `What is the correct definition of "${word}"?`,
+        options,
+        correctAnswer: definition.definition,
+        defaultHelpers: textHelpers,
+      },
+    });
+    await mcq.save();
+    questions.push(mcq);
   }
 
   return questions;

@@ -7,11 +7,13 @@ import {
   addToBucket,
   removeFromBucket,
   getBucket,
+  getRecent,
   getTermDetail,
   browseByLetter,
   getAlphabet,
   getTrending,
 } from './vocab.service';
+import { Types } from 'mongoose';
 import {
   SearchVocabQuery,
   AddToBucketDto,
@@ -19,6 +21,7 @@ import {
   DictionaryBrowseQuery,
   AlphabetQuery,
   TrendingQuery,
+  RecentQuery,
 } from './vocab.types';
 
 export const searchHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
@@ -42,14 +45,20 @@ export const addToBucketHandler = catchAsync(async (req: Request, res: Response)
   const profileId = req.profile?._id.toString();
   if (!profileId) throw new AppError('Unauthorized', 401);
 
-  const { termId, miniAppId } = req.body as Partial<AddToBucketDto>;
-  if (!termId || !miniAppId) throw new AppError('termId and miniAppId are required', 400);
+  const { termId, definitionId, miniAppId } = req.body as Partial<AddToBucketDto>;
+  if (!termId || !definitionId || !miniAppId) {
+    throw new AppError('termId, definitionId, and miniAppId are required', 400);
+  }
+  if (!Types.ObjectId.isValid(termId)) throw new AppError('Invalid termId', 400);
+  if (!Types.ObjectId.isValid(definitionId)) throw new AppError('Invalid definitionId', 400);
+  if (!Types.ObjectId.isValid(miniAppId)) throw new AppError('Invalid miniAppId', 400);
 
   try {
-    const entry = await addToBucket(profileId, termId, miniAppId);
+    const entry = await addToBucket(profileId, termId, definitionId, miniAppId);
     sendSuccess(res, entry, 201);
   } catch (err) {
-    throw new AppError(err instanceof Error ? err.message : 'Failed to add term to bucket', 400);
+    if (err instanceof AppError) throw err;
+    throw new AppError(err instanceof Error ? err.message : 'Failed to add to bucket', 400);
   }
 });
 
@@ -128,6 +137,18 @@ export const getAlphabetHandler = catchAsync(async (req: Request, res: Response)
   if (!miniAppId) throw new AppError('miniAppId query parameter is required', 400);
 
   const result = await getAlphabet(miniAppId);
+  sendSuccess(res, result);
+});
+
+export const getRecentHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
+  const profileId = req.profile?._id.toString();
+  if (!profileId) throw new AppError('Unauthorized', 401);
+
+  const { miniAppId, limit = '10' } = req.query as Partial<RecentQuery>;
+  if (!miniAppId) throw new AppError('miniAppId query parameter is required', 400);
+
+  const resolvedLimit = Math.min(50, Math.max(1, parseInt(limit ?? '10', 10)));
+  const result = await getRecent(profileId, miniAppId, resolvedLimit);
   sendSuccess(res, result);
 });
 

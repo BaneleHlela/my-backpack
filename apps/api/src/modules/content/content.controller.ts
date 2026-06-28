@@ -1,53 +1,59 @@
-// Route handlers for /api/content — content navigation (subjects, topics, mini-apps).
+// Route handlers for /api/content — content navigation (fields, subjects, topics, mini-apps).
 import { Request, Response } from 'express';
 import { sendSuccess } from '../../utils/response';
-import { AppError, catchAsync } from '../../utils/AppError';
+import { catchAsync } from '../../utils/AppError';
 import {
-  getActiveSubjects,
-  getTopicsBySubjectSlug,
-  getMiniAppsByTopicSlug,
+  getFields,
+  getSubjectsByField,
+  getTopicsBySubject,
+  getMiniAppsByTopic,
   getMiniAppBySlug,
 } from './content.service';
 
-export const getSubjectsHandler = catchAsync(
+export const getFieldsHandler = catchAsync(
   async (_req: Request, res: Response): Promise<void> => {
-    const subjects = await getActiveSubjects();
+    const fields = await getFields();
+    sendSuccess(res, fields);
+  }
+);
+
+export const getSubjectsHandler = catchAsync(
+  async (req: Request, res: Response): Promise<void> => {
+    const { fieldSlug } = req.params as { fieldSlug: string };
+    const subjects = await getSubjectsByField(fieldSlug);
     sendSuccess(res, subjects);
   }
 );
 
 export const getTopicsHandler = catchAsync(
   async (req: Request, res: Response): Promise<void> => {
-    const slug = req.params['slug'] as string;
-    try {
-      const topics = await getTopicsBySubjectSlug(slug);
-      sendSuccess(res, topics);
-    } catch (err) {
-      throw new AppError(err instanceof Error ? err.message : 'Failed to fetch topics', 404);
-    }
+    const { fieldSlug, subjectSlug } = req.params as { fieldSlug: string; subjectSlug: string };
+    const topics = await getTopicsBySubject(fieldSlug, subjectSlug);
+    sendSuccess(res, topics);
   }
 );
 
 export const getMiniAppsHandler = catchAsync(
   async (req: Request, res: Response): Promise<void> => {
-    const slug = req.params['slug'] as string;
-    try {
-      const miniApps = await getMiniAppsByTopicSlug(slug);
-      sendSuccess(res, miniApps);
-    } catch (err) {
-      throw new AppError(err instanceof Error ? err.message : 'Failed to fetch mini-apps', 404);
-    }
+    const { fieldSlug, subjectSlug, topicSlug } = req.params as {
+      fieldSlug: string;
+      subjectSlug: string;
+      topicSlug: string;
+    };
+    const miniApps = await getMiniAppsByTopic(fieldSlug, subjectSlug, topicSlug);
+    sendSuccess(res, miniApps);
   }
 );
 
 export const getMiniAppHandler = catchAsync(
   async (req: Request, res: Response): Promise<void> => {
-    const slug = req.params['slug'] as string;
-    try {
-      const miniApp = await getMiniAppBySlug(slug);
-      sendSuccess(res, miniApp);
-    } catch (err) {
-      throw new AppError(err instanceof Error ? err.message : 'Mini-app not found', 404);
-    }
+    const { fieldSlug, subjectSlug, topicSlug, miniAppSlug } = req.params as {
+      fieldSlug: string;
+      subjectSlug: string;
+      topicSlug: string;
+      miniAppSlug: string;
+    };
+    const result = await getMiniAppBySlug(fieldSlug, subjectSlug, topicSlug, miniAppSlug);
+    sendSuccess(res, result);
   }
 );

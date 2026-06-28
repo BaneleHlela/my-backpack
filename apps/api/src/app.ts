@@ -15,6 +15,8 @@ import profileRouter from './modules/profile/profile.routes';
 import vocabRouter from './modules/vocab/vocab.routes';
 import quizRouter from './modules/quiz/quiz.routes';
 import contentRouter from './modules/content/content.routes';
+import adminRouter from './modules/admin/admin.routes';
+import roadmapRouter from './modules/roadmap/roadmap.routes';
 
 const app: Application = express();
 
@@ -51,6 +53,8 @@ app.use('/api/profiles', profileRouter);
 app.use('/api/vocab', vocabRouter);
 app.use('/api/quiz', quizRouter);
 app.use('/api/content', contentRouter);
+app.use('/api/admin', adminRouter);
+app.use('/api/roadmap', roadmapRouter);
 
 // Health check
 app.get('/health', (_req, res) => {

@@ -18,7 +18,9 @@ export interface IBucketEntryDocument extends Document {
   _id: Types.ObjectId;
   bucketId: Types.ObjectId;
   termId: Types.ObjectId;
+  definitionId: Types.ObjectId;
   profileId: Types.ObjectId;
+  partOfSpeech: string;
   addedAt: Date;
   status: EntryStatus;
   createdAt: Date;
@@ -29,7 +31,9 @@ const bucketEntrySchema = new Schema<IBucketEntryDocument>(
   {
     bucketId: { type: Schema.Types.ObjectId, ref: 'TermBucket', required: true },
     termId: { type: Schema.Types.ObjectId, ref: 'Term', required: true },
+    definitionId: { type: Schema.Types.ObjectId, ref: 'Definition', required: true },
     profileId: { type: Schema.Types.ObjectId, ref: 'Profile', required: true },
+    partOfSpeech: { type: String, required: true },
     addedAt: { type: Date, default: Date.now },
     status: {
       type: String,
@@ -40,7 +44,7 @@ const bucketEntrySchema = new Schema<IBucketEntryDocument>(
   { timestamps: true }
 );
 
-bucketEntrySchema.index({ bucketId: 1, termId: 1 }, { unique: true });
+bucketEntrySchema.index({ bucketId: 1, termId: 1, definitionId: 1 }, { unique: true });
 bucketEntrySchema.index({ profileId: 1, status: 1 });
 
 const BucketEntry: Model<IBucketEntryDocument> = mongoose.model<IBucketEntryDocument>(

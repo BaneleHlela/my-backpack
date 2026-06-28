@@ -1,9 +1,8 @@
-﻿// DTO types for the vocab module — request shapes and response payloads for /api/vocab routes.
+// DTO types for the vocab module — request shapes and response payloads for /api/vocab routes.
 import { EntryStatus } from '../../models/apps/language/vocabulary/bucketEntry.model';
 import { ITermDocument } from '../../models/apps/language/vocabulary/term.model';
 import { IDefinitionDocument } from '../../models/apps/language/vocabulary/definition.model';
 import { IQuestionDocument } from '../../models/apps/language/vocabulary/question.model';
-import { ILearningRecordDocument } from '../../models/learning/learningRecord.model';
 
 export interface SearchVocabQuery {
   word: string;
@@ -12,6 +11,7 @@ export interface SearchVocabQuery {
 
 export interface AddToBucketDto {
   termId: string;
+  definitionId: string;
   miniAppId: string;
 }
 
@@ -26,9 +26,11 @@ export interface GetBucketQuery {
   limit?: string;
 }
 
-export interface BucketEntryWithDetails {
+export interface AddToBucketResult {
   entryId: string;
   termId: string;
+  definitionId: string;
+  partOfSpeech: string;
   word: string;
   phonetic?: string;
   audioUrl?: string;
@@ -38,20 +40,54 @@ export interface BucketEntryWithDetails {
   learningStatus: string;
 }
 
+export interface BucketTermEntry {
+  entry: {
+    _id: string;
+    termId: string;
+    definitionId: string;
+    partOfSpeech: string;
+    status: EntryStatus;
+    addedAt: Date;
+    confidenceScore: number;
+  };
+  term: {
+    _id: string;
+    word: string;
+    phonetic?: string;
+    audioUrl?: string;
+  };
+  definition: {
+    _id: string;
+    definition: string;
+    examples: string[];
+    partOfSpeech: string;
+  };
+}
+
 export interface PaginatedBucketResponse {
-  entries: BucketEntryWithDetails[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
+  terms: BucketTermEntry[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    hasMore: boolean;
+  };
+}
+
+export interface DefinitionWithStatus {
+  definition: IDefinitionDocument;
+  inBucket: boolean;
+  learningRecord: {
+    confidenceScore: number;
+    status: string;
+    totalAnswers: number;
+  } | null;
 }
 
 export interface TermDetailResult {
   term: ITermDocument;
-  definitions: IDefinitionDocument[];
+  definitions: DefinitionWithStatus[];
   questions: IQuestionDocument[];
-  learningRecord: ILearningRecordDocument | null;
-  inBucket: boolean;
 }
 
 export interface DictionaryBrowseQuery {
@@ -102,4 +138,9 @@ export interface TrendingTermResult {
   };
   primaryDefinition: string | null;
   bucketCount: number;
+}
+
+export interface RecentQuery {
+  miniAppId: string;
+  limit?: string;
 }

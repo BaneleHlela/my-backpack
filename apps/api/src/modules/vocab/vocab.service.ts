@@ -1,8 +1,9 @@
-﻿// Business logic for the vocabulary mini-app: word search, bucket management, and A-Z dictionary browsing.
+// Business logic for the vocabulary mini-app: word search, bucket management, and A-Z dictionary browsing.
 // Coordinates the dictionaryApi, questionGenerator, and adaptiveLearning services.
 import { Types } from 'mongoose';
 import { searchWord, parseAndStoreTerm } from '../../services/dictionaryApi.service';
 import { generateAutoQuestions } from '../../services/questionGenerator.service';
+import { AppError } from '../../utils/AppError';
 import TermBucket from '../../models/apps/language/vocabulary/termBucket.model';
 import BucketEntry from '../../models/apps/language/vocabulary/bucketEntry.model';
 import LearningRecord from '../../models/learning/learningRecord.model';
@@ -11,9 +12,11 @@ import Term, { ITermDocument } from '../../models/apps/language/vocabulary/term.
 import Definition, { IDefinitionDocument } from '../../models/apps/language/vocabulary/definition.model';
 import { EntryStatus } from '../../models/apps/language/vocabulary/bucketEntry.model';
 import {
-  BucketEntryWithDetails,
+  AddToBucketResult,
+  BucketTermEntry,
   PaginatedBucketResponse,
   TermDetailResult,
+  DefinitionWithStatus,
   DictionaryBrowseResponse,
   AlphabetAvailabilityResponse,
   TrendingTermResult,
@@ -47,15 +50,23 @@ export async function searchVocab(
   return { term, definitions, isInBucket, isNew };
 }
 
-// Adds a term to a profile's bucket. Creates the bucket if it doesn't exist.
-// Also bootstraps a LearningRecord and triggers auto question generation on first add.
+// Adds a specific definition of a term to a profile's bucket.
+// Creates the bucket if it doesn't exist.
+// Also bootstraps a per-definition LearningRecord and triggers auto question generation.
 export async function addToBucket(
   profileId: string,
   termId: string,
+  definitionId: string,
   miniAppId: string
-): Promise<BucketEntryWithDetails> {
+): Promise<AddToBucketResult> {
   const term = await Term.findById(termId);
-  if (!term) throw new Error('Term not found');
+  if (!term) throw new AppError('Term not found', 404);
+
+  const definition = await Definition.findById(definitionId);
+  if (!definition) throw new AppError('Definition not found', 404);
+  if (definition.termId.toString() !== termId) {
+    throw new AppError('Definition does not belong to this term', 400);
+  }
 
   // Get or create the bucket for this profile+miniApp
   let bucket = await TermBucket.findOne({ profileId, miniAppId });
@@ -64,25 +75,28 @@ export async function addToBucket(
     await bucket.save();
   }
 
-  // Prevent duplicate bucket entries
-  const existing = await BucketEntry.findOne({ bucketId: bucket._id, termId });
-  if (existing) throw new Error('Term is already in your bucket');
+  // Prevent duplicate entries per definition
+  const existing = await BucketEntry.findOne({ bucketId: bucket._id, termId, definitionId });
+  if (existing) throw new AppError('This definition is already in your bucket', 409);
 
   const entry = new BucketEntry({
     bucketId: bucket._id,
     termId,
+    definitionId,
     profileId,
+    partOfSpeech: definition.partOfSpeech,
     addedAt: new Date(),
     status: 'learning',
   });
   await entry.save();
 
-  // Bootstrap a LearningRecord if one doesn't exist yet
-  const existingRecord = await LearningRecord.findOne({ profileId, termId });
+  // Bootstrap a per-definition LearningRecord if one doesn't exist yet
+  const existingRecord = await LearningRecord.findOne({ profileId, termId, definitionId });
   if (!existingRecord) {
     const record = new LearningRecord({
       profileId,
       termId,
+      definitionId,
       miniAppId,
       confidenceScore: 0,
       status: 'unseen',
@@ -93,17 +107,19 @@ export async function addToBucket(
     await record.save();
   }
 
-  // Generate starter questions if none exist yet — fire-and-forget so the user gets an instant response
-  const existingQuestions = await Question.countDocuments({ termId, isActive: true });
+  // Generate starter questions for this definition — fire-and-forget
+  const existingQuestions = await Question.countDocuments({ termId, definitionId, isActive: true });
   if (existingQuestions === 0) {
-    generateAutoQuestions(termId).catch((err) =>
-      console.error('Auto question generation failed for term:', termId, err)
+    generateAutoQuestions(termId, definitionId).catch((err) =>
+      console.error('Auto question generation failed for term/definition:', termId, definitionId, err)
     );
   }
 
   return {
     entryId: entry._id.toString(),
     termId: term._id.toString(),
+    definitionId: definition._id.toString(),
+    partOfSpeech: definition.partOfSpeech,
     word: term.word,
     phonetic: term.phonetic,
     audioUrl: term.audioUrl,
@@ -129,7 +145,7 @@ export async function removeFromBucket(
   await entry.deleteOne();
 }
 
-// Returns full term detail including filtered definitions, questions, learning record, and bucket status.
+// Returns full term detail with per-definition bucket and learning status.
 export async function getTermDetail(
   termId: string,
   profileId: string,
@@ -138,10 +154,10 @@ export async function getTermDetail(
   const term = await Term.findById(termId);
   if (!term) throw new Error('Term not found');
 
-  const [allDefinitions, allQuestions, learningRecord, bucket] = await Promise.all([
+  const [allDefinitions, allQuestions, learningRecords, bucket] = await Promise.all([
     Definition.find({ termId }).sort({ order: 1 }),
     Question.find({ termId, isActive: true }),
-    LearningRecord.findOne({ profileId, termId }),
+    LearningRecord.find({ profileId, termId }),
     TermBucket.findOne({ profileId, miniAppId: term.miniAppId }),
   ]);
 
@@ -150,18 +166,34 @@ export async function getTermDetail(
     contentPrefs.allowedQuestionTypes.includes(q.type)
   );
 
-  let inBucket = false;
+  // Build a set of definitionIds that are already in the bucket
+  const addedDefinitionIds = new Set<string>();
   if (bucket) {
-    const entry = await BucketEntry.exists({ bucketId: bucket._id, termId });
-    inBucket = !!entry;
+    const bucketEntries = await BucketEntry.find({ bucketId: bucket._id, termId });
+    bucketEntries.forEach((e) => addedDefinitionIds.add(e.definitionId.toString()));
   }
+
+  const definitionsWithStatus: DefinitionWithStatus[] = definitions.map((def) => {
+    const lr = learningRecords.find(
+      (r) => r.definitionId?.toString() === def._id.toString()
+    );
+    return {
+      definition: def,
+      inBucket: addedDefinitionIds.has(def._id.toString()),
+      learningRecord: lr
+        ? {
+            confidenceScore: lr.confidenceScore,
+            status: lr.status,
+            totalAnswers: lr.totalAnswers,
+          }
+        : null,
+    };
+  });
 
   return {
     term,
-    definitions,
+    definitions: definitionsWithStatus,
     questions,
-    learningRecord: learningRecord ?? null,
-    inBucket,
   };
 }
 
@@ -246,6 +278,7 @@ export async function browseByLetter(
 // Returns which letters of the alphabet have at least one term for the given mini-app (no auth required).
 export async function getAlphabet(miniAppId: string): Promise<AlphabetAvailabilityResponse> {
   const miniAppObjectId = new Types.ObjectId(miniAppId);
+
 
   const results = await Term.aggregate<{ _id: string }>([
     { $match: { miniAppId: miniAppObjectId } },
@@ -332,7 +365,72 @@ export async function getTrending(
   }));
 }
 
-// Returns paginated bucket entries with term details and learning status.
+// Returns the most recently added bucket entries for a profile, up to limit.
+export async function getRecent(
+  profileId: string,
+  miniAppId: string,
+  limit: number
+): Promise<BucketTermEntry[]> {
+  const bucket = await TermBucket.findOne({ profileId, miniAppId });
+  if (!bucket) return [];
+
+  const rawEntries = await BucketEntry.find({ bucketId: bucket._id })
+    .sort({ addedAt: -1 })
+    .limit(limit)
+    .lean();
+
+  if (rawEntries.length === 0) return [];
+
+  const termIds = rawEntries.map((e) => e.termId);
+  const definitionIds = rawEntries.map((e) => e.definitionId);
+
+  const [terms, definitions, learningRecords] = await Promise.all([
+    Term.find({ _id: { $in: termIds } }).lean(),
+    Definition.find({ _id: { $in: definitionIds } }).lean(),
+    LearningRecord.find({ profileId, termId: { $in: termIds } }).lean(),
+  ]);
+
+  const termMap = new Map(terms.map((t) => [t._id.toString(), t]));
+  const defMap = new Map(definitions.map((d) => [d._id.toString(), d]));
+  const recordMap = new Map(
+    learningRecords.map((r) => [
+      `${r.termId.toString()}:${r.definitionId?.toString() ?? ''}`,
+      r,
+    ])
+  );
+
+  return rawEntries.map((e) => {
+    const term = termMap.get(e.termId.toString());
+    const def = defMap.get(e.definitionId.toString());
+    const record = recordMap.get(`${e.termId.toString()}:${e.definitionId.toString()}`);
+
+    return {
+      entry: {
+        _id: e._id.toString(),
+        termId: e.termId.toString(),
+        definitionId: e.definitionId.toString(),
+        partOfSpeech: e.partOfSpeech,
+        status: e.status,
+        addedAt: e.addedAt,
+        confidenceScore: record?.confidenceScore ?? 0,
+      },
+      term: {
+        _id: term?._id.toString() ?? e.termId.toString(),
+        word: term?.word ?? '',
+        phonetic: term?.phonetic,
+        audioUrl: term?.audioUrl,
+      },
+      definition: {
+        _id: def?._id.toString() ?? e.definitionId.toString(),
+        definition: def?.definition ?? '',
+        examples: def?.examples ?? [],
+        partOfSpeech: def?.partOfSpeech ?? e.partOfSpeech,
+      },
+    };
+  });
+}
+
+// Returns paginated bucket entries with term and definition details.
 export async function getBucket(
   profileId: string,
   miniAppId: string,
@@ -342,7 +440,10 @@ export async function getBucket(
 ): Promise<PaginatedBucketResponse> {
   const bucket = await TermBucket.findOne({ profileId, miniAppId });
   if (!bucket) {
-    return { entries: [], total: 0, page, limit, totalPages: 0 };
+    return {
+      terms: [],
+      pagination: { total: 0, page, limit, hasMore: false },
+    };
   }
 
   const statusFilter: EntryStatus[] =
@@ -363,36 +464,63 @@ export async function getBucket(
     .lean();
 
   const termIds = rawEntries.map((e) => e.termId);
+  const definitionIds = rawEntries.map((e) => e.definitionId);
 
-  const [terms, learningRecords] = await Promise.all([
+  const [terms, definitions, learningRecords] = await Promise.all([
     Term.find({ _id: { $in: termIds } }).lean(),
+    Definition.find({ _id: { $in: definitionIds } }).lean(),
     LearningRecord.find({ profileId, termId: { $in: termIds } }).lean(),
   ]);
 
   const termMap = new Map(terms.map((t) => [t._id.toString(), t]));
-  const recordMap = new Map(learningRecords.map((r) => [r.termId.toString(), r]));
+  const defMap = new Map(definitions.map((d) => [d._id.toString(), d]));
+  // key: termId:definitionId for per-definition lookup
+  const recordMap = new Map(
+    learningRecords.map((r) => [
+      `${r.termId.toString()}:${r.definitionId?.toString() ?? ''}`,
+      r,
+    ])
+  );
 
-  const entries: BucketEntryWithDetails[] = rawEntries.map((e) => {
+  const bucketTermEntries: BucketTermEntry[] = rawEntries.map((e) => {
     const term = termMap.get(e.termId.toString());
-    const record = recordMap.get(e.termId.toString());
+    const def = defMap.get(e.definitionId.toString());
+    const record = recordMap.get(
+      `${e.termId.toString()}:${e.definitionId.toString()}`
+    );
+
     return {
-      entryId: e._id.toString(),
-      termId: e.termId.toString(),
-      word: term?.word ?? '',
-      phonetic: term?.phonetic,
-      audioUrl: term?.audioUrl,
-      status: e.status,
-      addedAt: e.addedAt,
-      confidenceScore: record?.confidenceScore ?? 0,
-      learningStatus: record?.status ?? 'unseen',
+      entry: {
+        _id: e._id.toString(),
+        termId: e.termId.toString(),
+        definitionId: e.definitionId.toString(),
+        partOfSpeech: e.partOfSpeech,
+        status: e.status,
+        addedAt: e.addedAt,
+        confidenceScore: record?.confidenceScore ?? 0,
+      },
+      term: {
+        _id: term?._id.toString() ?? e.termId.toString(),
+        word: term?.word ?? '',
+        phonetic: term?.phonetic,
+        audioUrl: term?.audioUrl,
+      },
+      definition: {
+        _id: def?._id.toString() ?? e.definitionId.toString(),
+        definition: def?.definition ?? '',
+        examples: def?.examples ?? [],
+        partOfSpeech: def?.partOfSpeech ?? e.partOfSpeech,
+      },
     };
   });
 
   return {
-    entries,
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit),
+    terms: bucketTermEntries,
+    pagination: {
+      total,
+      page,
+      limit,
+      hasMore: page * limit < total,
+    },
   };
 }

@@ -10,6 +10,7 @@ import {
   addToBucketHandler,
   removeFromBucketHandler,
   getBucketHandler,
+  getRecentHandler,
   getTermDetailHandler,
   browseByLetterHandler,
   getAlphabetHandler,
@@ -32,6 +33,9 @@ router.get('/terms/:termId', requireProfile, attachContentPrefs, getTermDetailHa
 
 // GET /api/vocab/search?word=ephemeral&miniAppId=xxx
 router.get('/search', requireProfile, searchHandler);
+
+// GET /api/vocab/recent?miniAppId=xxx&limit=10
+router.get('/recent', requireProfile, getRecentHandler);
 
 // GET /api/vocab/bucket?miniAppId=xxx&status=learning&page=1&limit=20
 router.get('/bucket', requireProfile, getBucketHandler);

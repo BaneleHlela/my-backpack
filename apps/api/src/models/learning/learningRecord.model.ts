@@ -25,6 +25,7 @@ export interface ILearningRecordDocument extends Document {
   _id: Types.ObjectId;
   profileId: Types.ObjectId;
   termId: Types.ObjectId;
+  definitionId?: Types.ObjectId;
   miniAppId: Types.ObjectId;
   confidenceScore: number;
   status: LearningStatus;
@@ -43,6 +44,7 @@ const learningRecordSchema = new Schema<ILearningRecordDocument>(
   {
     profileId: { type: Schema.Types.ObjectId, ref: 'Profile', required: true },
     termId: { type: Schema.Types.ObjectId, ref: 'Term', required: true },
+    definitionId: { type: Schema.Types.ObjectId, ref: 'Definition' },
     miniAppId: { type: Schema.Types.ObjectId, ref: 'MiniApp', required: true },
     confidenceScore: { type: Number, default: 0.0, min: 0, max: 1 },
     status: {
@@ -61,7 +63,7 @@ const learningRecordSchema = new Schema<ILearningRecordDocument>(
   { timestamps: true }
 );
 
-learningRecordSchema.index({ profileId: 1, termId: 1 }, { unique: true });
+learningRecordSchema.index({ profileId: 1, termId: 1, definitionId: 1 }, { unique: true });
 learningRecordSchema.index({ profileId: 1, miniAppId: 1, status: 1 });
 learningRecordSchema.index({ profileId: 1, miniAppId: 1, nextReviewAt: 1 });
 

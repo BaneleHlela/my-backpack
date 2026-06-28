@@ -113,7 +113,6 @@ export async function loginLocal(
   }
 
   const profiles = await Profile.find({ _id: { $in: account.profiles } });
-  console.log('loginLocal profiles', profiles.map((p) => p.displayName));
 
   const partialToken = signPartialToken({ accountId: account._id.toString() });
   const refreshToken = signRefreshToken({ accountId: account._id.toString() });

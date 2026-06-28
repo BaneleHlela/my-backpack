@@ -5,6 +5,7 @@
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
 
 export type TermSource = 'dictionary_api' | 'manual';
+export type AIGenerationStatus = 'pending' | 'complete' | 'failed' | 'not_needed';
 
 export interface ITermDocument extends Document {
   _id: Types.ObjectId;
@@ -14,6 +15,10 @@ export interface ITermDocument extends Document {
   origin?: string;
   audioUrl?: string;
   source: TermSource;
+  aiGenerationStatus: AIGenerationStatus;
+  aiGenerationAttempts: number;
+  aiGenerationError?: string;
+  aiGeneratedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +35,14 @@ const termSchema = new Schema<ITermDocument>(
       enum: ['dictionary_api', 'manual'],
       default: 'dictionary_api',
     },
+    aiGenerationStatus: {
+      type: String,
+      enum: ['pending', 'complete', 'failed', 'not_needed'],
+      default: 'pending',
+    },
+    aiGenerationAttempts: { type: Number, default: 0 },
+    aiGenerationError: { type: String },
+    aiGeneratedAt: { type: Date },
   },
   { timestamps: true }
 );

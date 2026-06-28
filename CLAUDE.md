@@ -1,101 +1,180 @@
 # My Backpack
 
-A digital backpack app — an education platform with multiple mini-apps (vocab, math, engineering subjects, etc.). 
-Designed for multiple age groups, starting with an adult user (27) and child users (4–5 years old).
+A digital backpack — a comprehensive education platform with multiple mini-apps 
+(vocab, math, engineering subjects, etc.). Designed for multiple age groups from 
+a single codebase, serving age-appropriate content to adult users and younger 
+profiles. The platform's core goal is personalised learning pace — users learn 
+at their own speed and are alerted when they are test-ready.
+
+---
 
 ## Tech Stack
 
 - **Monorepo**: pnpm workspaces
 - **Backend**: Node.js + Express + TypeScript (`apps/api`)
-- **Web**: React + Vite + TypeScript + Redux (`apps/web`)
-- **Mobile**: React Native + Expo + TypeScript + Redux (`apps/mobile`)
+- **Web**: React + Vite + TypeScript + Redux Toolkit (`apps/web`)
+- **Mobile**: React Native + Expo + TypeScript + Redux Toolkit (`apps/mobile`)
 - **Shared types**: `packages/shared`
 - **Database**: MongoDB Atlas (Mongoose ODM)
 - **Cache**: Redis via Upstash
-- **Auth**: JWT (short-lived access token + long-lived refresh token in HTTP-only cookie)
+- **Auth**: JWT — two-step flow (partial token post-login + full token 
+  post-profile-select + refresh token in HTTP-only cookie)
+- **OAuth2**: Google and Facebook strategies via Passport.js
+- **Asset storage**: Google Cloud Storage (bucket: my-backpack-assets, 
+  region: africa-south1)
+- **AI**: Anthropic Claude Haiku (claude-haiku-4-5-20251001) for question 
+  generation and content processing
+- **Monorepo tooling**: pnpm workspaces, TypeScript strict mode throughout
 
-## Folder Structure
-my-backpack/
+---
 
-├── apps/
+## Running the Project
 
-│   ├── api/        # Express API
+```bash
+# From root — start API
+pnpm --filter api dev
 
-│   ├── web/        # React web app
+# From root — start web
+pnpm --filter web dev
 
-│   └── mobile/     # React Native (Expo)
+# From root — start mobile
+pnpm --filter mobile dev
 
-├── packages/
+# Seed the database
+pnpm --filter api seed
 
-│   └── shared/     # Shared TypeScript types and utilities
-│   └── ui/     # Shared UI components (if needed)
-├── pnpm-workspace.yaml
+# Generate questions for a term
+pnpm --filter api generate-questions -- --termId=xxx --definitionId=xxx
 
-└── CLAUDE.md
+# Cleanup generated questions (reset)
+pnpm --filter api cleanup-questions
+```
 
-## Conventions
+---
 
-- TypeScript strict mode everywhere
-- All API routes follow REST conventions
-- API modules are organised by feature (auth, profile, vocab, etc.)
-- Shared types live in `packages/shared` and are imported by all apps
-- Environment variables go in `.env` files (never committed to git)
-- No `any` types — use proper TypeScript types always
+## Git Strategy
 
-## Current Progress
+```
+main        ← production (auto-deploys)
+develop     ← working branch
+feature/xxx ← feature branches off develop
+```
 
-- [x] Monorepo initialized with pnpm workspaces
-- [x] Folder structure created
-- [x] CLAUDE.md created
-- [x] Google Cloud Storage bucket set up
-- [x] Backend auth system (Account + Profile models, JWT, Passport, OAuth2 scaffold)
-- [x] Web auth UI (login, register, forgot password, reset password, email verification)
-- [x] Profile setup flow (ProfileSetupPage with personal + education details, isSetupComplete flag)
-- [x] Dashboard skeleton (greeting, mini-app cards, profile dropdown)
-- [x] Profile module API (CRUD, setup, PIN — profile.service/controller/routes)
-- [ ] Mobile auth UI
-- [ ] Profile management screens (edit profile, manage profiles under an account)
-- [ ] Vocab mini-app
+Never push directly to main. Always merge develop → main via PR.
 
+---
+
+## Hosting (Free Tier)
+
+| Service | Purpose |
+|---|---|
+| Vercel | React web app |
+| Render | Express API (sleeps after 15min inactivity on free tier) |
+| MongoDB Atlas | Database (512MB free) |
+| Upstash | Redis cache (10,000 commands/day free) |
+| Google Cloud Storage | Asset storage (5GB free) |
+| Expo Go | Mobile testing |
+
+---
 
 ## Core Concept: Account → Profiles
 
-One Account handles authentication (email, password, OAuth). An Account can have multiple Profiles (max 6). Each Profile is what actually uses the app with its own progress, settings, and age-appropriate content. Think Netflix-style profile switching.
+One **Account** handles authentication (email, password, OAuth).
+An Account can have up to **6 Profiles**. Each Profile is what actually 
+uses the app — has its own progress, settings, age-appropriate content, 
+and learning data. Think Netflix-style profile switching.
 
-- Account owner logs in → sees profile selector → selects profile → gets full access token
-- Child profiles can be PIN-protected to prevent switching
+- Account owner logs in → sees profile selector → selects profile → 
+  gets full access token
+- Child profiles can be PIN-protected
 - Only the owner profile can create, edit, or delete other profiles
+- Maximum 6 profiles per account — enforced at service level
 
-## Auth Flow
+### Auth Flow
+1. Register/Login → partial JWT (accountId only) + refresh token in 
+   HTTP-only cookie
+2. Select profile → full JWT (accountId + profileId + ageGroup)
+3. All protected routes require full JWT
+4. Access token: 15 minutes | Refresh token: 7 days
 
-1. Register/Login → returns partial JWT (accountId only) + refresh token in HTTP-only cookie
-2. Select profile → returns full JWT (accountId + profileId + ageGroup)
-3. All protected routes require the full JWT
-4. Access token expires in 15 minutes, refresh token in 7 days
+### Middleware
+- `requireAccount` — verifies JWT, works with partial token
+- `requireProfile` — requires full token with profileId
+- `requireOwner` — checks profile.isOwner === true
+- `ageGroupFilter` — reads ageGroup from JWT, attaches contentPrefs to req
 
-## Key Models
+### Content preferences by ageGroup
+```
+child:
+  maxDefinitions: 1
+  simplifiedLanguage: true
+  allowedQuestionTypes: ['mcq_term_to_def', 'mcq_def_to_term', 
+                          'true_false_term_def', 'mcq_audio']
 
-**Account** — authentication only (email, password, OAuth providers, profile refs)
+teen:
+  maxDefinitions: 2
+  simplifiedLanguage: false
+  allowedQuestionTypes: [all except voice]
 
-**Profile** — app usage (displayName, ageGroup, education, preferences, progress, optional PIN)
+adult:
+  maxDefinitions: 10
+  simplifiedLanguage: false
+  allowedQuestionTypes: [all]
+```
+
+---
+
+## Content Hierarchy
+
+```
+Field           (e.g. Language, Mathematics, Engineering)
+  Subject       (e.g. English, IsiZulu Home Language, Calculus)
+    Topic       (e.g. Vocabulary, Sounds, Grammar, Differentiation)
+      MiniApp   (e.g. Dictionary, Quiz, Roadmap, Flashcards)
+```
+
+### Rule of thumb for placing models
+- Exists before any learning starts → `models/core/`
+- Tracks learning but subject-agnostic → `models/learning/`
+- Specific to one mini-app's content → `models/apps/field/subject/topic/`
+
+### MiniApp types
+`'quiz' | 'roadmap' | 'dictionary' | 'flashcards' | 'practice'`
+Used by frontend to know which UI to render.
+
+### Seeded hierarchy
+```
+Language (field)
+  ├── English (subject)
+  │     └── Vocabulary (topic)
+  │           ├── Dictionary (miniApp, type: dictionary)
+  │           └── Quiz (miniApp, type: quiz)
+  └── IsiZulu Home Language (subject)
+        └── Sounds (topic)
+              └── Sounds Roadmap (miniApp, type: roadmap)
+```
+
+---
 
 ## Model Structure
 
-Models live under `apps/api/src/models/` and are organised into three layers:
-
 ```
-models/
-├── core/                        ← app-wide foundational models
+apps/api/src/models/
+├── core/
 │   ├── account.model.ts
 │   ├── profile.model.ts
+│   ├── field.model.ts
 │   ├── subject.model.ts
 │   ├── topic.model.ts
 │   └── miniApp.model.ts
-├── learning/                    ← shared across all mini-apps
+├── learning/
 │   ├── learningRecord.model.ts
 │   ├── adaptiveProfile.model.ts
 │   ├── quizSession.model.ts
-│   └── answerRecord.model.ts
+│   ├── answerRecord.model.ts
+│   ├── roadmap.model.ts
+│   ├── roadmapNode.model.ts
+│   └── profileRoadmapProgress.model.ts
 └── apps/
     └── language/
         └── vocabulary/
@@ -106,65 +185,523 @@ models/
             └── bucketEntry.model.ts
 ```
 
-**Rule of thumb for placing new models:**
-- Exists before any learning starts → `core/`
-- Tracks learning but subject-agnostic → `learning/`
-- Specific to one mini-app's content → `apps/<subject>/<miniapp>/`
+---
 
-## Education Levels
+## Key Models — Field Definitions
 
-South African system: grade-r through grade-12, then certificate, diploma, bachelors, honours, masters, phd, professional, other.
+### Account
+Authentication only. Fields: email, password (bcrypt, cost 12), 
+authProviders[], profiles[], activeProfile, isEmailVerified.
 
-## Age Groups
+### Profile
+App usage entity. Fields: accountId, displayName, avatarUrl, ageGroup, 
+dateOfBirth, isOwner, pin (bcrypt, cost 10), education, preferences, 
+progress, isSetupComplete.
 
-- `child` (4–5 years old) — simplified UI, basic vocabulary, guided interactions
-- `teen` — intermediate content
-- `adult` — full feature access
+Education levels (SA system):
+`grade-r | grade-1 ... grade-12 | certificate | diploma | bachelors | 
+honours | masters | phd | professional | other`
 
-The `ageGroup` is embedded in the full JWT so every API endpoint knows which content to serve without an extra DB lookup.
+### Term
+Shared across all users. Fields: word, miniAppId, phonetic, origin, 
+audioUrl, source ('dictionary_api' | 'manual'), aiGenerationStatus 
+('pending' | 'complete' | 'failed' | 'not_needed'), aiGenerationAttempts, 
+aiGenerationError, aiGeneratedAt.
 
-## Asset Storage (Google Cloud Storage)
+Note: Sound "terms" (e.g. vowels a/e/i/o/u) are Term documents within 
+the Sounds MiniApp — they plug into the existing adaptive learning system.
 
-Bucket: `my-backpack-assets`
+### Definition
+One term can have multiple definitions. Fields: termId, partOfSpeech, 
+definition, examples[], synonyms[], antonyms[], order.
+
+### Question
+Shared across users. Fields: termId (optional), definitionId (optional), 
+miniAppId, nodeId (optional — links to RoadmapNode), type, **content** 
+(unified Mixed field — see IQuestionContent), maxPoints, pointsCanBePartial, 
+source ('auto' | 'ai' | 'manual'), isGeneric, profileId (null for generic),
+isActive.
+
+All question data (prompt, options, correctAnswer, explanation, draggables, 
+dropZones, feedback, avatar, defaultHelpers) lives inside `content`.
+Cast `question.content as IQuestionContent` immediately after retrieval.
+Types defined in `apps/api/src/modules/question/question.types.ts`.
+
+**Question types and default maxPoints:**
+```
+mcq_term_to_def:     4   — show term, select correct definition
+mcq_def_to_term:     4   — show definition, select correct term
+mcq_correct_usage:   5   — select sentence using word correctly
+mcq_incorrect_usage: 7   — select sentence using word incorrectly
+mcq_fill_blank:      4   — sentence with blank, select correct word
+mcq_audio:           4   — audio prompt, select correct answer
+fill_blank_typed:    6   — sentence with blank, type exact word
+true_false_term_def: 2   — is this definition correct for this term?
+true_false_def_term: 2   — is this term correct for this definition?
+true_false_usage:    3   — is the word used correctly in this sentence?
+text_input_def:      5   — shown definition, type the term
+text_input_audio:    5   — hear audio, type the term
+text_input_example:  5   — example sentence with word removed, type term
+dnd_single:          4   — drag one item to one zone
+dnd_select:          4   — drag correct item from multiple options to one zone
+dnd_count:           4   — drag a specific quantity of items to a zone
+dnd_sort:            5   — sort items into multiple category zones
+dnd_sequence:        5   — arrange items in correct order
+dnd_match:           5   — match pairs across two columns
+dnd_fill:            5   — drag words into sentence blanks
+dnd_build:           5   — drag letters or syllables to build a word
+```
+
+**audio: prefix convention:**
+When `content.prompt` starts with `"audio:"`, the frontend plays the 
+remainder as a GCS path rather than displaying text.
+Example: `"audio:sounds/isizulu/questions/khetha-umsindo-a.mp3"`
+
+**isGeneric flag:**
+- `true` — reusable across all users (generated from term+definition alone)
+- `false` — user-specific (uses bucket context, future feature)
+
+**IQuestionHelpers system:**
+Each question has `content.defaultHelpers: Partial<IQuestionHelpers>`.
+Nodes can override per-assignment via `assessment.questionAssignments[].helperOverrides`.
+Frontend calls `resolveHelpers(content.defaultHelpers, nodeOverrides)` 
+from `packages/shared/utils/resolveHelpers.ts` to get the final config.
+
+**DnD answer capture:**
+`rawResponse = JSON.stringify({ placements: [{ draggableId, dropZoneId }] })`
+Evaluated by `evaluateDnDAnswer()` in quizSession.service.ts.
+
+### BucketEntry
+Per-definition adding — one entry per term+definition combination.
+Fields: bucketId, termId, definitionId, profileId, partOfSpeech 
+(denormalized), status ('learning' | 'mastered' | 'paused'), addedAt.
+Unique index: bucketId + termId + definitionId.
+
+### LearningRecord
+Per profile per term per definition. Fields: profileId, termId, 
+definitionId (optional), miniAppId, confidenceScore (0.0–1.0), 
+status ('unseen' | 'learning' | 'mastered' | 'reviewing'), 
+totalAnswers, correctAnswers, lastAnsweredAt, nextReviewAt, 
+masteredAt, questionsToFirstMastery, reviewCount.
+
+### AdaptiveProfile
+One per profile. Fields: profileId, miniAppStats (Map of miniAppId → 
+{ avgQuestionsToMaster, totalTermsMastered, totalTermsAttempted, 
+learningVelocity }), globalStats { avgQuestionsToMaster, 
+totalCorrectAnswers, totalAnswers, overallAccuracy, currentStreak, 
+longestStreak, lastStudiedAt }, masteryThreshold (default: 0.85).
+
+### AnswerRecord
+Raw answer capture — every answer a user gives. Fields: profileId, 
+questionId, termId, miniAppId, sessionId, responseType, rawResponse, 
+selectedOptionIndex, maxPoints, pointsAwarded, isCorrect, gradingMethod 
+('exact_match' | 'keyword_match' | 'ai_graded' | 'pending'), 
+answeredAt, timeToAnswerMs, wasTimedOut, attemptNumber, wasSkipped, 
+confidenceBefore, confidenceAfter.
+
+### QuizSession
+Groups answer records. Fields: profileId, miniAppId, status 
+('active' | 'completed' | 'abandoned'), questionIds[], settings 
+{ questionCount, timeLimit, questionTypes, bucketFilter }, results 
+{ totalQuestions, answered, skipped, correct, totalPointsAvailable, 
+totalPointsAwarded, percentageScore, timeTakenMs }, startedAt, 
+completedAt.
+
+### Roadmap
+One per MiniApp (type: roadmap). Fields: miniAppId, title, description, 
+isActive.
+
+### RoadmapNode
+Fields: roadmapId, title, description, position, type 
+('lesson' | 'checkpoint' | 'practice'), curriculumTags 
+[{ curriculum: 'CAPS'|'IEB'|'Cambridge'|'University'|'Other', 
+gradeLevel: string }], studyMaterial { notes, audioUrl, videoUrl, 
+bookReference? }, assessment { passingScore, attemptsAllowed, 
+timeLimitSeconds, questionAssignments [{ questionId, order, 
+helperOverrides? }] }, unlockRequires[], rewards { xp, peanuts, badge? }, 
+isActive.
+
+`assessment.questionAssignments` links Question documents to this node 
+with display order and per-node helper overrides (INodeQuestionAssignment).
+
+### ProfileRoadmapProgress
+Fields: profileId, roadmapId, miniAppId, nodeProgress (Map of nodeId → 
+{ status: 'locked'|'unlocked'|'in_progress'|'completed', stars 0–3, 
+attempts, bestScore, lastAttemptAt, completedAt, 
+studyMaterialViewedAt }), currentNodeId, totalStars, startedAt, 
+lastActivityAt.
+Unique index: profileId + roadmapId.
+
+---
+
+## Adaptive Learning Algorithm
+
+### Confidence score (0.0 → 1.0) per term per profile
+- Correct answer: `+0.15 * learningVelocity * (pointsAwarded/maxPoints)`
+- Wrong answer: `-0.20`
+- Mastery threshold: `0.85` (configurable per AdaptiveProfile)
+- Mastered terms enter spaced repetition review cycle
+
+### Learning velocity
+Ratio of platform average to user average questions-to-master.
+Platform average hardcoded at 5 (PLATFORM_AVG_QUESTIONS_TO_MASTER).
+`learningVelocity = 5 / userAverage`
+Clamped between 0.5 and 2.0.
+Recalculated every 10 mastered terms.
+
+### Spaced repetition intervals (reviewCount → days until next review)
+0 → +1 day | 1 → +3 days | 2 → +7 days | 3 → +14 days | 4+ → +30 days
+
+### Question selection priority in quiz sessions
+1. Terms due for spaced repetition review (nextReviewAt <= now)
+2. Active learning terms (lowest confidenceScore first)
+3. Unseen terms (in bucket, never answered)
+
+---
+
+## Question Generation System
+
+### Pipeline
+```
+Term + Definition added to DB
+  ↓
+Non-AI questions generated immediately (auto)
+  ↓
+AI questions generated async via Anthropic API (source: 'ai')
+  ↓
+All questions saved with isGeneric: true
+  ↓
+Reused across all users who add the same definition
+```
+
+### Generation is NOT triggered when user adds to bucket
+Questions are generated via admin endpoint or seed script only.
+This is intentional — generic questions are pre-generated content,
+not per-user content.
+
+### Non-AI generated questions (source: 'auto')
+MCQ-1 (mcq_term_to_def), MCQ-2 (mcq_def_to_term), TF-1 
+(true_false_term_def ×2), TF-2 (true_false_def_term ×2), 
+TI-1 (text_input_def), TI-2 (text_input_audio — only if audioUrl exists),
+MCQ-5 (mcq_fill_blank — if example sentence exists), 
+FIB-1 (fill_blank_typed — reuses MCQ-5 sentence),
+TI-3 (text_input_example — reuses same sentence)
+
+### AI generated questions (source: 'ai')
+MCQ-3 (mcq_correct_usage), MCQ-4 (mcq_incorrect_usage), 
+TF-3 (true_false_usage), and conditionally MCQ-5/FIB-1/TI-3 
+if no example sentence exists.
+
+### Distractor rules
+- MCQ distractors must exclude ALL definitions from the same term
+  (not just the current definitionId — all sibling definitions)
+- AI prompt must be anchored to the specific definition being tested
+  to prevent multi-meaning words (e.g. "bank") generating 
+  multiple correct options
+
+### aiGenerationStatus on Term
+`'pending' | 'complete' | 'failed' | 'not_needed'`
+Max 3 retry attempts. Failed terms can be retried via admin endpoint.
+
+### Admin endpoints
+```
+POST /api/admin/generate-questions        — trigger for one term+def
+GET  /api/admin/generation-status         — monitor by miniAppId
+POST /api/admin/retry-failed-generation   — retry all failed terms
+```
+
+---
+
+## API Routes Reference
+
+### Auth
+```
+POST /api/auth/register
+POST /api/auth/login
+POST /api/auth/select-profile
+POST /api/auth/logout
+POST /api/auth/refresh
+GET  /api/auth/google
+GET  /api/auth/google/callback
+GET  /api/auth/facebook
+GET  /api/auth/facebook/callback
+```
+
+### Profile
+```
+GET    /api/profiles
+POST   /api/profiles
+GET    /api/profiles/me
+PATCH  /api/profiles/me
+PATCH  /api/profiles/me/setup
+DELETE /api/profiles/:profileId
+POST   /api/profiles/:profileId/pin
+DELETE /api/profiles/:profileId/pin
+GET    /api/profiles/me/stats
+```
+
+### Content navigation
+```
+GET /api/content/fields
+GET /api/content/fields/:fieldSlug/subjects
+GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/topics
+GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/topics/:topicSlug/miniapps
+GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/topics/:topicSlug/miniapps/:miniAppSlug
+```
+
+### Vocabulary
+```
+GET    /api/vocab/search?word=&miniAppId=
+GET    /api/vocab/terms/:termId
+POST   /api/vocab/bucket
+DELETE /api/vocab/bucket/:termId
+GET    /api/vocab/bucket?miniAppId=&status=&page=&limit=
+GET    /api/vocab/recent?miniAppId=
+GET    /api/vocab/trending?miniAppId=&limit=
+GET    /api/vocab/dictionary?miniAppId=&letter=&page=&limit=
+GET    /api/vocab/dictionary/alphabet?miniAppId=
+```
+
+### Quiz
+```
+POST  /api/quiz/session
+GET   /api/quiz/session/:sessionId
+POST  /api/quiz/session/:sessionId/answer
+PATCH /api/quiz/session/:sessionId/complete
+PATCH /api/quiz/session/:sessionId/abandon
+GET   /api/quiz/session/:sessionId/results
+```
+
+### Roadmap
+```
+GET  /api/roadmap/:miniAppId
+GET  /api/roadmap/node/:nodeId
+POST /api/roadmap/node/:nodeId/study
+POST /api/roadmap/node/:nodeId/start
+POST /api/roadmap/node/:nodeId/complete
+```
+
+### Admin
+```
+POST /api/admin/generate-questions
+GET  /api/admin/generation-status?miniAppId=
+POST /api/admin/retry-failed-generation
+```
+
+---
+
+## Google Cloud Storage Structure
+
+Bucket: `my-backpack-assets` (region: africa-south1)
+Public URL: `https://storage.googleapis.com/my-backpack-assets/[path]`
+
+```
 my-backpack-assets/
-
 ├── branding/
-
 │   ├── logos/
-
 │   └── icons/
-
 ├── wallpapers/
-
-│   ├── square/
-
+│   ├── 1x1/
 │   ├── portrait/
-
 │   └── landscape/
-
 ├── ui/
-
 │   └── illustrations/
-
+├── sounds/
+│   └── isizulu/
+│       ├── vowels/         ← a.mp3, e.mp3, i.mp3, o.mp3, u.mp3
+│       └── questions/      ← khetha-umsindo-a.mp3, etc.
 └── content/
+    └── vocab/
+```
 
-└── vocab/
+Shared asset URLs: `packages/shared/constants/assets.ts`
 
-## Mini-Apps Planned
+---
 
-- Vocab (starting here — for adult and child age groups)
-- Math
-- Engineering subjects (one per course)
-- More TBD
+## Folder Structure
 
+```
+my-backpack/
+├── apps/
+│   ├── api/
+│   │   └── src/
+│   │       ├── config/         # db.ts, redis.ts, passport.ts
+│   │       ├── middleware/     # ageGroup.middleware.ts
+│   │       ├── models/         # see Model Structure above
+│   │       ├── modules/
+│   │       │   ├── auth/
+│   │       │   ├── profile/
+│   │       │   ├── content/
+│   │       │   ├── vocab/
+│   │       │   ├── quiz/
+│   │       │   ├── roadmap/
+│   │       │   ├── admin/
+│   │       │   └── question/
+│   │       │       └── question.types.ts  # IDraggable, IDropZone, IBlank,
+│   │       │                              # IFeedback, IAvatarConfig,
+│   │       │                              # IQuestionHelpers, defaultHelpers,
+│   │       │                              # IQuestionContent, INodeQuestionAssignment
+│   │       ├── services/
+│   │       │   ├── questionGeneration/
+│   │       │   │   ├── index.ts
+│   │       │   │   ├── nonAiGenerator.ts
+│   │       │   │   ├── aiGenerator.ts
+│   │       │   │   ├── questionValidator.ts
+│   │       │   │   └── distractorHelper.ts
+│   │       │   ├── adaptiveLearning.service.ts
+│   │       │   ├── dictionaryApi.service.ts
+│   │       │   └── quizSession.service.ts
+│   │       ├── utils/
+│   │       │   ├── jwt.ts
+│   │       │   ├── response.ts
+│   │       │   └── AppError.ts
+│   │       ├── scripts/
+│   │       │   ├── generateQuestions.ts
+│   │       │   └── cleanupQuestions.ts
+│   │       ├── seed.ts
+│   │       └── app.ts
+│   ├── web/
+│   │   └── src/
+│   │       ├── app/            # Redux store
+│   │       ├── components/
+│   │       │   └── auth/       # Input, SocialLoginButtons, 
+│   │       │                   # ProfileCard, PinModal
+│   │       ├── features/
+│   │       │   ├── auth/       # authSlice
+│   │       │   └── theme/      # themeSlice
+│   │       ├── lib/            # axios instance
+│   │       └── pages/
+│   │           ├── LoginPage
+│   │           ├── SignupPage
+│   │           ├── ForgotPasswordPage
+│   │           ├── ResetPasswordPage
+│   │           ├── VerifyEmailPage
+│   │           ├── SelectProfilePage
+│   │           ├── ProfileSetupPage
+│   │           └── DashboardPage (skeleton)
+│   └── mobile/                 # React Native — auth UI pending
+├── packages/
+│   └── shared/
+│       ├── constants/
+│       │   └── assets.ts
+│       └── types/
+│           ├── account.ts
+│           ├── profile.ts
+│           ├── auth.ts
+│           ├── content.ts      # IField, ISubject, ITopic, IMiniApp
+│           ├── term.ts         # ITerm, IDefinition
+│           ├── question.ts     # IQuestion, IQuestionContent, IDraggable,
+│           │                   # IDropZone, IBlank, IFeedback, IAvatarConfig,
+│           │                   # IQuestionHelpers, defaultHelpers,
+│           │                   # INodeQuestionAssignment, QuestionType
+│           ├── quiz.ts         # IQuizSession, IAnswerRecord
+│           ├── learning.ts     # ILearningRecord, IAdaptiveProfile
+│           └── roadmap.ts      # IRoadmap, IRoadmapNode, IProgress
+│       └── utils/
+│           └── resolveHelpers.ts  # resolveHelpers(questionDefaults, nodeOverrides)
+├── CLAUDE.md                   ← this file
+├── pnpm-workspace.yaml
+└── .gitignore
+```
 
-## Notes for Claude
+---
 
+## Current Progress
+
+### Backend (apps/api)
+- [x] Monorepo initialized with pnpm workspaces
+- [x] Folder structure and model structure established
+- [x] Auth system (Account + Profile models, JWT, Passport, OAuth2)
+- [x] Profile module (CRUD, PIN, setup flow)
+- [x] Content hierarchy (Field → Subject → Topic → MiniApp)
+- [x] Vocabulary module (search, bucket management, dictionary, trending)
+- [x] Question models and all 13 question types defined
+- [x] Question model unified content field (prompt/options/correctAnswer/explanation inside content)
+- [x] DnD question types added (dnd_single/select/count/sort/sequence/match/fill/build)
+- [x] Helpers system (IQuestionHelpers, defaultHelpers, node helperOverrides, resolveHelpers)
+- [x] INodeQuestionAssignment on RoadmapNode.assessment.questionAssignments
+- [x] Question generation system (auto + AI via Anthropic Haiku)
+- [x] Adaptive learning service (confidence scores, velocity, spaced repetition)
+- [x] Quiz session service (create, answer capture, complete, abandon)
+- [x] DnD answer evaluation (evaluateDnDAnswer in quizSession.service.ts)
+- [x] Answer record model (full capture including confidenceBefore/After)
+- [x] Roadmap system (Roadmap, RoadmapNode, ProfileRoadmapProgress models)
+- [x] Roadmap module (routes, service, unlock logic)
+- [x] IsiZulu Sounds roadmap seeded (vowels node + 5 mcq_audio + 1 dnd_single)
+- [x] Admin endpoints (question generation, retry, status)
+- [x] Global error handler (AppError, catchAsync)
+- [x] AgeGroup content filter middleware
+- [ ] Email verification flow
+- [ ] Forgot password / reset password email flow
+- [ ] XP and peanuts reward system (deferred)
+- [ ] Test readiness scoring (deferred)
+- [ ] Book/PDF upload pipeline (deferred)
+- [ ] AI-powered content generation from books (deferred)
+- [ ] Mobile auth UI (deferred)
+
+### Frontend Web (apps/web)
+- [x] React + Vite + TypeScript + Redux setup
+- [x] Tailwind CSS configured
+- [x] Axios instance with interceptors
+- [x] React Router configured
+- [x] Auth pages (Login, Signup, ForgotPassword, ResetPassword, 
+      VerifyEmail, SelectProfile)
+- [x] Profile setup page
+- [x] Dashboard skeleton
+- [ ] Vocab mini-app UI (search, term detail, bucket, dictionary)
+- [ ] Quiz UI
+- [ ] Roadmap UI (roadmap screen, lesson player, completion screen)
+- [ ] Profile management screens
+
+### Frontend Mobile (apps/mobile)
+- [ ] Everything (deferred until web is further along)
+
+---
+
+## Conventions
+
+- TypeScript strict mode everywhere — no `any` types
+- All API routes follow REST conventions
+- API modules organised by feature under `src/modules/`
+- Shared types live in `packages/shared/types/` — imported by all apps
+- Environment variables in `.env` files — never committed to git
+- Consistent API response shape via `utils/response.ts`
+- Errors thrown as `new AppError(message, statusCode)` 
+- Async controllers wrapped with `catchAsync()`
+- Rate limiting on auth routes: 20 requests per 15 minutes
+- Education levels follow the South African schooling system
+- Always check ageGroup from JWT when serving content
+- `audio:` prefix on `content.prompt` tells frontend to play audio,
+  not display text
+- `question.content` is Schema.Types.Mixed — cast to `IQuestionContent` immediately after retrieval
+- DnD questions require `content.draggables` and `content.dropZones`; dnd_fill/dnd_build also need `content.sentenceTemplate`
+- `resolveHelpers(content.defaultHelpers, nodeOverrides)` from packages/shared gives final IQuestionHelpers
+- DnD rawResponse format: `JSON.stringify({ placements: [{ draggableId, dropZoneId }] })`
+- `assessment.questionAssignments` on RoadmapNode — always populate when creating nodes with questions
+
+---
+
+## Notes for Claude Code
+
+- Read this file at the start of every session before doing anything
 - We are not scaling yet — keep solutions simple and straightforward
 - Always use TypeScript, never plain JavaScript
-- When creating new API modules, follow the same structure as the auth module
-- Free hosting only for now: Vercel (web), Render (api), MongoDB Atlas, Upstash (Redis), Google Cloud Storage (assets)
-- Education levels follow the South African schooling system
-- Always check ageGroup from the JWT when serving content — never skip this
-- Max 6 profiles per account — enforce this at the service level
+- When creating new API modules follow the same structure as existing ones
+- When adding new models follow the placement rule above
+- Free hosting only for now
+- Education levels follow South African schooling system (grade-r to grade-12)
 - Never store plain text passwords or PINs — always bcrypt
+- Max 6 profiles per account — enforce at service level
+- Questions are generic by default (isGeneric: true) — 
+  user-specific questions are a future feature
+- Distractor definitions must exclude ALL definitions from the same term
+- AI prompts for question generation must be anchored to the 
+  specific definition being tested
+- Sound "terms" (vowels etc.) are Term documents — 
+  they use the same adaptive learning system as vocab terms
+- XP and peanuts reward system exists in the data model 
+  but the service layer is not yet built
+- Test readiness scoring is designed but not yet built
+```
+
+---

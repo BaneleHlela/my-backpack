@@ -30,7 +30,7 @@ export function attachContentPrefs(
         ageGroup,
         maxDefinitions: 1,
         simplifiedLanguage: true,
-        allowedQuestionTypes: ['mcq', 'true_false', 'word_to_def'],
+        allowedQuestionTypes: ['mcq_term_to_def', 'true_false_term_def', 'text_input_def', 'mcq_audio'],
       };
       break;
     case 'teen':
@@ -38,7 +38,16 @@ export function attachContentPrefs(
         ageGroup,
         maxDefinitions: 2,
         simplifiedLanguage: false,
-        allowedQuestionTypes: ['mcq', 'true_false', 'word_to_def', 'def_to_word', 'fill_blank'],
+        allowedQuestionTypes: [
+          'mcq_term_to_def',
+          'mcq_def_to_term',
+          'mcq_fill_blank',
+          'fill_blank_typed',
+          'true_false_term_def',
+          'true_false_def_term',
+          'text_input_def',
+          'mcq_audio',
+        ],
       };
       break;
     default:
@@ -47,13 +56,19 @@ export function attachContentPrefs(
         maxDefinitions: 10,
         simplifiedLanguage: false,
         allowedQuestionTypes: [
-          'mcq',
-          'true_false',
-          'word_to_def',
-          'def_to_word',
-          'fill_blank',
-          'text_input',
-          'voice',
+          'mcq_term_to_def',
+          'mcq_def_to_term',
+          'mcq_correct_usage',
+          'mcq_incorrect_usage',
+          'mcq_fill_blank',
+          'fill_blank_typed',
+          'true_false_term_def',
+          'true_false_def_term',
+          'true_false_usage',
+          'text_input_def',
+          'text_input_audio',
+          'text_input_example',
+          'mcq_audio',
         ],
       };
   }

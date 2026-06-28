@@ -9,6 +9,7 @@ export interface ILearningRecord {
   _id: string;
   profileId: string;
   termId: string;
+  definitionId?: string;
   miniAppId: string;
   confidenceScore: number;
   status: LearningStatus;
@@ -62,7 +63,9 @@ export interface IBucketEntry {
   _id: string;
   bucketId: string;
   termId: string;
+  definitionId: string;
   profileId: string;
+  partOfSpeech: string;
   addedAt: string;
   status: EntryStatus;
   createdAt: string;

@@ -1,4 +1,4 @@
-﻿// Manages the full quiz session lifecycle: creation, answer capture, completion, abandonment.
+// Manages the full quiz session lifecycle: creation, answer capture, completion, abandonment.
 //
 // Question selection priority (selectQuestions):
 //   1. Terms due for spaced-repetition review (status 'reviewing', nextReviewAt <= now)
@@ -7,6 +7,7 @@
 //
 // Answer capture (captureAnswer):
 //   — Determines isCorrect and pointsAwarded using 'exact_match' by default.
+//     DnD answers are evaluated via evaluateDnDAnswer.
 //     Voice answers use gradingMethod: 'pending' (transcription deferred).
 //   — Calls adaptiveLearning.service to update confidenceScore and term status.
 //   — Returns the next unanswered question in the session, or null if all done.
@@ -22,6 +23,7 @@ import QuizSession, {
   BucketFilter,
 } from '../models/learning/quizSession.model';
 import Question, { IQuestionDocument, QuestionType, QuestionSource } from '../models/apps/language/vocabulary/question.model';
+import { IQuestionContent, IDropZone } from '../modules/question/question.types';
 import AnswerRecord from '../models/learning/answerRecord.model';
 import LearningRecord from '../models/learning/learningRecord.model';
 import BucketEntry from '../models/apps/language/vocabulary/bucketEntry.model';
@@ -33,6 +35,81 @@ import { ResponseType, GradingMethod } from '../models/learning/answerRecord.mod
 import { EntryStatus } from '../models/apps/language/vocabulary/bucketEntry.model';
 
 const MASTERY_MILESTONE = 10;
+
+const DND_TYPES = new Set<QuestionType>([
+  'dnd_single', 'dnd_select', 'dnd_count', 'dnd_sort',
+  'dnd_sequence', 'dnd_match', 'dnd_fill', 'dnd_build',
+]);
+
+// ── DnD answer evaluation ─────────────────────────────────
+
+interface DnDPlacement {
+  draggableId: string;
+  dropZoneId: string;
+}
+
+// Evaluates a DnD answer. rawResponse is JSON.stringify({ placements: DnDPlacement[] }).
+export function evaluateDnDAnswer(
+  question: IQuestionDocument,
+  rawResponse: string
+): { isCorrect: boolean; pointsAwarded: number } {
+  const content = question.content as IQuestionContent;
+  const dropZones: IDropZone[] = content.dropZones ?? [];
+
+  let placements: DnDPlacement[];
+  try {
+    const parsed = JSON.parse(rawResponse) as { placements?: DnDPlacement[] };
+    placements = parsed.placements ?? [];
+  } catch {
+    return { isCorrect: false, pointsAwarded: 0 };
+  }
+
+  const placementMap = new Map<string, string[]>();
+  for (const p of placements) {
+    if (!placementMap.has(p.dropZoneId)) placementMap.set(p.dropZoneId, []);
+    placementMap.get(p.dropZoneId)!.push(p.draggableId);
+  }
+
+  let allZonesCorrect = true;
+
+  for (const zone of dropZones) {
+    const placed = placementMap.get(zone.id) ?? [];
+
+    if (question.type === 'dnd_count') {
+      // Exact quantity check — requiredCount items of any requiredDraggableId
+      const validItems = placed.filter((id) => zone.requiredDraggableIds.includes(id));
+      if (validItems.length !== (zone.requiredCount ?? zone.requiredDraggableIds.length)) {
+        allZonesCorrect = false;
+        break;
+      }
+    } else if (question.type === 'dnd_sequence') {
+      // Order matters — placements must match requiredDraggableIds in order
+      const ordered = placements
+        .filter((p) => p.dropZoneId === zone.id)
+        .map((p) => p.draggableId);
+      if (ordered.join(',') !== zone.requiredDraggableIds.join(',')) {
+        allZonesCorrect = false;
+        break;
+      }
+    } else {
+      // All other DnD types: set equality
+      const placedSet = new Set(placed);
+      const requiredSet = new Set(zone.requiredDraggableIds);
+      const setsMatch =
+        placedSet.size === requiredSet.size &&
+        [...requiredSet].every((id) => placedSet.has(id));
+      if (!setsMatch) {
+        allZonesCorrect = false;
+        break;
+      }
+    }
+  }
+
+  return {
+    isCorrect: allZonesCorrect,
+    pointsAwarded: allZonesCorrect ? question.maxPoints : 0,
+  };
+}
 
 export interface CreateSessionInput {
   miniAppId: string;
@@ -175,6 +252,8 @@ export async function captureAnswer(
   const question = await Question.findById(data.questionId);
   if (!question) throw new Error('Question not found');
 
+  const content = question.content as IQuestionContent;
+
   const adaptive = await AdaptiveProfile.findOne({ profileId });
   const masteryThreshold = adaptive?.masteryThreshold ?? 0.85;
 
@@ -192,13 +271,18 @@ export async function captureAnswer(
     isCorrect = false;
     pointsAwarded = 0;
     gradingMethod = 'exact_match';
-  } else if (question.type === 'voice') {
+  } else if (question.type === 'text_input_audio') {
     gradingMethod = 'pending';
     isCorrect = false;
     pointsAwarded = 0;
+  } else if (DND_TYPES.has(question.type)) {
+    const result = evaluateDnDAnswer(question, data.rawResponse);
+    isCorrect = result.isCorrect;
+    pointsAwarded = result.pointsAwarded;
+    gradingMethod = 'exact_match';
   } else {
     const normalised = data.rawResponse.toLowerCase().trim();
-    const correct = question.correctAnswer.toLowerCase().trim();
+    const correct = (content.correctAnswer ?? '').toLowerCase().trim();
     isCorrect = normalised === correct;
 
     if (isCorrect) {
@@ -211,7 +295,7 @@ export async function captureAnswer(
       pointsAwarded = 0;
     }
 
-    gradingMethod = question.type === 'fill_blank' ? 'keyword_match' : 'exact_match';
+    gradingMethod = question.type === 'fill_blank_typed' ? 'keyword_match' : 'exact_match';
   }
 
   const answerRecord = new AnswerRecord({
@@ -237,15 +321,20 @@ export async function captureAnswer(
   });
   await answerRecord.save();
 
-  const updatedRecord = await updateLearningRecord(
-    profileId,
-    question.termId.toString(),
-    question.miniAppId.toString(),
-    answerRecord,
-    masteryThreshold
-  );
-
-  answerRecord.confidenceAfter = updatedRecord.confidenceScore;
+  // Adaptive learning only applies to term-linked questions (vocab quiz).
+  // Roadmap-only questions (mcq_audio without a termId) skip this step.
+  let confidenceAfter = answerRecord.confidenceAfter;
+  if (question.termId) {
+    const updatedRecord = await updateLearningRecord(
+      profileId,
+      question.termId.toString(),
+      question.miniAppId.toString(),
+      answerRecord,
+      masteryThreshold
+    );
+    confidenceAfter = updatedRecord.confidenceScore;
+    answerRecord.confidenceAfter = confidenceAfter;
+  }
   await answerRecord.save();
 
   // Trigger velocity recalculation when the profile hits a mastery milestone (every 10 terms)
@@ -276,7 +365,7 @@ export async function captureAnswer(
     answerRecordId: answerRecord._id.toString(),
     isCorrect,
     pointsAwarded,
-    confidenceAfter: updatedRecord.confidenceScore,
+    confidenceAfter,
     nextQuestion,
     sessionComplete: !nextQuestion,
   };
@@ -441,10 +530,7 @@ export interface QuestionWithTerm {
   termId: Types.ObjectId;
   miniAppId: Types.ObjectId;
   type: QuestionType;
-  prompt: string;
-  options?: string[];
-  correctAnswer: string;
-  explanation?: string;
+  content: IQuestionContent;
   maxPoints: number;
   pointsCanBePartial: boolean;
   source: QuestionSource;
@@ -507,10 +593,7 @@ export async function getSessionState(
         termId: question.termId as Types.ObjectId,
         miniAppId: question.miniAppId as Types.ObjectId,
         type: question.type,
-        prompt: question.prompt,
-        options: question.options,
-        correctAnswer: question.correctAnswer,
-        explanation: question.explanation,
+        content: question.content as IQuestionContent,
         maxPoints: question.maxPoints,
         pointsCanBePartial: question.pointsCanBePartial,
         source: question.source,

@@ -1,6 +1,6 @@
-// A topic within a subject (e.g. "English" under "Language", "Calculus" under "Mathematics").
-// Topics are the second level of the content hierarchy: Subject → Topic → MiniApp.
-// The compound unique index on subjectId + slug prevents duplicate topic slugs within a subject.
+// A topic within a subject (e.g. "Vocabulary" under "English", "Differentiation" under "Calculus").
+// Topics are the third level of the hierarchy: Field → Subject → Topic → MiniApp.
+// Compound unique index on subjectId + slug prevents duplicate topic slugs within a subject.
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
 
 export interface ITopicDocument extends Document {
