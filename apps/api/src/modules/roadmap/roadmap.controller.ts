@@ -4,16 +4,29 @@ import { sendSuccess, sendError } from '../../utils/response';
 import {
   getRoadmapWithProgress,
   getNodeWithProgress,
-  markStudyMaterialViewed,
-  startNodeAssessment,
-  completeNodeAssessment,
+  getLessonWithProgress,
+  markLessonStudyViewed,
+  startLesson,
+  completeLesson,
 } from './roadmap.service';
 
-export async function getRoadmapHandler(req: Request, res: Response): Promise<void> {
+export async function getRoadmapByMiniAppHandler(req: Request, res: Response): Promise<void> {
   try {
     const profileId = req.profile!._id.toString();
     const miniAppId = req.params['miniAppId'] as string;
-    const result = await getRoadmapWithProgress(miniAppId, profileId);
+    const result = await getRoadmapWithProgress(profileId, miniAppId, undefined);
+    sendSuccess(res, result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to load roadmap';
+    sendError(res, message, 404);
+  }
+}
+
+export async function getRoadmapBySubjectHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const profileId = req.profile!._id.toString();
+    const subjectId = req.params['subjectId'] as string;
+    const result = await getRoadmapWithProgress(profileId, undefined, subjectId);
     sendSuccess(res, result);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to load roadmap';
@@ -25,8 +38,7 @@ export async function getNodeHandler(req: Request, res: Response): Promise<void>
   try {
     const profileId = req.profile!._id.toString();
     const nodeId = req.params['nodeId'] as string;
-    const allowedTypes = req.contentPrefs?.allowedQuestionTypes;
-    const result = await getNodeWithProgress(nodeId, profileId, allowedTypes);
+    const result = await getNodeWithProgress(nodeId, profileId);
     sendSuccess(res, result);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to load node';
@@ -34,44 +46,57 @@ export async function getNodeHandler(req: Request, res: Response): Promise<void>
   }
 }
 
-export async function markStudyViewedHandler(req: Request, res: Response): Promise<void> {
+export async function getLessonHandler(req: Request, res: Response): Promise<void> {
   try {
     const profileId = req.profile!._id.toString();
-    const nodeId = req.params['nodeId'] as string;
-    const entry = await markStudyMaterialViewed(nodeId, profileId);
-    sendSuccess(res, { progress: entry });
+    const lessonId = req.params['lessonId'] as string;
+    const allowedTypes = req.contentPrefs?.allowedQuestionTypes;
+    const result = await getLessonWithProgress(lessonId, profileId, allowedTypes);
+    sendSuccess(res, result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to update progress';
+    const message = err instanceof Error ? err.message : 'Failed to load lesson';
+    sendError(res, message, 404);
+  }
+}
+
+export async function markLessonStudyViewedHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const profileId = req.profile!._id.toString();
+    const lessonId = req.params['lessonId'] as string;
+    const result = await markLessonStudyViewed(lessonId, profileId);
+    sendSuccess(res, result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to mark study viewed';
     sendError(res, message, 400);
   }
 }
 
-export async function startAssessmentHandler(req: Request, res: Response): Promise<void> {
+export async function startLessonHandler(req: Request, res: Response): Promise<void> {
   try {
     const profileId = req.profile!._id.toString();
-    const nodeId = req.params['nodeId'] as string;
-    const result = await startNodeAssessment(nodeId, profileId);
+    const lessonId = req.params['lessonId'] as string;
+    const result = await startLesson(lessonId, profileId);
     sendSuccess(res, result, 201);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to start assessment';
-    const status = message === 'Node is locked' || message.includes('attempts') ? 403 : 400;
+    const message = err instanceof Error ? err.message : 'Failed to start lesson';
+    const status = message === 'Lesson is locked' ? 403 : 400;
     sendError(res, message, status);
   }
 }
 
-export async function completeAssessmentHandler(req: Request, res: Response): Promise<void> {
+export async function completeLessonHandler(req: Request, res: Response): Promise<void> {
   try {
     const profileId = req.profile!._id.toString();
-    const nodeId = req.params['nodeId'] as string;
+    const lessonId = req.params['lessonId'] as string;
     const { sessionId } = req.body as { sessionId: string };
     if (!sessionId) {
       sendError(res, 'sessionId is required', 400);
       return;
     }
-    const result = await completeNodeAssessment(nodeId, profileId, sessionId);
+    const result = await completeLesson(lessonId, profileId, sessionId);
     sendSuccess(res, result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to complete assessment';
+    const message = err instanceof Error ? err.message : 'Failed to complete lesson';
     sendError(res, message, 400);
   }
 }

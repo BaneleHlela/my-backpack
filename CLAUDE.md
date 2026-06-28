@@ -174,7 +174,9 @@ apps/api/src/models/
 │   ├── answerRecord.model.ts
 │   ├── roadmap.model.ts
 │   ├── roadmapNode.model.ts
-│   └── profileRoadmapProgress.model.ts
+│   ├── lesson.model.ts
+│   ├── profileRoadmapProgress.model.ts
+│   └── profileSubjectEnrollment.model.ts
 └── apps/
     └── language/
         └── vocabulary/
@@ -307,30 +309,55 @@ Groups answer records. Fields: profileId, miniAppId, status
 totalPointsAwarded, percentageScore, timeTakenMs }, startedAt, 
 completedAt.
 
+### Lesson
+One step inside a RoadmapNode. Fields: nodeId, roadmapId (denormalized),
+position (1-based within node), title, lessonType 
+('introduction' | 'practice' | 'assessment'), studyMaterial (optional) 
+{ notes, audioUrl, videoUrl, bookReference? }, questionIds[] (ordered),
+passingScore (0.0–1.0, only used for 'assessment' type), isActive.
+
+Completion rules by lessonType:
+- `introduction` — auto-completes when study material is viewed
+- `practice` — auto-completes after all questions attempted once (no pass/fail)
+- `assessment` — score must be >= passingScore to complete; gates next lesson
+
 ### Roadmap
-One per MiniApp (type: roadmap). Fields: miniAppId, title, description, 
-isActive.
+Belongs to a subject, a miniApp, or both. At least one of subjectId or 
+miniAppId must be present (enforced by pre-validate hook).
+Fields: subjectId (optional), miniAppId (optional), title, description,
+nodes [{ nodeId, position }] — canonical ordered list of nodes, isActive.
+
+`nodes[]` is the source of truth for node ordering. Sparse indexes on 
+both subjectId and miniAppId.
 
 ### RoadmapNode
 Fields: roadmapId, title, description, position, type 
 ('lesson' | 'checkpoint' | 'practice'), curriculumTags 
-[{ curriculum: 'CAPS'|'IEB'|'Cambridge'|'University'|'Other', 
-gradeLevel: string }], studyMaterial { notes, audioUrl, videoUrl, 
-bookReference? }, assessment { passingScore, attemptsAllowed, 
-timeLimitSeconds, questionAssignments [{ questionId, order, 
-helperOverrides? }] }, unlockRequires[], rewards { xp, peanuts, badge? }, 
-isActive.
+[{ curriculum, gradeLevel }], lessons [{ lessonId, position }],
+unlockRequires[], rewards { xp, peanuts, badge? }, isActive.
 
-`assessment.questionAssignments` links Question documents to this node 
-with display order and per-node helper overrides (INodeQuestionAssignment).
+studyMaterial and assessment have moved to individual Lesson documents.
+`lessons[]` lists lessons in order; position here must match lesson.position.
 
 ### ProfileRoadmapProgress
-Fields: profileId, roadmapId, miniAppId, nodeProgress (Map of nodeId → 
-{ status: 'locked'|'unlocked'|'in_progress'|'completed', stars 0–3, 
-attempts, bestScore, lastAttemptAt, completedAt, 
-studyMaterialViewedAt }), currentNodeId, totalStars, startedAt, 
-lastActivityAt.
+Fields: profileId, roadmapId, miniAppId (optional), nodeProgress 
+(Map of nodeId → { status, stars 0–3, attempts, bestScore, lastAttemptAt, 
+completedAt, lessonProgress (Map of lessonId → { status, completedAt, 
+attempts, bestScore, studyMaterialViewedAt, lastAttemptAt }) }), 
+currentNodeId, totalStars, startedAt, lastActivityAt.
 Unique index: profileId + roadmapId.
+
+First lesson of a node is set to 'unlocked' when the node is unlocked.
+Subsequent lessons unlock when the previous lesson is completed.
+
+### ProfileSubjectEnrollment
+One per profile per subject. Fields: profileId, subjectId, fieldId 
+(denormalized), enrolledAt, lastAccessedAt, status 
+('active' | 'paused' | 'completed'), progressSummary { totalNodes, 
+completedNodes, totalLessons, completedLessons, overallProgressPercent, 
+lastActivityAt }.
+Unique index: profileId + subjectId.
+Indexes: profileId + fieldId, profileId + status.
 
 ---
 
@@ -475,10 +502,23 @@ GET   /api/quiz/session/:sessionId/results
 ### Roadmap
 ```
 GET  /api/roadmap/:miniAppId
+GET  /api/roadmap/subject/:subjectId
 GET  /api/roadmap/node/:nodeId
-POST /api/roadmap/node/:nodeId/study
-POST /api/roadmap/node/:nodeId/start
-POST /api/roadmap/node/:nodeId/complete
+GET  /api/roadmap/lesson/:lessonId
+POST /api/roadmap/lesson/:lessonId/study
+POST /api/roadmap/lesson/:lessonId/start
+POST /api/roadmap/lesson/:lessonId/complete
+```
+
+### Enrollment
+```
+GET    /api/enrollment/subjects
+GET    /api/enrollment/subjects/available?fieldSlug=
+POST   /api/enrollment/subjects
+DELETE /api/enrollment/subjects/:subjectId
+GET    /api/enrollment/subjects/:subjectId/progress
+GET    /api/enrollment/fields/:fieldSlug/subjects
+PATCH  /api/enrollment/subjects/:subjectId/accessed
 ```
 
 ### Admin
@@ -535,6 +575,7 @@ my-backpack/
 │   │       │   ├── vocab/
 │   │       │   ├── quiz/
 │   │       │   ├── roadmap/
+│   │       │   ├── enrollment/
 │   │       │   ├── admin/
 │   │       │   └── question/
 │   │       │       └── question.types.ts  # IDraggable, IDropZone, IBlank,
@@ -596,7 +637,8 @@ my-backpack/
 │           │                   # INodeQuestionAssignment, QuestionType
 │           ├── quiz.ts         # IQuizSession, IAnswerRecord
 │           ├── learning.ts     # ILearningRecord, IAdaptiveProfile
-│           └── roadmap.ts      # IRoadmap, IRoadmapNode, IProgress
+│           ├── roadmap.ts      # IRoadmap, IRoadmapNode, ILesson, IProgress
+│           └── enrollment.ts   # IProfileSubjectEnrollment, IProgressSummary
 │       └── utils/
 │           └── resolveHelpers.ts  # resolveHelpers(questionDefaults, nodeOverrides)
 ├── CLAUDE.md                   ← this file
@@ -627,7 +669,13 @@ my-backpack/
 - [x] Answer record model (full capture including confidenceBefore/After)
 - [x] Roadmap system (Roadmap, RoadmapNode, ProfileRoadmapProgress models)
 - [x] Roadmap module (routes, service, unlock logic)
-- [x] IsiZulu Sounds roadmap seeded (vowels node + 5 mcq_audio + 1 dnd_single)
+- [x] Lesson model (replaces studyMaterial + assessment on RoadmapNode)
+- [x] Roadmap restructured — subjectId optional, nodes[] canonical order
+- [x] RoadmapNode restructured — lessons[] replaces studyMaterial + assessment
+- [x] ProfileRoadmapProgress — lesson-level progress tracking added
+- [x] Subject enrollment system (ProfileSubjectEnrollment model + enrollment module)
+- [x] Roadmap service updated — lesson-level start/complete/study routes
+- [x] IsiZulu Sounds roadmap seeded (3 lessons: introduction, practice, assessment)
 - [x] Admin endpoints (question generation, retry, status)
 - [x] Global error handler (AppError, catchAsync)
 - [x] AgeGroup content filter middleware
@@ -677,7 +725,10 @@ my-backpack/
 - DnD questions require `content.draggables` and `content.dropZones`; dnd_fill/dnd_build also need `content.sentenceTemplate`
 - `resolveHelpers(content.defaultHelpers, nodeOverrides)` from packages/shared gives final IQuestionHelpers
 - DnD rawResponse format: `JSON.stringify({ placements: [{ draggableId, dropZoneId }] })`
-- `assessment.questionAssignments` on RoadmapNode — always populate when creating nodes with questions
+- Lessons own questions — `lesson.questionIds[]` is the ordered list; questions are not directly on nodes
+- Roadmap.nodes[] and RoadmapNode.lessons[] are the canonical ordering arrays
+- A Roadmap must have at least one of subjectId or miniAppId (enforced by pre-validate hook)
+- Subject enrollment (ProfileSubjectEnrollment) is the entry point for a learner starting a subject
 
 ---
 

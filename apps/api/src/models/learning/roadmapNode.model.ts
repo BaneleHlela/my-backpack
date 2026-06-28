@@ -1,8 +1,7 @@
-// A single step on a roadmap path. Contains study material and assessment config.
-// Nodes are ordered by position (1-based). unlockRequires lists prerequisite nodeIds.
-// assessment.questionAssignments links Question documents with display order and helper overrides.
+// A single step on a roadmap path. Contains an ordered array of lessons.
+// Nodes are ordered via roadmap.nodes[]. unlockRequires lists prerequisite nodeIds.
+// studyMaterial and assessment have moved to individual Lesson documents.
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
-import { INodeQuestionAssignment } from '../../modules/question/question.types';
 
 export type NodeType = 'lesson' | 'checkpoint' | 'practice';
 export type CurriculumType = 'CAPS' | 'IEB' | 'Cambridge' | 'University' | 'Other';
@@ -12,29 +11,15 @@ export interface ICurriculumTag {
   gradeLevel: string;
 }
 
-export interface IStudyMaterial {
-  notes?: string;
-  audioUrl?: string;
-  videoUrl?: string;
-  bookReference?: {
-    bookId?: Types.ObjectId;
-    chapterNumber?: number;
-    pageStart?: number;
-    pageEnd?: number;
-  };
-}
-
-export interface IAssessmentSettings {
-  passingScore: number;
-  attemptsAllowed: number;
-  timeLimitSeconds?: number;
-  questionAssignments: INodeQuestionAssignment[];
-}
-
 export interface INodeRewards {
   xp: number;
   peanuts: number;
   badge?: string;
+}
+
+export interface INodeLessonRef {
+  lessonId: Types.ObjectId;
+  position: number;
 }
 
 export interface IRoadmapNodeDocument extends Document {
@@ -45,8 +30,7 @@ export interface IRoadmapNodeDocument extends Document {
   position: number;
   type: NodeType;
   curriculumTags: ICurriculumTag[];
-  studyMaterial: IStudyMaterial;
-  assessment: IAssessmentSettings;
+  lessons: INodeLessonRef[];
   unlockRequires: Types.ObjectId[];
   rewards: INodeRewards;
   isActive: boolean;
@@ -66,42 +50,10 @@ const curriculumTagSchema = new Schema<ICurriculumTag>(
   { _id: false }
 );
 
-const bookReferenceSchema = new Schema(
+const nodeLessonRefSchema = new Schema<INodeLessonRef>(
   {
-    bookId: { type: Schema.Types.ObjectId },
-    chapterNumber: { type: Number },
-    pageStart: { type: Number },
-    pageEnd: { type: Number },
-  },
-  { _id: false }
-);
-
-const studyMaterialSchema = new Schema<IStudyMaterial>(
-  {
-    notes: { type: String },
-    audioUrl: { type: String },
-    videoUrl: { type: String },
-    bookReference: { type: bookReferenceSchema },
-  },
-  { _id: false }
-);
-
-const questionAssignmentSchema = new Schema(
-  {
-    questionId: { type: Schema.Types.ObjectId, ref: 'Question', required: true },
-    order: { type: Number, required: true },
-    // Partial IQuestionHelpers — overrides question.content.defaultHelpers for this node context.
-    helperOverrides: { type: Schema.Types.Mixed, default: {} },
-  },
-  { _id: false }
-);
-
-const assessmentSchema = new Schema<IAssessmentSettings>(
-  {
-    passingScore: { type: Number, default: 0.7 },
-    attemptsAllowed: { type: Number, default: 3 },
-    timeLimitSeconds: { type: Number },
-    questionAssignments: { type: [questionAssignmentSchema], default: [] },
+    lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', required: true },
+    position: { type: Number, required: true },
   },
   { _id: false }
 );
@@ -127,8 +79,7 @@ const roadmapNodeSchema = new Schema<IRoadmapNodeDocument>(
       default: 'lesson',
     },
     curriculumTags: { type: [curriculumTagSchema], default: [] },
-    studyMaterial: { type: studyMaterialSchema, default: () => ({}) },
-    assessment: { type: assessmentSchema, default: () => ({}) },
+    lessons: { type: [nodeLessonRefSchema], default: [] },
     unlockRequires: { type: [Schema.Types.ObjectId], ref: 'RoadmapNode', default: [] },
     rewards: { type: rewardsSchema, default: () => ({}) },
     isActive: { type: Boolean, default: true },

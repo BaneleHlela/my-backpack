@@ -1,7 +1,7 @@
 // Seed script for the content hierarchy: Field → Subject → Topic → MiniApp,
-// plus the IsiZulu Sounds roadmap with vowel node and questions.
+// plus the IsiZulu Sounds roadmap with lessons and questions.
 // Usage: pnpm --filter api seed
-// Drops all hierarchy and roadmap data and re-seeds from scratch.
+// Drops all hierarchy, roadmap, lesson, and question data then re-seeds from scratch.
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import { connectDB } from './config/db';
@@ -14,6 +14,7 @@ import Definition, { IDefinitionDocument } from './models/apps/language/vocabula
 import Question, { IQuestionDocument } from './models/apps/language/vocabulary/question.model';
 import Roadmap from './models/learning/roadmap.model';
 import RoadmapNode from './models/learning/roadmapNode.model';
+import Lesson from './models/learning/lesson.model';
 
 async function seed(): Promise<void> {
   await connectDB();
@@ -25,19 +26,20 @@ async function seed(): Promise<void> {
     MiniApp.deleteMany({}),
     Roadmap.deleteMany({}),
     RoadmapNode.deleteMany({}),
+    Lesson.deleteMany({}),
     Term.deleteMany({}),
     Definition.deleteMany({}),
     Question.deleteMany({}),
   ]);
 
-  // Language field
+  // ── Content hierarchy ────────────────────────────────────────────────────────
+
   const language = await Field.create({
     name: 'Language',
     slug: 'language',
     description: 'Languages and linguistic skills',
   });
 
-  // English subject
   const english = await Subject.create({
     fieldId: language._id,
     name: 'English',
@@ -45,7 +47,6 @@ async function seed(): Promise<void> {
     description: 'English language learning',
   });
 
-  // IsiZulu Home Language subject
   const isizulu = await Subject.create({
     fieldId: language._id,
     name: 'IsiZulu Home Language',
@@ -53,7 +54,6 @@ async function seed(): Promise<void> {
     description: 'IsiZulu Home Language',
   });
 
-  // English → Vocabulary topic
   const vocabulary = await Topic.create({
     subjectId: english._id,
     name: 'Vocabulary',
@@ -61,7 +61,6 @@ async function seed(): Promise<void> {
     description: 'English vocabulary building',
   });
 
-  // IsiZulu → Sounds topic
   const sounds = await Topic.create({
     subjectId: isizulu._id,
     name: 'Sounds',
@@ -69,7 +68,6 @@ async function seed(): Promise<void> {
     description: 'IsiZulu sounds and pronunciation',
   });
 
-  // English → Vocabulary → Dictionary mini-app
   const dictionary = await MiniApp.create({
     topicId: vocabulary._id,
     name: 'Dictionary',
@@ -78,7 +76,6 @@ async function seed(): Promise<void> {
     type: 'dictionary',
   });
 
-  // English → Vocabulary → Quiz mini-app
   const vocabQuiz = await MiniApp.create({
     topicId: vocabulary._id,
     name: 'Quiz',
@@ -87,7 +84,6 @@ async function seed(): Promise<void> {
     type: 'quiz',
   });
 
-  // IsiZulu → Sounds → Roadmap mini-app
   const soundsRoadmapMiniApp = await MiniApp.create({
     topicId: sounds._id,
     name: 'Sounds Roadmap',
@@ -106,16 +102,18 @@ async function seed(): Promise<void> {
   console.log('        └── Sounds');
   console.log('              └── Sounds Roadmap:', soundsRoadmapMiniApp._id);
 
-  // ── IsiZulu Sounds Roadmap ──────────────────────────────────────────────────
+  // ── IsiZulu Sounds Roadmap ───────────────────────────────────────────────────
 
   const soundsRoadmap = await Roadmap.create({
+    subjectId: isizulu._id,
     miniAppId: soundsRoadmapMiniApp._id,
     title: 'IsiZulu Sounds',
     description: 'Learn IsiZulu sounds step by step, from vowels to syllables',
+    nodes: [],
   });
 
-  // ── Vowels Node ─────────────────────────────────────────────────────────────
-  // Created first without questionAssignments; updated after questions are created.
+  // ── Vowels Node ──────────────────────────────────────────────────────────────
+  // Created first without lessons; lessons[] updated after lesson documents are created.
 
   const vowelsNode = await RoadmapNode.create({
     roadmapId: soundsRoadmap._id,
@@ -127,25 +125,65 @@ async function seed(): Promise<void> {
       { curriculum: 'CAPS', gradeLevel: '1' },
       { curriculum: 'CAPS', gradeLevel: '2' },
     ],
-    studyMaterial: {
-      notes: `# Izinhlamvu Zokuvuma (Vowels)\n\nIsiZulu has 5 vowel sounds:\n\n- **a** — as in "amanzi" (water)\n- **e** — as in "ekhaya" (at home)\n- **i** — as in "inkosi" (chief/lord)\n- **o** — as in "omama" (mothers)\n- **u** — as in "ubuntu" (humanity)`,
-    },
-    assessment: {
-      passingScore: 0.6,
-      attemptsAllowed: 0,
-      timeLimitSeconds: undefined,
-      questionAssignments: [],
-    },
     unlockRequires: [],
-    rewards: {
-      xp: 50,
-      peanuts: 10,
+    rewards: { xp: 50, peanuts: 10 },
+    lessons: [],
+  });
+
+  // ── Three lessons for the vowels node ────────────────────────────────────────
+
+  // Lesson 1 — Introduction: auto-completes when study material is viewed.
+  const vowelsIntroLesson = await Lesson.create({
+    nodeId: vowelsNode._id,
+    roadmapId: soundsRoadmap._id,
+    position: 1,
+    title: 'Meet the Vowels',
+    lessonType: 'introduction',
+    studyMaterial: {
+      notes: `# Izinhlamvu Zokuvuma (Vowels)\n\nIsiZulu has 5 vowel sounds:\n\n- **a** — as in "amanzi" (water)\n- **e** — as in "ekhaya" (at home)\n- **i** — as in "inkosi" (chief)\n- **o** — as in "omama" (mothers)\n- **u** — as in "ubuntu" (humanity)`,
     },
+    questionIds: [],
+    passingScore: 0,
+  });
+
+  // Lesson 2 — Practice: low pressure, auto-completes after all questions attempted once.
+  const vowelsPracticeLesson = await Lesson.create({
+    nodeId: vowelsNode._id,
+    roadmapId: soundsRoadmap._id,
+    position: 2,
+    title: 'Hear the Vowels',
+    lessonType: 'practice',
+    questionIds: [],
+    passingScore: 0,
+  });
+
+  // Lesson 3 — Assessment: must pass to complete the node.
+  const vowelsAssessmentLesson = await Lesson.create({
+    nodeId: vowelsNode._id,
+    roadmapId: soundsRoadmap._id,
+    position: 3,
+    title: 'Vowels Challenge',
+    lessonType: 'assessment',
+    questionIds: [],
+    passingScore: 0.7,
+  });
+
+  // Update vowelsNode with ordered lessons array.
+  await RoadmapNode.findByIdAndUpdate(vowelsNode._id, {
+    lessons: [
+      { lessonId: vowelsIntroLesson._id, position: 1 },
+      { lessonId: vowelsPracticeLesson._id, position: 2 },
+      { lessonId: vowelsAssessmentLesson._id, position: 3 },
+    ],
+  });
+
+  // Update roadmap with nodes array.
+  await Roadmap.findByIdAndUpdate(soundsRoadmap._id, {
+    nodes: [{ nodeId: vowelsNode._id, position: 1 }],
   });
 
   // ── Sound Terms for Vowels ───────────────────────────────────────────────────
 
-  // audioUrl values are placeholders — replace with real GCS URLs
   const vowelData = [
     {
       word: 'a',
@@ -207,11 +245,9 @@ async function seed(): Promise<void> {
     vowelTerms.push({ term, definition });
   }
 
-  // ── Questions for Vowels Node ────────────────────────────────────────────────
+  // ── Questions ────────────────────────────────────────────────────────────────
+  // All practice questions → vowelsPracticeLesson (lesson 2).
 
-  // One mcq_audio question per vowel.
-  // prompt starting with "audio:" tells the frontend to play the GCS audio path
-  // rather than render the string as text.
   const mcqAudioQuestions: IQuestionDocument[] = [];
 
   for (const { term, definition } of vowelTerms) {
@@ -250,9 +286,8 @@ async function seed(): Promise<void> {
     mcqAudioQuestions.push(q);
   }
 
-  // ── DnD question for vowel "a" ───────────────────────────────────────────────
-
-  const { term: aTerm, definition: aDefinition } = vowelTerms[0]; // vowel "a"
+  // DnD question for vowel "a".
+  const { term: aTerm, definition: aDefinition } = vowelTerms[0];
 
   const dndAQuestion = await Question.create({
     termId: aTerm._id,
@@ -272,41 +307,13 @@ async function seed(): Promise<void> {
         emotion: 'excited',
       },
       draggables: [
-        {
-          id: 'vowel-a',
-          label: 'a',
-          imageUrl: 'sounds/isizulu/vowels/card-a.png',
-          audioUrl: 'sounds/isizulu/vowels/a.mp3',
-        },
-        {
-          id: 'vowel-e',
-          label: 'e',
-          imageUrl: 'sounds/isizulu/vowels/card-e.png',
-          audioUrl: 'sounds/isizulu/vowels/e.mp3',
-        },
-        {
-          id: 'vowel-i',
-          label: 'i',
-          imageUrl: 'sounds/isizulu/vowels/card-i.png',
-          audioUrl: 'sounds/isizulu/vowels/i.mp3',
-        },
+        { id: 'vowel-a', label: 'a', imageUrl: 'sounds/isizulu/vowels/card-a.png', audioUrl: 'sounds/isizulu/vowels/a.mp3' },
+        { id: 'vowel-e', label: 'e', imageUrl: 'sounds/isizulu/vowels/card-e.png', audioUrl: 'sounds/isizulu/vowels/e.mp3' },
+        { id: 'vowel-i', label: 'i', imageUrl: 'sounds/isizulu/vowels/card-i.png', audioUrl: 'sounds/isizulu/vowels/i.mp3' },
       ],
-      dropZones: [
-        {
-          id: 'zone-main',
-          requiredDraggableIds: ['vowel-a'],
-          requiredCount: 1,
-        },
-      ],
-      successFeedback: {
-        text: 'Yebo! Ngu-"A"!',
-        audioUrl: 'sounds/isizulu/feedback/correct-a.mp3',
-        highlightWords: ['Yebo', 'Ngu', 'A'],
-      },
-      tryAgainFeedback: {
-        text: 'Zama futhi!',
-        audioUrl: 'sounds/isizulu/feedback/try-again.mp3',
-      },
+      dropZones: [{ id: 'zone-main', requiredDraggableIds: ['vowel-a'], requiredCount: 1 }],
+      successFeedback: { text: 'Yebo! Ngu-"A"!', audioUrl: 'sounds/isizulu/feedback/correct-a.mp3', highlightWords: ['Yebo', 'Ngu', 'A'] },
+      tryAgainFeedback: { text: 'Zama futhi!', audioUrl: 'sounds/isizulu/feedback/try-again.mp3' },
       defaultHelpers: {
         autoReadPrompt: true,
         autoReadOptions: true,
@@ -321,33 +328,26 @@ async function seed(): Promise<void> {
     },
   });
 
-  // ── Assign questions to the vowels node ─────────────────────────────────────
-  // mcq_audio questions are order 1–5 (one per vowel); dnd_single for "a" is order 6.
-
-  const questionAssignments = [
-    ...mcqAudioQuestions.map((q, i) => ({
-      questionId: q._id,
-      order: i + 1,
-      helperOverrides: {},
-    })),
-    {
-      questionId: dndAQuestion._id,
-      order: mcqAudioQuestions.length + 1,
-      helperOverrides: {},
-    },
+  // Assign all questions to the practice lesson (lesson 2).
+  const practiceQuestionIds = [
+    ...mcqAudioQuestions.map((q) => q._id),
+    dndAQuestion._id,
   ];
 
-  await RoadmapNode.findByIdAndUpdate(vowelsNode._id, {
-    'assessment.questionAssignments': questionAssignments,
+  await Lesson.findByIdAndUpdate(vowelsPracticeLesson._id, {
+    questionIds: practiceQuestionIds,
   });
 
-  console.log('Seeded IsiZulu Sounds roadmap:');
-  console.log('  Roadmap: IsiZulu Sounds');
+  console.log('\nSeeded IsiZulu Sounds roadmap:');
+  console.log('  Roadmap: IsiZulu Sounds (subjectId:', isizulu._id, ')');
   console.log('  Node 1: Izinhlamvu Zokuvuma (Vowels)');
+  console.log('    Lesson 1: Meet the Vowels (introduction)');
+  console.log('    Lesson 2: Hear the Vowels (practice) —', practiceQuestionIds.length, 'questions');
+  console.log('    Lesson 3: Vowels Challenge (assessment)');
   console.log('  Sound terms created:', vowelTerms.length);
   console.log('  mcq_audio questions:', mcqAudioQuestions.length);
   console.log('  dnd_single questions: 1 (vowel "a")');
-  console.log('  Total questions:', mcqAudioQuestions.length + 1);
+  console.log('  Total questions:', practiceQuestionIds.length);
 }
 
 seed()

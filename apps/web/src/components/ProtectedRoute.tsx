@@ -9,15 +9,18 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, requireFullToken = true }: ProtectedRouteProps) {
-  const { accessToken, partialToken, isCheckingAuth } = useSelector(
-    (state: RootState) => state.auth
-  );
+  const { accessToken, partialToken, isCheckingAuth, isLoadingProfile, activeProfile } =
+    useSelector((state: RootState) => state.auth);
 
   if (isCheckingAuth) return null;
 
   if (requireFullToken) {
     if (!partialToken && !accessToken) return <Navigate to="/login" replace />;
     if (partialToken && !accessToken) return <Navigate to="/select-profile" replace />;
+    if (isLoadingProfile) return null;
+    if (accessToken && activeProfile && !activeProfile.isSetupComplete) {
+      return <Navigate to="/profile-setup" replace />;
+    }
     return <>{children}</>;
   }
 

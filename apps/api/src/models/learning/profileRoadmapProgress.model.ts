@@ -1,8 +1,19 @@
 // Tracks one profile's progress through one roadmap.
-// nodeProgress is a Map keyed by nodeId (string) for O(1) lookups per node.
+// nodeProgress is a Map keyed by nodeId (string); each entry contains
+// a lessonProgress Map keyed by lessonId (string) for O(1) lookups.
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
 
 export type NodeStatus = 'locked' | 'unlocked' | 'in_progress' | 'completed';
+export type LessonStatus = 'locked' | 'unlocked' | 'in_progress' | 'completed';
+
+export interface ILessonProgressEntry {
+  status: LessonStatus;
+  completedAt?: Date;
+  attempts: number;
+  bestScore: number;
+  studyMaterialViewedAt?: Date;
+  lastAttemptAt?: Date;
+}
 
 export interface INodeProgressEntry {
   status: NodeStatus;
@@ -11,14 +22,14 @@ export interface INodeProgressEntry {
   bestScore: number;
   lastAttemptAt?: Date;
   completedAt?: Date;
-  studyMaterialViewedAt?: Date;
+  lessonProgress: Map<string, ILessonProgressEntry>;
 }
 
 export interface IProfileRoadmapProgressDocument extends Document {
   _id: Types.ObjectId;
   profileId: Types.ObjectId;
   roadmapId: Types.ObjectId;
-  miniAppId: Types.ObjectId;
+  miniAppId?: Types.ObjectId;
   nodeProgress: Map<string, INodeProgressEntry>;
   currentNodeId?: Types.ObjectId;
   totalStars: number;
@@ -27,6 +38,22 @@ export interface IProfileRoadmapProgressDocument extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+const lessonProgressEntrySchema = new Schema<ILessonProgressEntry>(
+  {
+    status: {
+      type: String,
+      enum: ['locked', 'unlocked', 'in_progress', 'completed'],
+      required: true,
+    },
+    completedAt: { type: Date },
+    attempts: { type: Number, default: 0 },
+    bestScore: { type: Number, default: 0, min: 0, max: 1 },
+    studyMaterialViewedAt: { type: Date },
+    lastAttemptAt: { type: Date },
+  },
+  { _id: false }
+);
 
 const nodeProgressEntrySchema = new Schema<INodeProgressEntry>(
   {
@@ -40,7 +67,11 @@ const nodeProgressEntrySchema = new Schema<INodeProgressEntry>(
     bestScore: { type: Number, default: 0, min: 0, max: 1 },
     lastAttemptAt: { type: Date },
     completedAt: { type: Date },
-    studyMaterialViewedAt: { type: Date },
+    lessonProgress: {
+      type: Map,
+      of: lessonProgressEntrySchema,
+      default: () => new Map(),
+    },
   },
   { _id: false }
 );
@@ -49,7 +80,7 @@ const profileRoadmapProgressSchema = new Schema<IProfileRoadmapProgressDocument>
   {
     profileId: { type: Schema.Types.ObjectId, ref: 'Profile', required: true },
     roadmapId: { type: Schema.Types.ObjectId, ref: 'Roadmap', required: true },
-    miniAppId: { type: Schema.Types.ObjectId, ref: 'MiniApp', required: true },
+    miniAppId: { type: Schema.Types.ObjectId, ref: 'MiniApp' },
     nodeProgress: {
       type: Map,
       of: nodeProgressEntrySchema,

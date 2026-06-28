@@ -9,7 +9,9 @@ import { injectStore } from './lib/axios';
 import { checkAuth, fetchActiveProfile } from './features/auth/authSlice';
 
 import AuthLayout from './layouts/AuthLayout';
+import AppLayout from './layouts/AppLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -17,7 +19,10 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import SelectProfilePage from './pages/SelectProfilePage';
 import ProfileSetupPage from './pages/ProfileSetupPage';
-import DashboardPage from './pages/DashboardPage';
+import DashboardPage from './pages/dashboard/DashboardPage';
+import SubjectHomePage from './pages/subject/SubjectHomePage';
+import LessonPlayerPage from './pages/lesson/LessonPlayerPage';
+import MiniAppPage from './pages/miniapp/MiniAppPage';
 
 import './index.css';
 
@@ -29,7 +34,6 @@ function AppRoutes() {
   useEffect(() => {
     const init = async () => {
       const result = await dispatch(checkAuth());
-      // If we got a full token back (returning user with active profile), load the profile
       if (checkAuth.fulfilled.match(result) && result.payload.data.accessToken) {
         dispatch(fetchActiveProfile());
       }
@@ -40,6 +44,7 @@ function AppRoutes() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Auth pages */}
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
@@ -48,6 +53,7 @@ function AppRoutes() {
           <Route path="/verify-email" element={<VerifyEmailPage />} />
         </Route>
 
+        {/* Requires partial token only */}
         <Route
           path="/select-profile"
           element={
@@ -57,6 +63,7 @@ function AppRoutes() {
           }
         />
 
+        {/* Requires full token — profile setup (no AppLayout, no nav) */}
         <Route
           path="/profile-setup"
           element={
@@ -66,23 +73,26 @@ function AppRoutes() {
           }
         />
 
+        {/* Protected app pages — wrapped in AppLayout for nav + background */}
         <Route
-          path="/dashboard"
           element={
             <ProtectedRoute>
-              <DashboardPage />
+              <AppLayout />
             </ProtectedRoute>
           }
-        />
-
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          }
-        />
+        >
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/subject/:subjectSlug" element={<SubjectHomePage />} />
+          <Route
+            path="/subject/:subjectSlug/lesson/:lessonId"
+            element={<LessonPlayerPage />}
+          />
+          <Route
+            path="/field/:fieldSlug/subject/:subjectSlug/topic/:topicSlug/miniapp/:miniAppSlug"
+            element={<MiniAppPage />}
+          />
+        </Route>
       </Routes>
     </BrowserRouter>
   );
