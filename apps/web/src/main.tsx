@@ -67,7 +67,7 @@ function AppRoutes() {
         <Route
           path="/profile-setup"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowIncompleteProfile>
               <ProfileSetupPage />
             </ProtectedRoute>
           }

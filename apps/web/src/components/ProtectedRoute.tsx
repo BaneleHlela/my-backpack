@@ -6,9 +6,10 @@ import type { RootState } from '../app/store';
 interface ProtectedRouteProps {
   children: ReactNode;
   requireFullToken?: boolean;
+  allowIncompleteProfile?: boolean;
 }
 
-export default function ProtectedRoute({ children, requireFullToken = true }: ProtectedRouteProps) {
+export default function ProtectedRoute({ children, requireFullToken = true, allowIncompleteProfile = false }: ProtectedRouteProps) {
   const { accessToken, partialToken, isCheckingAuth, isLoadingProfile, activeProfile } =
     useSelector((state: RootState) => state.auth);
 
@@ -18,7 +19,7 @@ export default function ProtectedRoute({ children, requireFullToken = true }: Pr
     if (!partialToken && !accessToken) return <Navigate to="/login" replace />;
     if (partialToken && !accessToken) return <Navigate to="/select-profile" replace />;
     if (isLoadingProfile) return null;
-    if (accessToken && activeProfile && !activeProfile.isSetupComplete) {
+    if (!allowIncompleteProfile && accessToken && activeProfile && !activeProfile.isSetupComplete) {
       return <Navigate to="/profile-setup" replace />;
     }
     return <>{children}</>;

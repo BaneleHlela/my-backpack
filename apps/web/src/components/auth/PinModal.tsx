@@ -80,7 +80,7 @@ export default function PinModal({ profileName, isLoading, error, onSubmit, onCl
               if (key === '') return <div key={idx} />;
               return (
                 <motion.button
-                  key={key}
+                  key={idx}
                   type="button"
                   whileTap={{ scale: 0.88 }}
                   onClick={() => handleKey(key)}

@@ -56,6 +56,7 @@ export default function SelectProfilePage() {
     setPendingProfile(null);
     const profileResult = await dispatch(fetchActiveProfile());
     if (fetchActiveProfile.fulfilled.match(profileResult)) {
+      console.log('Profile selected:', profileResult.payload);
       const destination = profileResult.payload.isSetupComplete ? '/dashboard' : '/profile-setup';
       navigate(destination, { replace: true });
     }
