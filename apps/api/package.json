@@ -6,7 +6,7 @@
     "dev": "nodemon src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
-    "seed": "ts-node src/seed.ts",
+    "seed": "ts-node src/seed/index.ts",
     "generate-questions": "ts-node src/scripts/generateQuestions.ts",
     "cleanup-questions": "ts-node src/scripts/cleanupQuestions.ts"
   },

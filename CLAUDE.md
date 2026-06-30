@@ -558,6 +558,31 @@ Shared asset URLs: `packages/shared/constants/assets.ts`
 
 ---
 
+## Seed Data System
+
+The seed system lives in `apps/api/src/seed/` and is fully idempotent —
+running `pnpm --filter api seed` multiple times updates existing records
+rather than creating duplicates, using `findOneAndUpdate` with
+`upsert: true`.
+
+Structure:
+- `data/` — raw constant data, no DB calls
+- `seeders/` — functions that write core content to DB
+- `seeders/roadmaps/` — one file per subject's roadmap
+- `questions/` — one file per subject, contains the actual question
+  content. This is where you add or edit individual questions
+  (e.g. vowels, basic vocab terms).
+
+To add a new vowel or sound: edit `questions/isizulu/vowels.questions.ts`
+To add a new English term: edit `questions/english/vocab-basics.questions.ts`
+To add a new subject's roadmap: create a new file in `seeders/roadmaps/`
+
+You do not need to drop the database before re-running seed — the upsert
+pattern handles updates safely. Dropping the DB is still useful after
+major schema changes that old documents won't satisfy.
+
+---
+
 ## Folder Structure
 
 ```
@@ -599,7 +624,14 @@ my-backpack/
 │   │       ├── scripts/
 │   │       │   ├── generateQuestions.ts
 │   │       │   └── cleanupQuestions.ts
-│   │       ├── seed.ts
+│   │       ├── seed/
+│   │       │   ├── index.ts            # master runner
+│   │       │   ├── data/               # raw constant data, no DB calls
+│   │       │   ├── seeders/            # accounts, content hierarchy, roadmaps
+│   │       │   │   └── roadmaps/
+│   │       │   └── questions/          # per-subject question content
+│   │       │       ├── english/
+│   │       │       └── isizulu/
 │   │       └── app.ts
 │   ├── web/
 │   │   └── src/
@@ -696,8 +728,8 @@ my-backpack/
       VerifyEmail, SelectProfile)
 - [x] Profile setup page
 - [x] Dashboard skeleton
-- [ ] Vocab mini-app UI (search, term detail, bucket, dictionary)
-- [ ] Quiz UI
+- [x] Vocab mini-app UI (search, term detail, bucket, dictionary)
+- [x] Quiz UI (12 text-based question types; dnd_* and mcq_audio show a "not yet supported" placeholder)
 - [ ] Roadmap UI (roadmap screen, lesson player, completion screen)
 - [ ] Profile management screens
 

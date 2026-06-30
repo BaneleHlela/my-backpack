@@ -1,11 +1,15 @@
-// Scaffold page for mini-app content (dictionary, quiz, etc.).
+// Mini-app entry page. Fetches the MiniApp document for this route and branches
+// which screen renders based on its `type` field.
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Loader2 } from 'lucide-react';
+import axiosInstance from '../../lib/axios';
+import type { MiniAppBreadcrumb } from '@my-backpack/shared';
+import DictionaryPage from '../DictionaryPage/DictionaryPage';
+import QuizPage from '../QuizPage/QuizPage';
 
 const TYPE_PLACEHOLDERS: Record<string, { emoji: string; label: string }> = {
-  dictionary: { emoji: '📖', label: 'Dictionary coming soon' },
-  quiz: { emoji: '🧠', label: 'Quiz coming soon' },
   roadmap: { emoji: '🗺️', label: 'Roadmap coming soon' },
   flashcards: { emoji: '🃏', label: 'Flashcards coming soon' },
   practice: { emoji: '✏️', label: 'Practice coming soon' },
@@ -20,17 +24,67 @@ export default function MiniAppPage() {
   }>();
   const navigate = useNavigate();
 
-  const placeholder = TYPE_PLACEHOLDERS[miniAppSlug ?? ''] ?? {
-    emoji: '📦',
-    label: 'Coming soon',
-  };
+  const [breadcrumb, setBreadcrumb] = useState<MiniAppBreadcrumb | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!fieldSlug || !subjectSlug || !topicSlug || !miniAppSlug) return;
+    setIsLoading(true);
+    setError(null);
+    axiosInstance
+      .get(
+        `/content/fields/${fieldSlug}/subjects/${subjectSlug}/topics/${topicSlug}/miniapps/${miniAppSlug}`
+      )
+      .then((res) => setBreadcrumb(res.data.data as MiniAppBreadcrumb))
+      .catch((err: unknown) => {
+        const e = err as { response?: { data?: { message?: string } } };
+        setError(e.response?.data?.message ?? 'Failed to load mini-app');
+      })
+      .finally(() => setIsLoading(false));
+  }, [fieldSlug, subjectSlug, topicSlug, miniAppSlug]);
+
+  const miniApp = breadcrumb?.miniApp ?? null;
 
   const breadcrumbs = [
-    { label: fieldSlug ?? '', href: '/dashboard' },
-    { label: subjectSlug ?? '', href: `/subject/${subjectSlug}` },
-    { label: topicSlug ?? '', href: `/subject/${subjectSlug}` },
-    { label: miniAppSlug ?? '', href: '#' },
+    { label: breadcrumb?.field.name ?? fieldSlug ?? '', href: '/dashboard' },
+    { label: breadcrumb?.subject.name ?? subjectSlug ?? '', href: `/subject/${subjectSlug}` },
+    { label: breadcrumb?.topic.name ?? topicSlug ?? '', href: `/subject/${subjectSlug}` },
+    { label: miniApp?.name ?? miniAppSlug ?? '', href: '#' },
   ].filter((b) => b.label);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-violet-400" />
+      </div>
+    );
+  }
+
+  if (error || !miniApp) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-6 text-center">
+        <p className="text-gray-500 mb-4">{error ?? 'Mini-app not found.'}</p>
+        <button
+          type="button"
+          onClick={() => navigate(`/subject/${subjectSlug}`)}
+          className="px-5 py-2 rounded-xl bg-white/50 border border-white/50 text-sm font-medium text-gray-700 hover:bg-white/70 transition-colors"
+        >
+          Back to roadmap
+        </button>
+      </div>
+    );
+  }
+
+  if (miniApp.type === 'dictionary') {
+    return <DictionaryPage miniApp={miniApp} subjectSlug={subjectSlug ?? ''} />;
+  }
+
+  if (miniApp.type === 'quiz') {
+    return <QuizPage miniApp={miniApp} subjectSlug={subjectSlug ?? ''} />;
+  }
+
+  const placeholder = TYPE_PLACEHOLDERS[miniApp.type] ?? { emoji: '📦', label: 'Coming soon' };
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
@@ -64,7 +118,7 @@ export default function MiniAppPage() {
       >
         <span className="text-6xl">{placeholder.emoji}</span>
         <p className="text-lg font-semibold text-gray-700">{placeholder.label}</p>
-        <p className="text-sm text-gray-500 capitalize">{miniAppSlug}</p>
+        <p className="text-sm text-gray-500">{miniApp.name}</p>
         <button
           type="button"
           onClick={() => navigate(`/subject/${subjectSlug}`)}

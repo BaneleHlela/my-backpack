@@ -92,6 +92,10 @@ function AppRoutes() {
             path="/field/:fieldSlug/subject/:subjectSlug/topic/:topicSlug/miniapp/:miniAppSlug"
             element={<MiniAppPage />}
           />
+          <Route
+            path="/field/:fieldSlug/subject/:subjectSlug/topic/:topicSlug/miniapp/:miniAppSlug/term/:termId"
+            element={<MiniAppPage />}
+          />
         </Route>
       </Routes>
     </BrowserRouter>
