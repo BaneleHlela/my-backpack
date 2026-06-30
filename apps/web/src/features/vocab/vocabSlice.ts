@@ -39,10 +39,25 @@ export interface BucketTermEntryLite {
     partOfSpeech: string;
     status: string;
     addedAt: string;
-    confidenceScore: number;
   };
   term: { _id: string; word: string; phonetic?: string; audioUrl?: string };
   definition: { _id: string; definition: string; examples: string[]; partOfSpeech: string };
+  learningRecord: {
+    confidenceScore: number;
+    learningStatus: string;
+    totalAnswers: number;
+    correctAnswers: number;
+    lastAnsweredAt: string | null;
+    nextReviewAt: string | null;
+    masteredAt: string | null;
+  } | null;
+}
+
+export interface BucketPagination {
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
 }
 
 export interface DictionaryTermPreview {
@@ -92,6 +107,13 @@ interface VocabState {
 
   addingDefinitionIds: string[];
   addError: string | null;
+
+  bucket: BucketTermEntryLite[];
+  bucketPagination: BucketPagination | null;
+  bucketStatusFilter: 'learning' | 'mastered' | 'paused' | 'all';
+  bucketLoading: boolean;
+  bucketError: string | null;
+  removingTermIds: string[];
 }
 
 const initialState: VocabState = {
@@ -119,6 +141,13 @@ const initialState: VocabState = {
 
   addingDefinitionIds: [],
   addError: null,
+
+  bucket: [],
+  bucketPagination: null,
+  bucketStatusFilter: 'all',
+  bucketLoading: false,
+  bucketError: null,
+  removingTermIds: [],
 };
 
 // ── Thunks ─────────────────────────────────────────────────────────────────
@@ -231,6 +260,43 @@ export const browseDictionary = createAsyncThunk(
   }
 );
 
+export const fetchBucket = createAsyncThunk(
+  'vocab/fetchBucket',
+  async (
+    {
+      miniAppId,
+      status = 'all',
+      page = 1,
+      limit = 50,
+    }: { miniAppId: string; status?: 'learning' | 'mastered' | 'paused' | 'all'; page?: number; limit?: number },
+    { rejectWithValue }
+  ) => {
+    try {
+      const res = await axiosInstance.get('/vocab/bucket', {
+        params: { miniAppId, status, page, limit },
+      });
+      return res.data.data as { terms: BucketTermEntryLite[]; pagination: BucketPagination };
+    } catch (err) {
+      return rejectWithValue(extractErrorMessage(err, 'Failed to load bucket'));
+    }
+  }
+);
+
+export const removeBucketEntry = createAsyncThunk(
+  'vocab/removeBucketEntry',
+  async ({ termId, miniAppId }: { termId: string; miniAppId: string }, { rejectWithValue }) => {
+    try {
+      await axiosInstance.delete(`/vocab/bucket/${termId}`, { params: { miniAppId } });
+      return { termId };
+    } catch (err) {
+      return rejectWithValue({
+        termId,
+        message: extractErrorMessage(err, 'Failed to remove term from bucket'),
+      });
+    }
+  }
+);
+
 // ── Slice ──────────────────────────────────────────────────────────────────
 
 const vocabSlice = createSlice({
@@ -248,6 +314,12 @@ const vocabSlice = createSlice({
     },
     setBrowseLetter(state, action: { payload: string }) {
       state.browseLetter = action.payload;
+    },
+    setBucketStatusFilter(
+      state,
+      action: { payload: 'learning' | 'mastered' | 'paused' | 'all' }
+    ) {
+      state.bucketStatusFilter = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -354,9 +426,44 @@ const vocabSlice = createSlice({
       })
       .addCase(browseDictionary.rejected, (state) => {
         state.browseLoading = false;
+      })
+      // bucket
+      .addCase(fetchBucket.pending, (state) => {
+        state.bucketLoading = true;
+        state.bucketError = null;
+      })
+      .addCase(fetchBucket.fulfilled, (state, action) => {
+        state.bucketLoading = false;
+        state.bucket = action.payload.terms;
+        state.bucketPagination = action.payload.pagination;
+      })
+      .addCase(fetchBucket.rejected, (state, action) => {
+        state.bucketLoading = false;
+        state.bucketError = action.payload as string;
+      })
+      // remove bucket entry
+      .addCase(removeBucketEntry.pending, (state, action) => {
+        state.removingTermIds.push(action.meta.arg.termId);
+      })
+      .addCase(removeBucketEntry.fulfilled, (state, action) => {
+        state.removingTermIds = state.removingTermIds.filter(
+          (id) => id !== action.payload.termId
+        );
+        state.bucket = state.bucket.filter((e) => e.entry.termId !== action.payload.termId);
+        if (state.bucketPagination) {
+          state.bucketPagination.total = Math.max(0, state.bucketPagination.total - 1);
+        }
+      })
+      .addCase(removeBucketEntry.rejected, (state, action) => {
+        const payload = action.payload as { termId: string; message: string } | undefined;
+        if (payload) {
+          state.removingTermIds = state.removingTermIds.filter((id) => id !== payload.termId);
+          state.bucketError = payload.message;
+        }
       });
   },
 });
 
-export const { clearSearch, clearActiveTerm, setBrowseLetter } = vocabSlice.actions;
+export const { clearSearch, clearActiveTerm, setBrowseLetter, setBucketStatusFilter } =
+  vocabSlice.actions;
 export default vocabSlice.reducer;

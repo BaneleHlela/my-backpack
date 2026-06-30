@@ -102,9 +102,9 @@ export const getBucketHandler = catchAsync(async (req: Request, res: Response): 
     req.query as Partial<GetBucketQuery>;
   if (!miniAppId) throw new AppError('miniAppId query parameter is required', 400);
 
-  const validStatuses = ['learning', 'mastered', 'all'];
+  const validStatuses = ['learning', 'mastered', 'paused', 'all'];
   const resolvedStatus = validStatuses.includes(status ?? '')
-    ? (status as 'learning' | 'mastered' | 'all')
+    ? (status as 'learning' | 'mastered' | 'paused' | 'all')
     : 'all';
   const resolvedPage = Math.max(1, parseInt(page ?? '1', 10));
   const resolvedLimit = Math.min(100, Math.max(1, parseInt(limit ?? '20', 10)));

@@ -1,12 +1,13 @@
 // Mini-app entry page. Fetches the MiniApp document for this route and branches
 // which screen renders based on its `type` field.
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 import axiosInstance from '../../lib/axios';
 import type { MiniAppBreadcrumb } from '@my-backpack/shared';
 import DictionaryPage from '../DictionaryPage/DictionaryPage';
+import BucketPage from '../BucketPage/BucketPage';
 import QuizPage from '../QuizPage/QuizPage';
 
 const TYPE_PLACEHOLDERS: Record<string, { emoji: string; label: string }> = {
@@ -23,6 +24,7 @@ export default function MiniAppPage() {
     miniAppSlug: string;
   }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [breadcrumb, setBreadcrumb] = useState<MiniAppBreadcrumb | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,6 +79,9 @@ export default function MiniAppPage() {
   }
 
   if (miniApp.type === 'dictionary') {
+    if (location.pathname.endsWith('/bucket')) {
+      return <BucketPage miniApp={miniApp} subjectSlug={subjectSlug ?? ''} />;
+    }
     return <DictionaryPage miniApp={miniApp} subjectSlug={subjectSlug ?? ''} />;
   }
 

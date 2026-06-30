@@ -197,6 +197,22 @@ export async function getTermDetail(
   };
 }
 
+// Builds the nested learningRecord summary shared by getRecent and getBucket responses.
+function buildLearningRecordSummary(
+  record: { confidenceScore: number; status: string; totalAnswers: number; correctAnswers: number; lastAnsweredAt?: Date; nextReviewAt?: Date; masteredAt?: Date } | undefined
+): BucketTermEntry['learningRecord'] {
+  if (!record) return null;
+  return {
+    confidenceScore: record.confidenceScore,
+    learningStatus: record.status,
+    totalAnswers: record.totalAnswers,
+    correctAnswers: record.correctAnswers,
+    lastAnsweredAt: record.lastAnsweredAt ?? null,
+    nextReviewAt: record.nextReviewAt ?? null,
+    masteredAt: record.masteredAt ?? null,
+  };
+}
+
 // Internal type for the A-Z browse aggregation result.
 interface BrowseAggregationResult {
   _id: Types.ObjectId;
@@ -412,7 +428,6 @@ export async function getRecent(
         partOfSpeech: e.partOfSpeech,
         status: e.status,
         addedAt: e.addedAt,
-        confidenceScore: record?.confidenceScore ?? 0,
       },
       term: {
         _id: term?._id.toString() ?? e.termId.toString(),
@@ -426,6 +441,7 @@ export async function getRecent(
         examples: def?.examples ?? [],
         partOfSpeech: def?.partOfSpeech ?? e.partOfSpeech,
       },
+      learningRecord: buildLearningRecordSummary(record),
     };
   });
 }
@@ -434,7 +450,7 @@ export async function getRecent(
 export async function getBucket(
   profileId: string,
   miniAppId: string,
-  status: 'learning' | 'mastered' | 'all',
+  status: 'learning' | 'mastered' | 'paused' | 'all',
   page: number,
   limit: number
 ): Promise<PaginatedBucketResponse> {
@@ -497,7 +513,6 @@ export async function getBucket(
         partOfSpeech: e.partOfSpeech,
         status: e.status,
         addedAt: e.addedAt,
-        confidenceScore: record?.confidenceScore ?? 0,
       },
       term: {
         _id: term?._id.toString() ?? e.termId.toString(),
@@ -511,6 +526,7 @@ export async function getBucket(
         examples: def?.examples ?? [],
         partOfSpeech: def?.partOfSpeech ?? e.partOfSpeech,
       },
+      learningRecord: buildLearningRecordSummary(record),
     };
   });
 

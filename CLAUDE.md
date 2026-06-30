@@ -732,7 +732,8 @@ my-backpack/
       VerifyEmail, SelectProfile)
 - [x] Profile setup page
 - [x] Dashboard skeleton
-- [x] Vocab mini-app UI (search, term detail, bucket, dictionary)
+- [x] Vocab mini-app UI (search, term detail, dictionary)
+- [x] Bucket UI (My Bucket page — status filter tabs, client-side sort, confidence/accuracy/review info, remove)
 - [x] Quiz UI (12 text-based question types; dnd_* and mcq_audio show a "not yet supported" placeholder)
 - [ ] Roadmap UI (roadmap screen, lesson player, completion screen)
 - [ ] Profile management screens

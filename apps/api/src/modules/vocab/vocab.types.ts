@@ -21,7 +21,7 @@ export interface RemoveFromBucketParams {
 
 export interface GetBucketQuery {
   miniAppId: string;
-  status?: 'learning' | 'mastered' | 'all';
+  status?: 'learning' | 'mastered' | 'paused' | 'all';
   page?: string;
   limit?: string;
 }
@@ -48,7 +48,6 @@ export interface BucketTermEntry {
     partOfSpeech: string;
     status: EntryStatus;
     addedAt: Date;
-    confidenceScore: number;
   };
   term: {
     _id: string;
@@ -62,6 +61,15 @@ export interface BucketTermEntry {
     examples: string[];
     partOfSpeech: string;
   };
+  learningRecord: {
+    confidenceScore: number;
+    learningStatus: string;
+    totalAnswers: number;
+    correctAnswers: number;
+    lastAnsweredAt: Date | null;
+    nextReviewAt: Date | null;
+    masteredAt: Date | null;
+  } | null;
 }
 
 export interface PaginatedBucketResponse {
