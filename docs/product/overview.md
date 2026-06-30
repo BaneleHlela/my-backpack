@@ -74,7 +74,9 @@ The app tracks your mastery across every topic. When you've genuinely mastered e
 ## What's Built and Working Today
 
 - Adult vocabulary app (English) with search, dictionary, and learning bucket
-- Children's IsiZulu sounds roadmap with audio and drag-and-drop activities
+- Children's IsiZulu sounds roadmap (2 nodes): vowel sounds (live) + consonant syllables (seeded)
+- Foundation Phase Mathematics roadmap (2 nodes): drag-and-drop mechanic intro + counting 1–10
+- English Phonics roadmap (2 nodes): short vowel sounds + three-letter CVC words
 - Adaptive learning engine — the app tracks your confidence with every term and adjusts
 - Account and profile system — one account, up to 6 profiles, age-appropriate content
 - Quiz engine — multiple question formats including multiple choice, typed answers, and drag-and-drop
@@ -86,11 +88,12 @@ The app tracks your mastery across every topic. When you've genuinely mastered e
 
 - Vocabulary quiz and dictionary UI (web and mobile)
 - Roadmap UI — the visual, game-style learning path
-- Children's lesson player for IsiZulu and English
+- Children's lesson player for IsiZulu, English, and Mathematics
 - Mobile app (React Native)
-- More IsiZulu content: syllables, words, phrases
+- More IsiZulu content: syllables, words, phrases (consonants m/n/l and clicks)
+- More English Phonics: consonant blends, sight words, simple sentences
 - CAPS-aligned content for Grades 1–12
-- Mathematics mini-apps
+- More Mathematics: patterns, measurement, space and shape
 - Teacher dashboard for creating and managing content
 - Peanuts wallet and reward redemption
 - Testing centre network

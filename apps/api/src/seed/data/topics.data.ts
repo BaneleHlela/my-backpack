@@ -38,6 +38,20 @@ export const seedTopics: SeedTopicData[] = [
     ],
   },
   {
+    subjectSlug: 'english',
+    name: 'Phonics',
+    slug: 'phonics',
+    description: 'Letter sounds, vowels, and early reading',
+    miniApps: [
+      {
+        name: 'Phonics Roadmap',
+        slug: 'roadmap',
+        type: 'roadmap',
+        description: 'Learn English phonics step by step',
+      },
+    ],
+  },
+  {
     subjectSlug: 'isizulu-hl',
     name: 'Sounds',
     slug: 'sounds',
@@ -58,7 +72,7 @@ export const seedTopics: SeedTopicData[] = [
     description: 'Counting, number recognition, and basic operations',
     miniApps: [
       {
-        name: 'Counting Roadmap',
+        name: 'Number Sense Roadmap',
         slug: 'roadmap',
         type: 'roadmap',
         description: 'Learn to count step by step',

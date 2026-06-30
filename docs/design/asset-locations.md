@@ -31,11 +31,23 @@ my-backpack-assets/
 ├── ui/
 │   └── illustrations/   ← UI illustrations, empty state images, onboarding visuals
 ├── sounds/
-│   └── isizulu/
-│       ├── vowels/      ← a.mp3, e.mp3, i.mp3, o.mp3, u.mp3
-│       └── questions/   ← khetha-umsindo-a.mp3, etc.
+│   ├── isizulu/
+│   │   ├── vowels/       ← a.mp3, e.mp3, i.mp3, o.mp3, u.mp3
+│   │   ├── questions/    ← khetha-umsindo-a.mp3, etc.
+│   │   ├── feedback/     ← correct-a.mp3, try-again.mp3, etc.
+│   │   ├── avatar/       ← zoe-drag-a.mp3, etc. (avatar dialogue audio)
+│   │   └── consonants/   ← ba.mp3, be.mp3, bi.mp3, … cu.mp3
+│   └── english/
+│       ├── vowels/       ← a.mp3, e.mp3, i.mp3, o.mp3, u.mp3 (short vowel sounds)
+│       ├── questions/    ← pick-sound-a.mp3, etc. (mcq_audio prompts)
+│       └── cvc/          ← cat.mp3, sit.mp3, sun.mp3, etc. (CVC word pronunciations)
 └── content/
-    └── vocab/           ← Vocabulary word pronunciation audio files
+    ├── vocab/            ← Vocabulary word pronunciation audio files
+    ├── math/
+    │   └── objects/      ← apple.png, cabbage.png, car.png, etc. (drag-intro images)
+    └── english/
+        ├── vowels/       ← card-a.png, card-e.png, … card-u.png (letter cards)
+        └── cvc/          ← letter tile images for dnd_build questions
 ```
 
 ---

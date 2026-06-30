@@ -33,9 +33,15 @@ Phase 2 is about making the working backend visible to users. Everything in Phas
 - Roadmap UI — the Duolingo-style path: nodes on a map, locked and unlocked, stars for completion, rewards for finishing
 - Children's DnD lesson player — a full-screen, touch-friendly experience for young learners working through audio and drag-and-drop activities
 
-**More content:**
-- More IsiZulu content — syllables, words, phrases, building on the vowel sounds foundation
-- English content for young children — aligned to Grade R and Grade 1 vocabulary
+**More content (now built):**
+- IsiZulu consonants node — b and c syllables (ba/be/bi/bo/bu, ca/ce/ci/co/cu) seeded and live
+- English Phonics roadmap — short vowel sounds node + three-letter CVC words node
+- Foundation Phase Mathematics — drag-and-drop mechanic intro node + counting 1–10 node
+
+**More content (still to come):**
+- More IsiZulu: sonorant consonants m/n/l, then clicks (q/x) as dedicated nodes
+- More English Phonics: consonant blends, digraphs, sight words, simple sentence building
+- More Maths Number Sense: patterns, more/less, number recognition beyond 10
 
 **Mobile app (React Native):**
 - Authentication and profile selection

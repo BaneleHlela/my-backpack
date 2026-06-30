@@ -25,7 +25,7 @@ export interface ITermDocument extends Document {
 
 const termSchema = new Schema<ITermDocument>(
   {
-    word: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    word: { type: String, required: true, trim: true, lowercase: true },
     miniAppId: { type: Schema.Types.ObjectId, ref: 'MiniApp', required: true },
     phonetic: { type: String },
     origin: { type: String },
@@ -47,7 +47,7 @@ const termSchema = new Schema<ITermDocument>(
   { timestamps: true }
 );
 
-termSchema.index({ miniAppId: 1, word: 1 });
+termSchema.index({ miniAppId: 1, word: 1 }, { unique: true });
 
 const Term: Model<ITermDocument> = mongoose.model<ITermDocument>('Term', termSchema);
 

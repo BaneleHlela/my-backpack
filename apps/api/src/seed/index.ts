@@ -3,17 +3,25 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import { connectDB } from '../config/db';
+import Term from '../models/apps/language/vocabulary/term.model';
 import { seedAccountsAndProfiles } from './seeders/accounts.seed';
 import { seedContentHierarchy } from './seeders/content.seed';
 import { seedGeneralDictionaryQuiz } from './seeders/quizzes.seed';
 import { seedIsiZuluRoadmap } from './seeders/roadmaps/isizulu-hl.roadmap.seed';
 import { seedMathFoundationRoadmap } from './seeders/roadmaps/math-foundation.roadmap.seed';
+import { seedEnglishPhonicsRoadmap } from './seeders/roadmaps/english-phonics.roadmap.seed';
 import { seedAllQuestions } from './questions';
 
 async function runSeed(): Promise<void> {
   await connectDB();
 
   try {
+    // One-off migration: Term.word used to be globally unique; it's now unique per miniAppId
+    // so the same word (e.g. vowel letters) can exist across multiple mini-apps. Dropping the
+    // stale single-field index is a no-op once it's already gone, so this is safe to leave here.
+    await Term.collection.dropIndex('word_1').catch(() => {});
+    await Term.syncIndexes();
+
     await seedAccountsAndProfiles();
     console.log('');
 
@@ -31,12 +39,24 @@ async function runSeed(): Promise<void> {
     const isizuluRoadmapResult = await seedIsiZuluRoadmap();
     console.log('');
 
-    await seedMathFoundationRoadmap();
+    const mathRoadmapResult = await seedMathFoundationRoadmap();
+    console.log('');
+
+    const englishPhonicsResult = await seedEnglishPhonicsRoadmap();
     console.log('');
 
     await seedAllQuestions({
       practiceLessonId: isizuluRoadmapResult.practiceLessonId,
       dictionaryMiniAppId,
+      consonantsPracticeLessonId: isizuluRoadmapResult.consonantsPracticeLessonId,
+      consonantsAssessmentLessonId: isizuluRoadmapResult.consonantsAssessmentLessonId,
+      dragPracticeLessonId: mathRoadmapResult.dragPracticeLessonId,
+      dragAssessmentLessonId: mathRoadmapResult.dragAssessmentLessonId,
+      countingPracticeLessonId: mathRoadmapResult.practiceLessonId,
+      countingAssessmentLessonId: mathRoadmapResult.assessmentLessonId,
+      englishVowelsPracticeLessonId: englishPhonicsResult.vowelsPracticeLessonId,
+      cvcPracticeLessonId: englishPhonicsResult.cvcPracticeLessonId,
+      cvcAssessmentLessonId: englishPhonicsResult.cvcAssessmentLessonId,
     });
     console.log('');
 

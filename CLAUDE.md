@@ -146,12 +146,25 @@ Used by frontend to know which UI to render.
 ```
 Language (field)
   ├── English (subject)
-  │     └── Vocabulary (topic)
-  │           ├── Dictionary (miniApp, type: dictionary)
-  │           └── Quiz (miniApp, type: quiz)
+  │     ├── Vocabulary (topic)
+  │     │     ├── Dictionary (miniApp, type: dictionary)
+  │     │     └── Quiz (miniApp, type: quiz)
+  │     └── Phonics (topic)
+  │           └── Phonics Roadmap (miniApp, type: roadmap)
+  │                 ├── Node 1: Vowel Sounds (10 questions: mcq_audio + dnd_single × 5 vowels)
+  │                 └── Node 2: Three-Letter Words (22 questions: mcq_audio + dnd_build × 11 CVC words)
   └── IsiZulu Home Language (subject)
         └── Sounds (topic)
               └── Sounds Roadmap (miniApp, type: roadmap)
+                    ├── Node 1: Izinhlamvu Zokuvuma — Vowels (10 questions — live)
+                    └── Node 2: Izinhlamvu Zongwaqa — Consonants (20 questions: mcq_audio + dnd_build × 10 syllables)
+
+Foundation Phase Mathematics (field)  [note: actual field slug — verify via DB if querying]
+  └── Foundation Phase Mathematics (subject)
+        └── Number Sense (topic)
+              └── Number Sense Roadmap (miniApp, type: roadmap)
+                    ├── Node 1: Let's Learn to Drag! (8 practice + 5 assessment dnd_single questions)
+                    └── Node 2: Counting 1 to 10 (10 dnd_count questions)
 ```
 
 ---
@@ -210,8 +223,11 @@ audioUrl, source ('dictionary_api' | 'manual'), aiGenerationStatus
 ('pending' | 'complete' | 'failed' | 'not_needed'), aiGenerationAttempts, 
 aiGenerationError, aiGeneratedAt.
 
-Note: Sound "terms" (e.g. vowels a/e/i/o/u) are Term documents within 
-the Sounds MiniApp — they plug into the existing adaptive learning system.
+Note: Sound/phonics "terms" (vowels, consonant syllables, CVC words) are 
+Term documents within their respective MiniApps — they plug into the 
+existing adaptive learning system. Term.word is unique **per miniAppId** 
+(compound index), not globally — the same letter 'a' can exist as a Term 
+for isiZulu Sounds and for English Phonics independently.
 
 ### Definition
 One term can have multiple definitions. Fields: termId, partOfSpeech, 
@@ -313,8 +329,13 @@ completedAt.
 One step inside a RoadmapNode. Fields: nodeId, roadmapId (denormalized),
 position (1-based within node), title, lessonType 
 ('introduction' | 'practice' | 'assessment'), studyMaterial (optional) 
-{ notes, audioUrl, videoUrl, bookReference? }, questionIds[] (ordered),
+{ notes, audioUrl, videoUrl, bookReference? }, quizId (optional — 
+references a Quiz with mode:'fixed' holding this lesson's questions),
 passingScore (0.0–1.0, only used for 'assessment' type), isActive.
+
+Questions are NOT stored directly on the Lesson — practice/assessment 
+lessons reference a `Quiz` document via `lesson.quizId`. The Quiz holds 
+the ordered `questionIds[]`. Introduction lessons have no quizId.
 
 Completion rules by lessonType:
 - `introduction` — auto-completes when study material is viewed
@@ -551,11 +572,23 @@ my-backpack-assets/
 ├── ui/
 │   └── illustrations/
 ├── sounds/
-│   └── isizulu/
-│       ├── vowels/         ← a.mp3, e.mp3, i.mp3, o.mp3, u.mp3
-│       └── questions/      ← khetha-umsindo-a.mp3, etc.
+│   ├── isizulu/
+│   │   ├── vowels/         ← a.mp3, e.mp3, i.mp3, o.mp3, u.mp3
+│   │   ├── questions/      ← khetha-umsindo-a.mp3, etc.
+│   │   ├── feedback/       ← correct-a.mp3, try-again.mp3, etc.
+│   │   ├── avatar/         ← zoe-drag-a.mp3, etc.
+│   │   └── consonants/     ← ba.mp3, be.mp3, … cu.mp3
+│   └── english/
+│       ├── vowels/         ← a.mp3, e.mp3, i.mp3, o.mp3, u.mp3 (short sounds)
+│       ├── questions/      ← pick-sound-a.mp3, etc.
+│       └── cvc/            ← cat.mp3, sit.mp3, sun.mp3, etc.
 └── content/
-    └── vocab/
+    ├── vocab/
+    ├── math/
+    │   └── objects/        ← apple.png, cabbage.png, car.png, etc.
+    └── english/
+        ├── vowels/         ← card-a.png, card-e.png, etc.
+        └── cvc/            ← letter tile images
 ```
 
 Shared asset URLs: `packages/shared/constants/assets.ts`
@@ -577,8 +610,13 @@ Structure:
   content. This is where you add or edit individual questions
   (e.g. vowels, basic vocab terms).
 
-To add a new vowel or sound: edit `questions/isizulu/vowels.questions.ts`
+To add a new isiZulu vowel: edit `questions/isizulu/vowels.questions.ts`
+To add a new isiZulu consonant: edit `questions/isizulu/consonants.questions.ts` (consonantData array)
+To add a new English vowel: edit `questions/english/vowels.questions.ts`
+To add a new CVC word: edit `questions/english/cvc-words.questions.ts` (wordData array)
 To add a new English term: edit `questions/english/vocab-basics.questions.ts`
+To add a new math counting question: edit `questions/math/counting.questions.ts`
+To add a new drag-intro object: edit `questions/math/drag-intro.questions.ts`
 To add a new subject's roadmap: create a new file in `seeders/roadmaps/`
 
 You do not need to drop the database before re-running seed — the upsert
@@ -634,8 +672,9 @@ my-backpack/
 │   │       │   ├── seeders/            # accounts, content hierarchy, roadmaps
 │   │       │   │   └── roadmaps/
 │   │       │   └── questions/          # per-subject question content
-│   │       │       ├── english/
-│   │       │       └── isizulu/
+│   │       │       ├── english/        # vocab-basics, vowels, cvc-words
+│   │       │       ├── isizulu/        # vowels, consonants
+│   │       │       └── math/           # drag-intro, counting
 │   │       └── app.ts
 │   ├── web/
 │   │   └── src/
@@ -711,7 +750,15 @@ my-backpack/
 - [x] ProfileRoadmapProgress — lesson-level progress tracking added
 - [x] Subject enrollment system (ProfileSubjectEnrollment model + enrollment module)
 - [x] Roadmap service updated — lesson-level start/complete/study routes
-- [x] IsiZulu Sounds roadmap seeded (3 lessons: introduction, practice, assessment)
+- [x] IsiZulu Sounds roadmap seeded (vowels node: 10 questions, live)
+- [x] Term.word unique index fixed — now compound (miniAppId + word) not global
+- [x] English Phonics content hierarchy (Topic + MiniApp + Roadmap seeded)
+- [x] English Phonics node 1: Vowel Sounds (10 questions: mcq_audio + dnd_single × 5 vowels)
+- [x] English Phonics node 2: Three-Letter Words (22 questions: mcq_audio + dnd_build × 11 CVC words)
+- [x] Math Number Sense roadmap restructured (2 nodes: drag-intro at pos 1, counting at pos 2)
+- [x] Math drag-intro node: 8 practice + 5 assessment dnd_single questions
+- [x] Math counting node: 10 dnd_count questions across counts 1–10
+- [x] IsiZulu consonants node 2: 20 questions (mcq_audio + dnd_build × 10 syllables, b/c × vowels)
 - [x] Admin endpoints (question generation, retry, status)
 - [x] Global error handler (AppError, catchAsync)
 - [x] AgeGroup content filter middleware
@@ -762,7 +809,9 @@ my-backpack/
 - DnD questions require `content.draggables` and `content.dropZones`; dnd_fill/dnd_build also need `content.sentenceTemplate`
 - `resolveHelpers(content.defaultHelpers, nodeOverrides)` from packages/shared gives final IQuestionHelpers
 - DnD rawResponse format: `JSON.stringify({ placements: [{ draggableId, dropZoneId }] })`
-- Lessons own questions — `lesson.questionIds[]` is the ordered list; questions are not directly on nodes
+- Lessons own questions via a Quiz reference — `lesson.quizId` → `Quiz.questionIds[]`; questions are NOT directly on lessons or nodes
+- When seeding a lesson's question set: create a `Quiz` (mode:'fixed'), set `lesson.quizId` (see `isizulu/vowels.questions.ts` for the canonical pattern)
+- Term.word is unique per miniAppId (compound index) — when upserting Terms, always include `miniAppId` in the query filter
 - Roadmap.nodes[] and RoadmapNode.lessons[] are the canonical ordering arrays
 - A Roadmap must have at least one of subjectId or miniAppId (enforced by pre-validate hook)
 - Subject enrollment (ProfileSubjectEnrollment) is the entry point for a learner starting a subject
@@ -772,6 +821,7 @@ my-backpack/
 ## Notes for Claude Code
 
 - Read this file at the start of every session before doing anything
+- Update this file and any affected docs/ files at the end of every session, as part of the same PR — not as separate follow-up work
 - We are not scaling yet — keep solutions simple and straightforward
 - Always use TypeScript, never plain JavaScript
 - When creating new API modules follow the same structure as existing ones
@@ -785,11 +835,17 @@ my-backpack/
 - Distractor definitions must exclude ALL definitions from the same term
 - AI prompts for question generation must be anchored to the 
   specific definition being tested
-- Sound "terms" (vowels etc.) are Term documents — 
+- Sound/phonics "terms" (vowels, syllables, CVC words) are Term documents —
   they use the same adaptive learning system as vocab terms
 - XP and peanuts reward system exists in the data model 
   but the service layer is not yet built
 - Test readiness scoring is designed but not yet built
+- Lessons reference questions via `Quiz` (mode:'fixed') not directly —
+  always create a Quiz and set `lesson.quizId`, never `lesson.questionIds`
+- When seeding Term documents, always include `miniAppId` in the upsert 
+  query filter — Term.word is unique per miniAppId, not globally
+- isiZulu has no /r/ phoneme as a native consonant — never generate 
+  ra/re/ri/ro/ru syllables in consonant drills
 ```
 
 ---

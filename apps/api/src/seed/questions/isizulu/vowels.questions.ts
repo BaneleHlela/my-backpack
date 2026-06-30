@@ -92,9 +92,10 @@ export async function seedVowelQuestions(practiceLessonId: string): Promise<void
   const createdQuestionIds: string[] = [];
 
   for (const v of vowelData) {
-    // Term.word has a global unique index, so the query must be by word alone.
+    // Term.word is unique per miniAppId, not globally — English Phonics also seeds 'a'-'u'
+    // Terms against its own miniApp, so the query must be scoped here too.
     const term = await Term.findOneAndUpdate(
-      { word: v.word },
+      { miniAppId: soundsMiniApp._id, word: v.word },
       {
         word: v.word,
         miniAppId: soundsMiniApp._id,
