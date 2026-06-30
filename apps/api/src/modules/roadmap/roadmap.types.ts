@@ -21,7 +21,7 @@ export interface LessonPlain {
   title: string;
   lessonType: LessonType;
   studyMaterial?: ILessonStudyMaterial;
-  questionIds: Types.ObjectId[];
+  quizId?: Types.ObjectId;
   passingScore: number;
   isActive: boolean;
   createdAt: Date;

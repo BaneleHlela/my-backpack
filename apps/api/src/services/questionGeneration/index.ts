@@ -1,7 +1,7 @@
 // Orchestrates the full question generation pipeline for a single term+definition pair.
 // Fetches distractors, runs non-AI generation, optionally calls the AI generator,
 // validates results, and saves all valid questions in one insertMany call.
-// Called from admin routes; NOT triggered on bucket add.
+// Called from admin routes and (fire-and-forget) from vocab.service.ts's addToBucket.
 import Question from '../../models/apps/language/vocabulary/question.model';
 import Term from '../../models/apps/language/vocabulary/term.model';
 import Definition from '../../models/apps/language/vocabulary/definition.model';

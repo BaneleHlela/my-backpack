@@ -8,7 +8,7 @@
 // values the API actually accepts.
 import { useState } from 'react';
 import { Settings2, Loader2 } from 'lucide-react';
-import type { QuestionType, BucketFilter } from '@my-backpack/shared';
+import type { QuestionType, BucketFilter, FeedbackMode } from '@my-backpack/shared';
 
 const TEXT_TYPES: { type: QuestionType; label: string }[] = [
   { type: 'mcq_term_to_def', label: 'Term → definition (MCQ)' },
@@ -42,10 +42,16 @@ const BUCKET_FILTERS: { value: BucketFilter; label: string }[] = [
   { value: 'all', label: 'All' },
 ];
 
+const FEEDBACK_MODES: { value: FeedbackMode; label: string; description: string }[] = [
+  { value: 'immediate', label: 'After each question', description: 'See if you got it right before moving on' },
+  { value: 'end', label: 'At the end', description: 'Answer all questions, then review your results' },
+];
+
 export interface QuizStartSettings {
   questionCount: number;
   bucketFilter: BucketFilter;
   questionTypes?: QuestionType[];
+  feedbackMode: FeedbackMode;
 }
 
 interface QuizStartScreenProps {
@@ -57,6 +63,7 @@ export default function QuizStartScreen({ isStarting, onStart }: QuizStartScreen
   const [customizing, setCustomizing] = useState(false);
   const [questionCount, setQuestionCount] = useState(10);
   const [bucketFilter, setBucketFilter] = useState<BucketFilter>('learning');
+  const [feedbackMode, setFeedbackMode] = useState<FeedbackMode>('immediate');
   const [selectedTypes, setSelectedTypes] = useState<Set<QuestionType>>(
     new Set(TEXT_TYPES.map((t) => t.type))
   );
@@ -71,13 +78,14 @@ export default function QuizStartScreen({ isStarting, onStart }: QuizStartScreen
   };
 
   const startDefault = () => {
-    onStart({ questionCount: 10, bucketFilter: 'learning' });
+    onStart({ questionCount: 10, bucketFilter: 'learning', feedbackMode: 'immediate' });
   };
 
   const startCustom = () => {
     onStart({
       questionCount,
       bucketFilter,
+      feedbackMode,
       questionTypes: selectedTypes.size > 0 ? Array.from(selectedTypes) : undefined,
     });
   };
@@ -145,6 +153,36 @@ export default function QuizStartScreen({ isStarting, onStart }: QuizStartScreen
                 >
                   {f.label}
                 </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+              Show results
+            </label>
+            <div className="flex flex-col gap-2 mt-1.5">
+              {FEEDBACK_MODES.map((m) => (
+                <label
+                  key={m.value}
+                  className={`flex items-start gap-2.5 px-3 py-2 rounded-xl border cursor-pointer transition-colors ${
+                    feedbackMode === m.value
+                      ? 'bg-violet-500/10 border-violet-400'
+                      : 'bg-white/50 border-white/50 hover:bg-white/70'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="feedbackMode"
+                    checked={feedbackMode === m.value}
+                    onChange={() => setFeedbackMode(m.value)}
+                    className="mt-0.5 accent-violet-500"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-gray-800">{m.label}</span>
+                    <span className="block text-xs text-gray-500">{m.description}</span>
+                  </span>
+                </label>
               ))}
             </div>
           </div>

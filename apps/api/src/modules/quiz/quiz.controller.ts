@@ -3,14 +3,16 @@ import { Request, Response } from 'express';
 import { sendSuccess } from '../../utils/response';
 import { AppError, catchAsync } from '../../utils/AppError';
 import {
-  createSession,
+  createQuizSession,
   captureAnswer,
   completeSession,
   abandonSession,
   getSessionResults,
   getSessionState,
 } from '../../services/quizSession.service';
-import { CreateSessionDto, CaptureAnswerDto } from './quiz.types';
+import { listQuizzes, hasQuizContent } from './quiz.service';
+import Quiz from '../../models/learning/quiz.model';
+import { CreateSessionDto, CaptureAnswerDto, ListQuizzesQuery, HasQuizContentQuery } from './quiz.types';
 
 export const createSessionHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
   const profileId = req.profile?._id.toString();
@@ -19,15 +21,38 @@ export const createSessionHandler = catchAsync(async (req: Request, res: Respons
   const { miniAppId, settings } = req.body as Partial<CreateSessionDto>;
   if (!miniAppId) throw new AppError('miniAppId is required', 400);
 
+  const quiz = await Quiz.findOne({ miniAppId, isDefault: true, isActive: true });
+  if (!quiz) throw new AppError('No default quiz configured for this mini-app', 404);
+
   try {
-    const { session, firstQuestion } = await createSession(profileId, {
-      miniAppId,
-      settings: settings ?? {},
-    });
+    const { session, firstQuestion } = await createQuizSession(
+      profileId,
+      quiz._id.toString(),
+      settings ?? {}
+    );
     sendSuccess(res, { session, firstQuestion }, 201);
   } catch (err) {
     throw new AppError(err instanceof Error ? err.message : 'Failed to create session', 400);
   }
+});
+
+export const listQuizzesHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
+  const { miniAppId } = req.query as Partial<ListQuizzesQuery>;
+  if (!miniAppId) throw new AppError('miniAppId is required', 400);
+
+  const quizzes = await listQuizzes(miniAppId);
+  sendSuccess(res, { quizzes });
+});
+
+export const hasQuizContentHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
+  const profileId = req.profile?._id.toString();
+  if (!profileId) throw new AppError('Unauthorized', 401);
+
+  const { miniAppId } = req.query as Partial<HasQuizContentQuery>;
+  if (!miniAppId) throw new AppError('miniAppId is required', 400);
+
+  const hasContent = await hasQuizContent(miniAppId, profileId);
+  sendSuccess(res, { hasContent });
 });
 
 export const captureAnswerHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {

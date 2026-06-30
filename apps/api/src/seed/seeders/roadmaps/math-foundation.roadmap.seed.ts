@@ -1,6 +1,6 @@
 // Seeds the Foundation Phase Mathematics "Counting 1 to 10" roadmap: one node with 3 lessons.
 // Same pattern as isizulu-hl.roadmap.seed.ts. Idempotent — re-running updates existing records.
-// Practice/assessment lessons are seeded with empty questionIds — counting questions are added
+// Practice/assessment lessons are seeded with no quizId — counting questions/quizzes are added
 // later via a dedicated math questions seed file, the same way vowels.questions.ts works.
 import Roadmap from '../../../models/learning/roadmap.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
@@ -59,7 +59,6 @@ export async function seedMathFoundationRoadmap(): Promise<MathFoundationRoadmap
         notes:
           '# Counting\n\nCounting is saying numbers in order to find out how many things there are.\n\nWe count from 1 to 10: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10.',
       },
-      questionIds: [],
       passingScore: 0,
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -73,7 +72,6 @@ export async function seedMathFoundationRoadmap(): Promise<MathFoundationRoadmap
       position: 2,
       title: 'Practice Counting',
       lessonType: 'practice',
-      questionIds: [],
       passingScore: 0,
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -87,7 +85,6 @@ export async function seedMathFoundationRoadmap(): Promise<MathFoundationRoadmap
       position: 3,
       title: 'Counting Challenge',
       lessonType: 'assessment',
-      questionIds: [],
       passingScore: 0.7,
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }

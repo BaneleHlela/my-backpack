@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { connectDB } from '../config/db';
 import { seedAccountsAndProfiles } from './seeders/accounts.seed';
 import { seedContentHierarchy } from './seeders/content.seed';
+import { seedGeneralDictionaryQuiz } from './seeders/quizzes.seed';
 import { seedIsiZuluRoadmap } from './seeders/roadmaps/isizulu-hl.roadmap.seed';
 import { seedMathFoundationRoadmap } from './seeders/roadmaps/math-foundation.roadmap.seed';
 import { seedAllQuestions } from './questions';
@@ -19,14 +20,19 @@ async function runSeed(): Promise<void> {
     const { miniAppMap } = await seedContentHierarchy();
     console.log('');
 
+    const dictionaryMiniAppId = miniAppMap.get('english/vocabulary/dictionary');
+    if (!dictionaryMiniAppId) throw new Error('Dictionary miniApp not found in map');
+    const quizMiniAppId = miniAppMap.get('english/vocabulary/quiz');
+    if (!quizMiniAppId) throw new Error('Quiz miniApp not found in map');
+
+    await seedGeneralDictionaryQuiz(quizMiniAppId, dictionaryMiniAppId);
+    console.log('');
+
     const isizuluRoadmapResult = await seedIsiZuluRoadmap();
     console.log('');
 
     await seedMathFoundationRoadmap();
     console.log('');
-
-    const dictionaryMiniAppId = miniAppMap.get('english/vocabulary/dictionary');
-    if (!dictionaryMiniAppId) throw new Error('Dictionary miniApp not found in map');
 
     await seedAllQuestions({
       practiceLessonId: isizuluRoadmapResult.practiceLessonId,

@@ -21,7 +21,9 @@ import QuizSession, {
   ISessionResults,
   SessionStatus,
   BucketFilter,
+  FeedbackMode,
 } from '../models/learning/quizSession.model';
+import Quiz from '../models/learning/quiz.model';
 import Question, { IQuestionDocument, QuestionType, QuestionSource } from '../models/apps/language/vocabulary/question.model';
 import { IQuestionContent, IDropZone } from '../modules/question/question.types';
 import AnswerRecord from '../models/learning/answerRecord.model';
@@ -111,14 +113,12 @@ export function evaluateDnDAnswer(
   };
 }
 
-export interface CreateSessionInput {
-  miniAppId: string;
-  settings: {
-    questionCount?: number;
-    timeLimit?: number;
-    questionTypes?: string[];
-    bucketFilter?: BucketFilter;
-  };
+export interface CreateSessionSettingsOverride {
+  questionCount?: number;
+  timeLimit?: number;
+  questionTypes?: string[];
+  bucketFilter?: BucketFilter;
+  feedbackMode?: FeedbackMode;
 }
 
 export interface CaptureAnswerInput {
@@ -140,14 +140,22 @@ export interface CaptureAnswerResult {
   sessionComplete: boolean;
 }
 
-// Selects an ordered list of question ObjectIds for the session based on the profile's bucket.
+// Identifies a single bucketed term+definition pair.
+function bucketRefKey(termId: string, definitionId: string): string {
+  return `${termId}:${definitionId}`;
+}
+
+// Selects an ordered list of question ObjectIds for the session based on the profile's bucket
+// across all of the quiz's source mini-apps (sourceMiniAppIds), keyed by term+definition so
+// multi-definition words resolve to the specific definition the profile actually bucketed.
 async function selectQuestions(
   profileId: string,
-  miniAppId: string,
+  sourceMiniAppIds: string[],
   settings: ISessionSettings
 ): Promise<Types.ObjectId[]> {
-  const bucket = await TermBucket.findOne({ profileId, miniAppId });
-  if (!bucket) return [];
+  const buckets = await TermBucket.find({ profileId, miniAppId: { $in: sourceMiniAppIds } });
+  if (buckets.length === 0) return [];
+  const bucketIds = buckets.map((b) => b._id);
 
   const statusFilter: EntryStatus[] =
     settings.bucketFilter === 'all'
@@ -157,34 +165,41 @@ async function selectQuestions(
       : ['learning'];
 
   const entries = await BucketEntry.find({
-    bucketId: bucket._id,
+    bucketId: { $in: bucketIds },
     status: { $in: statusFilter },
   });
   if (entries.length === 0) return [];
 
-  const termIds = entries.map((e) => e.termId.toString());
+  const refs = entries.map((e) => ({
+    termId: e.termId.toString(),
+    definitionId: e.definitionId.toString(),
+  }));
+  const refMap = new Map(refs.map((r) => [bucketRefKey(r.termId, r.definitionId), r]));
 
+  const termIds = refs.map((r) => r.termId);
   const records = await LearningRecord.find({
     profileId,
     termId: { $in: termIds },
   });
-  const recordMap = new Map(records.map((r) => [r.termId.toString(), r]));
+  const recordMap = new Map(
+    records.map((r) => [bucketRefKey(r.termId.toString(), r.definitionId?.toString() ?? ''), r])
+  );
 
   // Priority 1: due for review
   const dueForReview = records
     .filter((r) => r.status === 'reviewing' && r.nextReviewAt && r.nextReviewAt <= new Date())
-    .map((r) => r.termId.toString());
+    .map((r) => bucketRefKey(r.termId.toString(), r.definitionId?.toString() ?? ''));
 
   // Priority 2: actively learning, lowest confidence first
   const learning = records
     .filter((r) => r.status === 'learning')
     .sort((a, b) => a.confidenceScore - b.confidenceScore)
-    .map((r) => r.termId.toString());
+    .map((r) => bucketRefKey(r.termId.toString(), r.definitionId?.toString() ?? ''));
 
   // Priority 3: unseen (in bucket order)
-  const unseen = termIds.filter(
-    (id) => !recordMap.has(id) || recordMap.get(id)?.status === 'unseen'
-  );
+  const unseen = refs
+    .map((r) => bucketRefKey(r.termId, r.definitionId))
+    .filter((key) => !recordMap.has(key) || recordMap.get(key)?.status === 'unseen');
 
   const prioritised = Array.from(new Set([...dueForReview, ...learning, ...unseen]));
   const selected = prioritised.slice(0, settings.questionCount);
@@ -193,10 +208,13 @@ async function selectQuestions(
   const typeFilter: QuestionType[] | undefined =
     settings.questionTypes.length > 0 ? (settings.questionTypes as QuestionType[]) : undefined;
 
-  for (const termId of selected) {
+  for (const key of selected) {
+    const ref = refMap.get(key);
+    if (!ref) continue;
     const qs = await Question.find({
-      termId,
-      miniAppId,
+      termId: ref.termId,
+      definitionId: ref.definitionId,
+      miniAppId: { $in: sourceMiniAppIds },
       isActive: true,
       ...(typeFilter ? { type: { $in: typeFilter } } : {}),
     });
@@ -210,23 +228,41 @@ async function selectQuestions(
   return questionIds;
 }
 
-// Creates a new quiz session and returns it along with the first question to display.
-export async function createSession(
+// Creates a new quiz session from a Quiz definition and returns it with the first question.
+// mode: 'fixed' quizzes (e.g. a roadmap lesson's practice set) use the quiz's pinned
+// questionIds; mode: 'dynamic' quizzes (e.g. the general vocab quiz) select live from the
+// profile's bucket across the quiz's sourceMiniAppIds.
+export async function createQuizSession(
   profileId: string,
-  input: CreateSessionInput
+  quizId: string,
+  overrideSettings?: CreateSessionSettingsOverride
 ): Promise<{ session: IQuizSessionDocument; firstQuestion: IQuestionDocument | null }> {
+  const quiz = await Quiz.findById(quizId);
+  if (!quiz || !quiz.isActive) throw new Error('Quiz not found');
+
   const settings: ISessionSettings = {
-    questionCount: input.settings.questionCount ?? 10,
-    timeLimit: input.settings.timeLimit,
-    questionTypes: input.settings.questionTypes ?? [],
-    bucketFilter: input.settings.bucketFilter ?? 'learning',
+    questionCount: overrideSettings?.questionCount ?? quiz.settings.questionCount,
+    timeLimit: overrideSettings?.timeLimit ?? quiz.settings.timeLimit,
+    questionTypes: overrideSettings?.questionTypes ?? quiz.settings.questionTypes,
+    bucketFilter: overrideSettings?.bucketFilter ?? quiz.settings.bucketFilter,
+    feedbackMode: overrideSettings?.feedbackMode ?? quiz.settings.feedbackMode,
   };
 
-  const questionIds = await selectQuestions(profileId, input.miniAppId, settings);
+  let questionIds: Types.ObjectId[];
+  if (quiz.mode === 'fixed') {
+    const questions = await Question.find({ _id: { $in: quiz.questionIds }, isActive: true });
+    questionIds = questions.map((q) => q._id as Types.ObjectId);
+  } else {
+    questionIds = await selectQuestions(
+      profileId,
+      quiz.sourceMiniAppIds.map((id) => id.toString()),
+      settings
+    );
+  }
 
   const session = new QuizSession({
     profileId,
-    miniAppId: input.miniAppId,
+    miniAppId: quiz.miniAppId,
     status: 'active',
     questionIds,
     settings,

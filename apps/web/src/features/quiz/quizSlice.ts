@@ -7,7 +7,7 @@
 // instead of a `questions[] + currentIndex` pair.
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axiosInstance from '../../lib/axios';
-import type { IQuestion, QuizSettings, SessionResults, ResponseType } from '@my-backpack/shared';
+import type { IQuestion, QuizSettings, SessionResults, ResponseType, FeedbackMode } from '@my-backpack/shared';
 
 function extractErrorMessage(err: unknown, fallback: string): string {
   const e = err as { response?: { data?: { message?: string } } };
@@ -27,6 +27,20 @@ interface LastAnswer {
   maxPoints: number;
   confidenceAfter: number;
   sessionComplete: boolean;
+  wasSkipped: boolean;
+}
+
+// One entry per answered question — accumulated so the 'end' feedbackMode can show a
+// single results-screen breakdown instead of per-question modals.
+export interface AnsweredQuestionSummary {
+  questionId: string;
+  prompt?: string;
+  rawResponse: string;
+  correctAnswer?: string;
+  isCorrect: boolean;
+  pointsAwarded: number;
+  maxPoints: number;
+  wasSkipped: boolean;
 }
 
 interface QuizProgress {
@@ -55,6 +69,8 @@ interface QuizState {
   progress: QuizProgress;
   results: SessionResults | null;
   error: string | null;
+  feedbackMode: FeedbackMode;
+  answeredQuestions: AnsweredQuestionSummary[];
 }
 
 const initialState: QuizState = {
@@ -67,6 +83,8 @@ const initialState: QuizState = {
   progress: { answered: 0, total: 0, correct: 0 },
   results: null,
   error: null,
+  feedbackMode: 'immediate',
+  answeredQuestions: [],
 };
 
 // ── Thunks ─────────────────────────────────────────────────────────────────
@@ -80,7 +98,7 @@ export const startSession = createAsyncThunk(
     try {
       const res = await axiosInstance.post('/quiz/session', { miniAppId, settings });
       return res.data.data as {
-        session: { _id: string; questionIds: string[] };
+        session: { _id: string; questionIds: string[]; settings: { feedbackMode: FeedbackMode } };
         firstQuestion: IQuestion | null;
       };
     } catch (err) {
@@ -189,6 +207,8 @@ const quizSlice = createSlice({
       .addCase(startSession.fulfilled, (state, action) => {
         state.sessionId = action.payload.session._id;
         state.currentQuestion = action.payload.firstQuestion;
+        state.feedbackMode = action.payload.session.settings.feedbackMode;
+        state.answeredQuestions = [];
         state.progress = {
           answered: 0,
           total: action.payload.session.questionIds.length,
@@ -214,7 +234,18 @@ const quizSlice = createSlice({
           maxPoints: state.currentQuestion?.maxPoints ?? 0,
           confidenceAfter: action.payload.confidenceAfter,
           sessionComplete: action.payload.sessionComplete,
+          wasSkipped: action.meta.arg.wasSkipped ?? false,
         };
+        state.answeredQuestions.push({
+          questionId,
+          prompt: state.currentQuestion?.content.prompt,
+          rawResponse: action.meta.arg.rawResponse,
+          correctAnswer: state.currentQuestion?.content.correctAnswer,
+          isCorrect: action.payload.isCorrect,
+          pointsAwarded: action.payload.pointsAwarded,
+          maxPoints: state.currentQuestion?.maxPoints ?? 0,
+          wasSkipped: action.meta.arg.wasSkipped ?? false,
+        });
         state.pendingNextQuestion = action.payload.nextQuestion;
         state.progress = {
           ...state.progress,

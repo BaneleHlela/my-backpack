@@ -52,7 +52,7 @@ function toNodeForPanel(node: RoadmapWithProgress['nodes'][number]): NodeForPane
         title: lesson.title,
         lessonType: lesson.lessonType,
         studyMaterial: lesson.studyMaterial,
-        questionIds: lesson.questionIds,
+        quizId: lesson.quizId,
         passingScore: lesson.passingScore,
         isActive: lesson.isActive,
         progressStatus: lesson.progressStatus,

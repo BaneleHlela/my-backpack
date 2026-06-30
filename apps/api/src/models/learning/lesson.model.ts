@@ -1,5 +1,7 @@
 // One step inside a RoadmapNode. Nodes contain an ordered array of lessons.
 // lessonType controls auto-completion rules and pass/fail behaviour.
+// quizId references the Quiz document holding this lesson's question set (mode: 'fixed').
+// Lessons with no questions (e.g. introduction lessons) leave quizId unset.
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
 
 export type LessonType = 'introduction' | 'practice' | 'assessment';
@@ -24,7 +26,7 @@ export interface ILessonDocument extends Document {
   title: string;
   lessonType: LessonType;
   studyMaterial?: ILessonStudyMaterial;
-  questionIds: Types.ObjectId[];
+  quizId?: Types.ObjectId;
   passingScore: number;
   isActive: boolean;
   createdAt: Date;
@@ -63,7 +65,7 @@ const lessonSchema = new Schema<ILessonDocument>(
       required: true,
     },
     studyMaterial: { type: studyMaterialSchema },
-    questionIds: { type: [Schema.Types.ObjectId], ref: 'Question', default: [] },
+    quizId: { type: Schema.Types.ObjectId, ref: 'Quiz' },
     passingScore: { type: Number, default: 0.7, min: 0, max: 1 },
     isActive: { type: Boolean, default: true },
   },

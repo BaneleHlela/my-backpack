@@ -401,10 +401,14 @@ All questions saved with isGeneric: true
 Reused across all users who add the same definition
 ```
 
-### Generation is NOT triggered when user adds to bucket
-Questions are generated via admin endpoint or seed script only.
-This is intentional — generic questions are pre-generated content,
-not per-user content.
+### Generation is triggered when a user adds a definition to their bucket
+`vocab.service.ts`'s `addToBucket` calls `generateQuestionsForDefinition`
+(the same full auto+AI pipeline used by the admin endpoint) fire-and-forget,
+but only if no active questions already exist for that term+definition.
+Questions are still generic (`isGeneric: true`, `profileId: null`) and
+reused across all users who add the same definition — generation is
+triggered by the first user to add it, not per-user regeneration.
+Can also be triggered manually via the admin endpoint or seed script.
 
 ### Non-AI generated questions (source: 'auto')
 MCQ-1 (mcq_term_to_def), MCQ-2 (mcq_def_to_term), TF-1 

@@ -1,16 +1,36 @@
 // Shared types for quiz sessions and answer records.
-// Mirrors quizSession.model.ts and answerRecord.model.ts.
+// Mirrors quizSession.model.ts, quiz.model.ts, and answerRecord.model.ts.
 
 export type SessionStatus = 'active' | 'completed' | 'abandoned';
 export type BucketFilter = 'all' | 'learning' | 'mastered';
 export type ResponseType = 'mcq_selection' | 'text_input' | 'voice_transcript' | 'true_false';
 export type GradingMethod = 'exact_match' | 'keyword_match' | 'ai_graded' | 'pending';
+export type QuizMode = 'dynamic' | 'fixed';
+// 'immediate' shows correctness/points right after each question; 'end' defers all
+// feedback to a single breakdown on the results screen.
+export type FeedbackMode = 'immediate' | 'end';
 
 export interface QuizSettings {
   questionCount: number;
   timeLimit?: number;
   questionTypes: string[];
   bucketFilter: BucketFilter;
+  feedbackMode: FeedbackMode;
+}
+
+export interface IQuiz {
+  _id: string;
+  miniAppId: string;
+  sourceMiniAppIds: string[];
+  title: string;
+  mode: QuizMode;
+  questionIds: string[];
+  settings: QuizSettings;
+  isUserAdjustable: boolean;
+  isDefault: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SessionResults {

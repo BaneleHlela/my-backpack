@@ -31,18 +31,41 @@ export interface QuestionRendererProps {
   question: IQuestion;
   helpers: IQuestionHelpers;
   disabled?: boolean;
+  isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
 }
 
-export default function QuestionRenderer({ question, helpers, disabled, onAnswer }: QuestionRendererProps) {
+export default function QuestionRenderer({
+  question,
+  helpers,
+  disabled,
+  isSubmitting,
+  onAnswer,
+}: QuestionRendererProps) {
   const content = question.content;
 
   if (MCQ_TYPES.has(question.type)) {
-    return <McqPattern content={content} helpers={helpers} disabled={disabled} onAnswer={onAnswer} />;
+    return (
+      <McqPattern
+        content={content}
+        helpers={helpers}
+        disabled={disabled}
+        isSubmitting={isSubmitting}
+        onAnswer={onAnswer}
+      />
+    );
   }
 
   if (TRUE_FALSE_TYPES.has(question.type)) {
-    return <TrueFalsePattern content={content} helpers={helpers} disabled={disabled} onAnswer={onAnswer} />;
+    return (
+      <TrueFalsePattern
+        content={content}
+        helpers={helpers}
+        disabled={disabled}
+        isSubmitting={isSubmitting}
+        onAnswer={onAnswer}
+      />
+    );
   }
 
   if (TYPED_INPUT_TYPES.has(question.type)) {
@@ -53,6 +76,7 @@ export default function QuestionRenderer({ question, helpers, disabled, onAnswer
         content={content}
         helpers={helpers}
         disabled={disabled}
+        isSubmitting={isSubmitting}
         onAnswer={onAnswer}
       />
     );

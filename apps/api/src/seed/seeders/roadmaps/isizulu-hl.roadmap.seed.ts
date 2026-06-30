@@ -58,7 +58,6 @@ export async function seedIsiZuluRoadmap(): Promise<IsiZuluRoadmapSeedResult> {
         notes:
           '# Izinhlamvu Zokuvuma (Vowels)\n\nIsiZulu has 5 vowel sounds:\n\n- **a** — as in "amanzi" (water)\n- **e** — as in "ekhaya" (at home)\n- **i** — as in "inkosi" (chief)\n- **o** — as in "omama" (mothers)\n- **u** — as in "ubuntu" (humanity)',
       },
-      questionIds: [],
       passingScore: 0,
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }

@@ -18,6 +18,7 @@ interface TypedInputPatternProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
   disabled?: boolean;
+  isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
 }
 
@@ -26,6 +27,7 @@ export default function TypedInputPattern({
   termId,
   content,
   disabled,
+  isSubmitting,
   onAnswer,
 }: TypedInputPatternProps) {
   const [value, setValue] = useState('');
@@ -94,9 +96,10 @@ export default function TypedInputPattern({
         type="button"
         disabled={disabled || !value.trim()}
         onClick={submit}
-        className="w-full py-3 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 disabled:opacity-50 transition-colors"
+        className="w-full py-3 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
       >
-        Submit
+        {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+        {isSubmitting ? 'Submitting...' : 'Submit'}
       </button>
     </div>
   );

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, Loader2, BookOpen } from 'lucide-react';
+import { ChevronLeft, Loader2, BookOpen, SkipForward } from 'lucide-react';
 import { resolveHelpers } from '@my-backpack/shared';
 import type { IMiniApp } from '@my-backpack/shared';
 import type { AppDispatch, RootState } from '../../app/store';
@@ -39,13 +39,15 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
   const [bucketHasTerms, setBucketHasTerms] = useState<boolean | null>(null);
   const questionStartedAt = useRef<number>(Date.now());
 
-  // Pre-check: don't let the learner start an empty session.
+  // Pre-check: don't let the learner start an empty session. Resolved server-side via the
+  // mini-app's default Quiz (which may pull its content pool from a sibling mini-app, e.g.
+  // the Dictionary, so this can't be answered by checking this mini-app's own bucket directly).
   useEffect(() => {
     let cancelled = false;
     axiosInstance
-      .get('/vocab/bucket', { params: { miniAppId: miniApp._id, status: 'learning', page: 1, limit: 1 } })
+      .get('/quiz/has-content', { params: { miniAppId: miniApp._id } })
       .then((res) => {
-        if (!cancelled) setBucketHasTerms((res.data.data.pagination.total as number) > 0);
+        if (!cancelled) setBucketHasTerms(res.data.data.hasContent as boolean);
       })
       .catch(() => {
         if (!cancelled) setBucketHasTerms(true); // fail open — let the start screen attempt it
@@ -63,17 +65,27 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Track the latest session/status in a ref so the unmount-only effect below can read
+  // current values without re-running (and re-cleaning-up) on every status transition —
+  // an effect with [sessionId, status] deps would otherwise fire its cleanup on every
+  // answer (active -> submitting -> awaiting_advance -> ...), abandoning the session mid-quiz.
+  const sessionRef = useRef<{ sessionId: string | null; status: typeof quiz.status }>({
+    sessionId: quiz.sessionId,
+    status: quiz.status,
+  });
+  useEffect(() => {
+    sessionRef.current = { sessionId: quiz.sessionId, status: quiz.status };
+  }, [quiz.sessionId, quiz.status]);
+
   useEffect(() => {
     return () => {
-      if (
-        quiz.sessionId &&
-        (quiz.status === 'active' || quiz.status === 'awaiting_advance' || quiz.status === 'submitting')
-      ) {
-        void dispatch(abandonSession(quiz.sessionId));
+      const { sessionId, status } = sessionRef.current;
+      if (sessionId && (status === 'active' || status === 'awaiting_advance' || status === 'submitting')) {
+        void dispatch(abandonSession(sessionId));
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quiz.sessionId, quiz.status]);
+  }, []);
 
   // Reset the answer timer whenever a new question becomes current.
   useEffect(() => {
@@ -89,6 +101,17 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
     }
   }, [quiz.status, quiz.results, quiz.sessionId, dispatch]);
 
+  // feedbackMode 'end' skips the per-question AnswerFeedback modal — advance straight
+  // through to the next question (or complete the session) as soon as an answer lands.
+  useEffect(() => {
+    if (quiz.status !== 'awaiting_advance' || quiz.feedbackMode !== 'end') return;
+    if (quiz.lastAnswer?.sessionComplete && quiz.sessionId) {
+      void dispatch(completeSession(quiz.sessionId));
+    } else {
+      dispatch(advanceQuestion());
+    }
+  }, [quiz.status, quiz.feedbackMode, quiz.lastAnswer, quiz.sessionId, dispatch]);
+
   const handleStart = (settings: QuizStartSettings) => {
     void dispatch(startSession({ miniAppId: miniApp._id, settings }));
   };
@@ -102,6 +125,19 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
         rawResponse,
         selectedOptionIndex,
         timeToAnswerMs: Date.now() - questionStartedAt.current,
+      })
+    );
+  };
+
+  const handleSkip = () => {
+    if (!quiz.sessionId || !quiz.currentQuestion) return;
+    void dispatch(
+      submitAnswer({
+        sessionId: quiz.sessionId,
+        questionId: quiz.currentQuestion._id,
+        rawResponse: '',
+        timeToAnswerMs: Date.now() - questionStartedAt.current,
+        wasSkipped: true,
       })
     );
   };
@@ -187,22 +223,33 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
                   question={quiz.currentQuestion}
                   helpers={resolveHelpers(quiz.currentQuestion.content.defaultHelpers, undefined)}
                   disabled={quiz.status !== 'active'}
+                  isSubmitting={quiz.status === 'submitting'}
                   onAnswer={handleAnswer}
                 />
               </div>
 
-              {quiz.status === 'awaiting_advance' && quiz.lastAnswer && (
-                <div className="mt-4">
-                  <AnswerFeedback
-                    isCorrect={quiz.lastAnswer.isCorrect}
-                    pointsAwarded={quiz.lastAnswer.pointsAwarded}
-                    maxPoints={quiz.lastAnswer.maxPoints}
-                    content={quiz.currentQuestion.content}
-                    ageGroup={ageGroup}
-                    isLastQuestion={quiz.lastAnswer.sessionComplete}
-                    onAdvance={handleAdvance}
-                  />
-                </div>
+              {quiz.status === 'active' && (
+                <button
+                  type="button"
+                  onClick={handleSkip}
+                  className="flex items-center gap-1.5 mx-auto mt-3 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <SkipForward className="w-3.5 h-3.5" />
+                  Skip question
+                </button>
+              )}
+
+              {quiz.status === 'awaiting_advance' && quiz.feedbackMode === 'immediate' && quiz.lastAnswer && (
+                <AnswerFeedback
+                  isCorrect={quiz.lastAnswer.isCorrect}
+                  pointsAwarded={quiz.lastAnswer.pointsAwarded}
+                  maxPoints={quiz.lastAnswer.maxPoints}
+                  content={quiz.currentQuestion.content}
+                  ageGroup={ageGroup}
+                  isLastQuestion={quiz.lastAnswer.sessionComplete}
+                  wasSkipped={quiz.lastAnswer.wasSkipped}
+                  onAdvance={handleAdvance}
+                />
               )}
             </motion.div>
           )}
@@ -217,6 +264,7 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
           <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <QuizResults
               results={quiz.results}
+              answeredQuestions={quiz.feedbackMode === 'end' ? quiz.answeredQuestions : undefined}
               onQuizAgain={handleQuizAgain}
               onReturnToDictionary={() => navigate(`/subject/${subjectSlug}`)}
             />

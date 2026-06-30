@@ -1,26 +1,33 @@
 // Shared UI for true_false_term_def, true_false_def_term, true_false_usage —
 // a two-button True/False choice. content.prompt already carries the full
 // composed question text (and quoted sentence, where relevant).
+//
+// Selecting an option never submits immediately — the learner always confirms
+// with the dedicated Submit button, regardless of helpers.autoSubmit (that flag
+// is reserved for DnD interaction patterns, not click-to-select ones).
 import { useState } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, X, Loader2 } from 'lucide-react';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 
 interface TrueFalsePatternProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
   disabled?: boolean;
+  isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
 }
 
-export default function TrueFalsePattern({ content, helpers, disabled, onAnswer }: TrueFalsePatternProps) {
+export default function TrueFalsePattern({ content, disabled, isSubmitting, onAnswer }: TrueFalsePatternProps) {
   const [selected, setSelected] = useState<'True' | 'False' | null>(null);
 
   const choose = (value: 'True' | 'False') => {
     if (disabled) return;
     setSelected(value);
-    if (helpers.autoSubmit) {
-      onAnswer(value, value === 'True' ? 0 : 1);
-    }
+  };
+
+  const submit = () => {
+    if (!selected || disabled) return;
+    onAnswer(selected, selected === 'True' ? 0 : 1);
   };
 
   return (
@@ -56,16 +63,15 @@ export default function TrueFalsePattern({ content, helpers, disabled, onAnswer 
         </button>
       </div>
 
-      {!helpers.autoSubmit && (
-        <button
-          type="button"
-          disabled={selected === null || disabled}
-          onClick={() => selected && onAnswer(selected, selected === 'True' ? 0 : 1)}
-          className="w-full py-3 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 disabled:opacity-50 transition-colors"
-        >
-          Submit
-        </button>
-      )}
+      <button
+        type="button"
+        disabled={selected === null || disabled}
+        onClick={submit}
+        className="w-full py-3 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+      >
+        {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+        {isSubmitting ? 'Submitting...' : 'Submit'}
+      </button>
     </div>
   );
 }

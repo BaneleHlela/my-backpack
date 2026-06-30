@@ -11,8 +11,10 @@ import ProfileRoadmapProgress, {
   LessonStatus,
 } from '../../models/learning/profileRoadmapProgress.model';
 import Question from '../../models/apps/language/vocabulary/question.model';
+import Quiz from '../../models/learning/quiz.model';
 import QuizSession from '../../models/learning/quizSession.model';
 import AnswerRecord from '../../models/learning/answerRecord.model';
+import { createQuizSession } from '../../services/quizSession.service';
 import {
   RoadmapWithProgressResult,
   NodeDetailResult,
@@ -186,17 +188,20 @@ export async function getLessonWithProgress(
   const lp = nodeEntry?.lessonProgress?.get(lessonId) ?? null;
   const isUnlocked = lp ? lp.status !== 'locked' : false;
 
+  const quiz = lesson.quizId ? await Quiz.findById(lesson.quizId) : null;
+  const quizQuestionIds = quiz?.questionIds ?? [];
+
   const questionQuery: Record<string, unknown> = {
-    _id: { $in: lesson.questionIds },
+    _id: { $in: quizQuestionIds },
     isActive: true,
   };
   if (ageGroupFilter && ageGroupFilter.length > 0) {
     questionQuery['type'] = { $in: ageGroupFilter };
   }
   const questions = await Question.find(questionQuery);
-  // Preserve lesson question order.
+  // Preserve the quiz's question order.
   const questionMap = new Map(questions.map((q) => [q._id.toString(), q]));
-  const orderedQuestions = lesson.questionIds
+  const orderedQuestions = quizQuestionIds
     .map((id) => questionMap.get(id.toString()))
     .filter((q): q is NonNullable<typeof q> => !!q);
 
@@ -259,7 +264,7 @@ export async function startLesson(
 ): Promise<StartLessonResult> {
   const lesson = await Lesson.findById(lessonId);
   if (!lesson || !lesson.isActive) throw new Error('Lesson not found');
-  if (lesson.questionIds.length === 0) throw new Error('Lesson has no questions');
+  if (!lesson.quizId) throw new Error('Lesson has no questions');
 
   const progress = await ProfileRoadmapProgress.findOne({
     roadmapId: lesson.roadmapId,
@@ -271,26 +276,7 @@ export async function startLesson(
   const lp = nodeEntry?.lessonProgress?.get(lessonId);
   if (!lp || lp.status === 'locked') throw new Error('Lesson is locked');
 
-  const roadmap = await Roadmap.findById(lesson.roadmapId);
-  const questions = await Question.find({ _id: { $in: lesson.questionIds }, isActive: true });
-  const questionIds = lesson.questionIds as Types.ObjectId[];
-  const questionTypes = [...new Set(questions.map((q) => q.type))];
-
-  const session = await QuizSession.create({
-    profileId,
-    miniAppId: roadmap?.miniAppId,
-    status: 'active',
-    questionIds,
-    settings: {
-      questionCount: questionIds.length,
-      questionTypes,
-      bucketFilter: 'all',
-    },
-    startedAt: new Date(),
-  });
-
-  const firstQuestion = questionIds.length > 0 ? await Question.findById(questionIds[0]) : null;
-  return { session, firstQuestion };
+  return createQuizSession(profileId, lesson.quizId.toString());
 }
 
 // Completes a lesson: evaluates quiz results, updates progress, unlocks next lesson/node.

@@ -1,8 +1,9 @@
-// Shown immediately after each answer. Tone branches by ageGroup per the brand
-// guide (celebratory/simple for child, confident/direct for adult) — English
-// vocab skews adult, so that's the default.
-import { motion } from 'framer-motion';
-import { CheckCircle2, XCircle } from 'lucide-react';
+// Shown as a modal immediately after each answer. Tone branches by ageGroup per the
+// brand guide (celebratory/simple for child, confident/direct for adult) — English
+// vocab skews adult, so that's the default. No backdrop-click-to-dismiss — advancing
+// is the only way out, via the button, so the learner can't skip past the result.
+import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle2, XCircle, SkipForward } from 'lucide-react';
 import type { AgeGroup, IQuestionContent } from '@my-backpack/shared';
 
 interface AnswerFeedbackProps {
@@ -12,6 +13,7 @@ interface AnswerFeedbackProps {
   content: IQuestionContent;
   ageGroup: AgeGroup;
   isLastQuestion: boolean;
+  wasSkipped?: boolean;
   onAdvance: () => void;
 }
 
@@ -22,11 +24,14 @@ export default function AnswerFeedback({
   content,
   ageGroup,
   isLastQuestion,
+  wasSkipped,
   onAdvance,
 }: AnswerFeedbackProps) {
   const isChild = ageGroup === 'child';
 
-  const headline = isCorrect
+  const headline = wasSkipped
+    ? 'Skipped'
+    : isCorrect
     ? isChild
       ? 'Well done! 🎉'
       : 'Correct'
@@ -34,47 +39,63 @@ export default function AnswerFeedback({
     ? 'Try again next time!'
     : 'Not quite';
 
+  const ring = wasSkipped ? 'border-gray-200' : isCorrect ? 'border-emerald-200' : 'border-rose-200';
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`rounded-2xl border p-5 ${
-        isCorrect ? 'bg-emerald-50/70 border-emerald-200' : 'bg-rose-50/70 border-rose-200'
-      }`}
-    >
-      <div className="flex items-start gap-3">
-        {isCorrect ? (
-          <CheckCircle2 className="w-6 h-6 text-emerald-500 flex-shrink-0" />
-        ) : (
-          <XCircle className="w-6 h-6 text-rose-500 flex-shrink-0" />
-        )}
-        <div className="flex-1">
-          <p className={`font-semibold ${isCorrect ? 'text-emerald-700' : 'text-rose-700'}`}>
-            {headline}
-          </p>
-          <p className="text-sm text-gray-600 mt-0.5">
-            {pointsAwarded} / {maxPoints} points
-          </p>
-
-          {!isCorrect && content.correctAnswer && (
-            <p className="text-sm text-gray-700 mt-2">
-              Correct answer: <span className="font-semibold">{content.correctAnswer}</span>
-            </p>
-          )}
-
-          {content.explanation && (
-            <p className="text-sm text-gray-600 mt-2">{content.explanation}</p>
-          )}
-        </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={onAdvance}
-        className="w-full mt-4 py-3 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 transition-colors"
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       >
-        {isLastQuestion ? 'Finish' : 'Next question'}
-      </button>
-    </motion.div>
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0, y: 12 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.9, opacity: 0, y: 12 }}
+          className={`bg-white/95 backdrop-blur rounded-3xl border shadow-2xl p-6 w-full max-w-md ${ring}`}
+        >
+          <div className="flex items-start gap-3">
+            {wasSkipped ? (
+              <SkipForward className="w-7 h-7 text-gray-400 flex-shrink-0" />
+            ) : isCorrect ? (
+              <CheckCircle2 className="w-7 h-7 text-emerald-500 flex-shrink-0" />
+            ) : (
+              <XCircle className="w-7 h-7 text-rose-500 flex-shrink-0" />
+            )}
+            <div className="flex-1">
+              <p
+                className={`text-lg font-semibold ${
+                  wasSkipped ? 'text-gray-600' : isCorrect ? 'text-emerald-700' : 'text-rose-700'
+                }`}
+              >
+                {headline}
+              </p>
+              <p className="text-sm text-gray-600 mt-0.5">
+                {pointsAwarded} / {maxPoints} points
+              </p>
+
+              {!isCorrect && content.correctAnswer && (
+                <p className="text-sm text-gray-700 mt-3">
+                  Correct answer: <span className="font-semibold">{content.correctAnswer}</span>
+                </p>
+              )}
+
+              {!wasSkipped && content.explanation && (
+                <p className="text-sm text-gray-600 mt-2">{content.explanation}</p>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onAdvance}
+            className="w-full mt-5 py-3 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 transition-colors"
+          >
+            {isLastQuestion ? 'Finish' : 'Next question'}
+          </button>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 }

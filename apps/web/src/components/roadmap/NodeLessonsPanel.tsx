@@ -17,7 +17,7 @@ interface LessonWithProgress {
   title: string;
   lessonType: LessonType;
   studyMaterial?: ILessonStudyMaterial;
-  questionIds: string[];
+  quizId?: string;
   passingScore: number;
   isActive: boolean;
   progressStatus: LessonStatus;
@@ -138,11 +138,8 @@ export default function NodeLessonsPanel({ node, subjectSlug, onClose }: NodeLes
                   <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium ${meta.classes}`}>
                     {meta.label}
                   </span>
-                  {lesson.questionIds.length > 0 && (
-                    <span className="text-xs text-gray-400">
-                      {lesson.questionIds.length}{' '}
-                      {lesson.questionIds.length === 1 ? 'question' : 'questions'}
-                    </span>
+                  {lesson.quizId && (
+                    <span className="text-xs text-gray-400">Has questions</span>
                   )}
                 </div>
               </div>

@@ -2,7 +2,7 @@
 // Coordinates the dictionaryApi, questionGenerator, and adaptiveLearning services.
 import { Types } from 'mongoose';
 import { searchWord, parseAndStoreTerm } from '../../services/dictionaryApi.service';
-import { generateAutoQuestions } from '../../services/questionGenerator.service';
+import { generateQuestionsForDefinition } from '../../services/questionGeneration/index';
 import { AppError } from '../../utils/AppError';
 import TermBucket from '../../models/apps/language/vocabulary/termBucket.model';
 import BucketEntry from '../../models/apps/language/vocabulary/bucketEntry.model';
@@ -107,11 +107,11 @@ export async function addToBucket(
     await record.save();
   }
 
-  // Generate starter questions for this definition — fire-and-forget
+  // Generate the full question set (auto + AI) for this definition — fire-and-forget
   const existingQuestions = await Question.countDocuments({ termId, definitionId, isActive: true });
   if (existingQuestions === 0) {
-    generateAutoQuestions(termId, definitionId).catch((err) =>
-      console.error('Auto question generation failed for term/definition:', termId, definitionId, err)
+    generateQuestionsForDefinition(termId, definitionId).catch((err: unknown) =>
+      console.error('Question generation failed for term/definition:', termId, definitionId, err)
     );
   }
 

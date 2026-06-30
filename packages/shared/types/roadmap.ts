@@ -39,7 +39,7 @@ export interface ILesson {
   title: string;
   lessonType: LessonType;
   studyMaterial?: ILessonStudyMaterial;
-  questionIds: string[];
+  quizId?: string;
   passingScore: number;
   isActive: boolean;
   createdAt: string;

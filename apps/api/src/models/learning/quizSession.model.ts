@@ -12,15 +12,18 @@
 // 'questionIds' is the ordered list the session was built with; individual AnswerRecords
 // link back to this session via sessionId.
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
+import type { FeedbackMode } from './quiz.model';
 
 export type SessionStatus = 'active' | 'completed' | 'abandoned';
 export type BucketFilter = 'all' | 'learning' | 'mastered';
+export type { FeedbackMode };
 
 export interface ISessionSettings {
   questionCount: number;
   timeLimit?: number;
   questionTypes: string[];
   bucketFilter: BucketFilter;
+  feedbackMode: FeedbackMode;
 }
 
 export interface ISessionResults {
@@ -57,6 +60,11 @@ const sessionSettingsSchema = new Schema<ISessionSettings>(
       type: String,
       enum: ['all', 'learning', 'mastered'],
       default: 'learning',
+    },
+    feedbackMode: {
+      type: String,
+      enum: ['immediate', 'end'],
+      default: 'immediate',
     },
   },
   { _id: false }

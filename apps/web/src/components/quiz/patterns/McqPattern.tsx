@@ -2,26 +2,36 @@
 // mcq_incorrect_usage, mcq_fill_blank — a selectable option list.
 // content.prompt already carries the fully-composed question text from the
 // generator (e.g. "What is the correct definition of \"ephemeral\"?").
+//
+// Selecting an option never submits immediately — the learner always confirms
+// with the dedicated Submit button, regardless of helpers.autoSubmit (that flag
+// is reserved for DnD interaction patterns, not click-to-select ones).
 import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 
 interface McqPatternProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
   disabled?: boolean;
+  isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
 }
 
-export default function McqPattern({ content, helpers, disabled, onAnswer }: McqPatternProps) {
+const OPTION_LABELS = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+export default function McqPattern({ content, disabled, isSubmitting, onAnswer }: McqPatternProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const options = content.options ?? [];
 
   const choose = (index: number) => {
     if (disabled) return;
     setSelected(index);
-    if (helpers.autoSubmit) {
-      onAnswer(options[index], index);
-    }
+  };
+
+  const submit = () => {
+    if (selected === null || disabled) return;
+    onAnswer(options[selected], selected);
   };
 
   return (
@@ -35,27 +45,33 @@ export default function McqPattern({ content, helpers, disabled, onAnswer }: Mcq
             type="button"
             disabled={disabled}
             onClick={() => choose(i)}
-            className={`text-left px-4 py-3 rounded-2xl border transition-colors disabled:cursor-not-allowed ${
+            className={`flex items-center gap-3 text-left px-4 py-3 rounded-2xl border transition-colors disabled:cursor-not-allowed ${
               selected === i
                 ? 'bg-violet-500 border-violet-500 text-white'
                 : 'bg-white/40 border-white/50 text-gray-800 hover:bg-white/60'
             }`}
           >
-            {option}
+            <span
+              className={`flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold ${
+                selected === i ? 'bg-white/25 text-white' : 'bg-white/60 text-gray-600'
+              }`}
+            >
+              {OPTION_LABELS[i] ?? i + 1}
+            </span>
+            <span>{option}</span>
           </button>
         ))}
       </div>
 
-      {!helpers.autoSubmit && (
-        <button
-          type="button"
-          disabled={selected === null || disabled}
-          onClick={() => selected !== null && onAnswer(options[selected], selected)}
-          className="w-full py-3 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 disabled:opacity-50 transition-colors"
-        >
-          Submit
-        </button>
-      )}
+      <button
+        type="button"
+        disabled={selected === null || disabled}
+        onClick={submit}
+        className="w-full py-3 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+      >
+        {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+        {isSubmitting ? 'Submitting...' : 'Submit'}
+      </button>
     </div>
   );
 }

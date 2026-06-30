@@ -9,6 +9,7 @@ import Subject from '../../../models/core/subject.model';
 import Topic from '../../../models/core/topic.model';
 import MiniApp from '../../../models/core/miniApp.model';
 import Lesson from '../../../models/learning/lesson.model';
+import Quiz from '../../../models/learning/quiz.model';
 import { IQuestionContent } from '../../../modules/question/question.types';
 
 // ── Edit this array to add/change vowel content ──────────
@@ -213,9 +214,28 @@ export async function seedVowelQuestions(practiceLessonId: string): Promise<void
     createdQuestionIds.push(dndQuestion._id.toString());
   }
 
-  // Link all questions to the practice lesson (idempotent — sets, not pushes).
+  // Wrap the questions in a fixed Quiz and link it to the practice lesson (idempotent).
+  const practiceQuiz = await Quiz.findOneAndUpdate(
+    { miniAppId: soundsMiniApp._id, mode: 'fixed', title: 'IsiZulu Vowels Practice' },
+    {
+      miniAppId: soundsMiniApp._id,
+      sourceMiniAppIds: [soundsMiniApp._id],
+      title: 'IsiZulu Vowels Practice',
+      mode: 'fixed',
+      questionIds: createdQuestionIds,
+      settings: {
+        questionCount: createdQuestionIds.length,
+        questionTypes: [],
+        bucketFilter: 'all',
+      },
+      isUserAdjustable: false,
+      isDefault: false,
+      isActive: true,
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
   await Lesson.findByIdAndUpdate(practiceLessonId, {
-    questionIds: createdQuestionIds,
+    quizId: practiceQuiz._id,
   });
 
   console.log(

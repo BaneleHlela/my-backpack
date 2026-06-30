@@ -115,7 +115,9 @@ export default function LessonPlayerPage() {
         >
           <span className="text-5xl">🧠</span>
           <p className="font-semibold text-gray-700">Quiz coming soon</p>
-          <p className="text-sm text-gray-500">This lesson has {currentLesson.questionIds.length} questions.</p>
+          <p className="text-sm text-gray-500">
+            {currentLesson.quizId ? 'This lesson has practice questions.' : 'This lesson has no questions yet.'}
+          </p>
           <button
             type="button"
             onClick={() => navigate(`/subject/${subjectSlug}`)}

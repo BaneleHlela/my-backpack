@@ -4,6 +4,8 @@ import { Router, IRouter } from 'express';
 import { requireProfile } from '../auth/auth.middleware';
 import {
   createSessionHandler,
+  listQuizzesHandler,
+  hasQuizContentHandler,
   captureAnswerHandler,
   completeSessionHandler,
   abandonSessionHandler,
@@ -12,6 +14,12 @@ import {
 } from './quiz.controller';
 
 const router: IRouter = Router();
+
+// GET /api/quiz/quizzes?miniAppId=
+router.get('/quizzes', requireProfile, listQuizzesHandler);
+
+// GET /api/quiz/has-content?miniAppId=
+router.get('/has-content', requireProfile, hasQuizContentHandler);
 
 // POST /api/quiz/session  { miniAppId, settings? }
 router.post('/session', requireProfile, createSessionHandler);
