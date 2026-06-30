@@ -63,7 +63,8 @@ export const fetchLesson = createAsyncThunk(
   async (lessonId: string, { rejectWithValue }) => {
     try {
       const res = await axiosInstance.get(`/roadmap/lesson/${lessonId}`);
-      return res.data.data as ILesson;
+      // API returns { lesson, progress, questions, isUnlocked } — extract just the lesson.
+      return (res.data.data.lesson ?? res.data.data) as ILesson;
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       return rejectWithValue(e.response?.data?.message ?? 'Failed to fetch lesson');
