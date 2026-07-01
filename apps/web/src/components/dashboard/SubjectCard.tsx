@@ -74,7 +74,7 @@ export default function SubjectCard({ enrollment, subject }: SubjectCardProps) {
       <div>
         <div className="flex justify-between text-xs text-gray-600 mb-1.5">
           <span>
-            {progressSummary.completedLessons} of {progressSummary.totalLessons} lessons complete
+            {progressSummary.completedItems} of {progressSummary.totalItems} items complete
           </span>
           <span className="font-semibold">{pct}%</span>
         </div>

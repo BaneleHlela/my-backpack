@@ -107,6 +107,24 @@ export const startSession = createAsyncThunk(
   }
 );
 
+// Starts a quiz session for a roadmap quiz item — structurally identical to startSession but
+// posts to the node/item-scoped roadmap endpoint instead of /quiz/session with a miniAppId
+// (quiz items don't expose start-time settings overrides).
+export const startQuizItemSession = createAsyncThunk(
+  'quiz/startQuizItemSession',
+  async ({ nodeId, itemId }: { nodeId: string; itemId: string }, { rejectWithValue }) => {
+    try {
+      const res = await axiosInstance.post(`/roadmap/node/${nodeId}/item/${itemId}/start`);
+      return res.data.data as {
+        session: { _id: string; questionIds: string[]; settings: { feedbackMode: FeedbackMode } };
+        firstQuestion: IQuestion | null;
+      };
+    } catch (err) {
+      return rejectWithValue(extractErrorMessage(err, 'Failed to start quiz'));
+    }
+  }
+);
+
 export const submitAnswer = createAsyncThunk(
   'quiz/submitAnswer',
   async (
@@ -217,6 +235,27 @@ const quizSlice = createSlice({
         state.status = action.payload.firstQuestion ? 'active' : 'completed';
       })
       .addCase(startSession.rejected, (state, action) => {
+        state.status = 'error';
+        state.error = action.payload as string;
+      })
+      // startQuizItemSession
+      .addCase(startQuizItemSession.pending, (state) => {
+        state.status = 'starting';
+        state.error = null;
+      })
+      .addCase(startQuizItemSession.fulfilled, (state, action) => {
+        state.sessionId = action.payload.session._id;
+        state.currentQuestion = action.payload.firstQuestion;
+        state.feedbackMode = action.payload.session.settings.feedbackMode;
+        state.answeredQuestions = [];
+        state.progress = {
+          answered: 0,
+          total: action.payload.session.questionIds.length,
+          correct: 0,
+        };
+        state.status = action.payload.firstQuestion ? 'active' : 'completed';
+      })
+      .addCase(startQuizItemSession.rejected, (state, action) => {
         state.status = 'error';
         state.error = action.payload as string;
       })

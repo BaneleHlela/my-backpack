@@ -1,18 +1,23 @@
-// Seeds the IsiZulu HL "IsiZulu Sounds" roadmap: one node with 3 lessons. Idempotent — re-running
-// updates existing records. Requires content.seed.ts to have run first (needs the subject).
+// Seeds the IsiZulu HL "IsiZulu Sounds" roadmap: the vowels node (1 lesson item + 6 quiz
+// items, per docs/content/vowels-dnd-quiz-design.md) and the consonants node (1 lesson item +
+// 2 quiz items — was practice + assessment). Idempotent — re-running updates existing
+// records. Requires content.seed.ts to have run first (needs the subject).
+//
+// Both nodes' `items[]` (the quiz items specifically) are written by their respective
+// question-seed files (isizulu/vowels.questions.ts, isizulu/consonants.questions.ts), which
+// know the Quiz ids — this seeder only creates the intro Lesson + node scaffolding.
 import Roadmap from '../../../models/learning/roadmap.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Lesson from '../../../models/learning/lesson.model';
 import Subject from '../../../models/core/subject.model';
+import { seedVowelsLessonSequence } from './vowelsLessonSequence';
 
 export interface IsiZuluRoadmapSeedResult {
   roadmapId: string;
   vowelsNodeId: string;
-  practiceLessonId: string;
-  assessmentLessonId: string;
+  vowelsIntroLessonId: string;
   consonantsNodeId: string;
-  consonantsPracticeLessonId: string;
-  consonantsAssessmentLessonId: string;
+  consonantsIntroLessonId: string;
 }
 
 export async function seedIsiZuluRoadmap(): Promise<IsiZuluRoadmapSeedResult> {
@@ -49,55 +54,13 @@ export async function seedIsiZuluRoadmap(): Promise<IsiZuluRoadmapSeedResult> {
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  const introLesson = await Lesson.findOneAndUpdate(
-    { nodeId: vowelsNode._id, position: 1 },
-    {
-      nodeId: vowelsNode._id,
-      roadmapId: roadmap._id,
-      position: 1,
-      title: 'Meet the Vowels',
-      lessonType: 'introduction',
-      studyMaterial: {
-        notes:
-          '# Izinhlamvu Zokuvuma (Vowels)\n\nIsiZulu has 5 vowel sounds:\n\n- **a** — as in "amanzi" (water)\n- **e** — as in "ekhaya" (at home)\n- **i** — as in "inkosi" (chief)\n- **o** — as in "omama" (mothers)\n- **u** — as in "ubuntu" (humanity)',
-      },
-      passingScore: 0,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  const practiceLesson = await Lesson.findOneAndUpdate(
-    { nodeId: vowelsNode._id, position: 2 },
-    {
-      nodeId: vowelsNode._id,
-      roadmapId: roadmap._id,
-      position: 2,
-      title: 'Hear the Vowels',
-      lessonType: 'practice',
-      passingScore: 0,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  const assessmentLesson = await Lesson.findOneAndUpdate(
-    { nodeId: vowelsNode._id, position: 3 },
-    {
-      nodeId: vowelsNode._id,
-      roadmapId: roadmap._id,
-      position: 3,
-      title: 'Vowels Challenge',
-      lessonType: 'assessment',
-      passingScore: 0.7,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  await RoadmapNode.findByIdAndUpdate(vowelsNode._id, {
-    lessons: [
-      { lessonId: introLesson._id, position: 1 },
-      { lessonId: practiceLesson._id, position: 2 },
-      { lessonId: assessmentLesson._id, position: 3 },
-    ],
+  const { introLessonId: vowelsIntroLessonId } = await seedVowelsLessonSequence({
+    nodeId: vowelsNode._id,
+    roadmapId: roadmap._id,
+    introTitle: 'Meet the Vowels',
+    introVideoUrl: 'https://www.youtube.com/watch?v=gp1UmVSlLJ4',
+    introNotes:
+      '# Izinhlamvu Zokuvuma (Vowels)\n\nIsiZulu has 5 vowel sounds:\n\n- **a** — as in "amanzi" (water)\n- **e** — as in "ekhaya" (at home)\n- **i** — as in "inkosi" (chief)\n- **o** — as in "omama" (mothers)\n- **u** — as in "ubuntu" (humanity)',
   });
 
   // ── Node 2: Izinhlamvu Zongwaqa (Consonants) ──────────────
@@ -129,49 +92,21 @@ export async function seedIsiZuluRoadmap(): Promise<IsiZuluRoadmapSeedResult> {
       roadmapId: roadmap._id,
       position: 1,
       title: 'Meet the Consonants',
-      lessonType: 'introduction',
-      studyMaterial: {
-        notes:
-          '# Izinhlamvu Zongwaqa (Consonants)\n\nConsonants combine with each vowel to make new sounds:\n\n- **b** — ba, be, bi, bo, bu\n- **c** — ca, ce, ci, co, cu',
-      },
-      passingScore: 0,
+      resources: [
+        {
+          type: 'notes',
+          position: 1,
+          markdown:
+            '# Izinhlamvu Zongwaqa (Consonants)\n\nConsonants combine with each vowel to make new sounds:\n\n- **b** — ba, be, bi, bo, bu\n- **c** — ca, ce, ci, co, cu',
+        },
+      ],
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  const consonantsPracticeLesson = await Lesson.findOneAndUpdate(
-    { nodeId: consonantsNode._id, position: 2 },
-    {
-      nodeId: consonantsNode._id,
-      roadmapId: roadmap._id,
-      position: 2,
-      title: 'Hear the Consonants',
-      lessonType: 'practice',
-      passingScore: 0,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  const consonantsAssessmentLesson = await Lesson.findOneAndUpdate(
-    { nodeId: consonantsNode._id, position: 3 },
-    {
-      nodeId: consonantsNode._id,
-      roadmapId: roadmap._id,
-      position: 3,
-      title: 'Consonants Challenge',
-      lessonType: 'assessment',
-      passingScore: 0.7,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  await RoadmapNode.findByIdAndUpdate(consonantsNode._id, {
-    lessons: [
-      { lessonId: consonantsIntroLesson._id, position: 1 },
-      { lessonId: consonantsPracticeLesson._id, position: 2 },
-      { lessonId: consonantsAssessmentLesson._id, position: 3 },
-    ],
-  });
+  // Superseded by direct quiz items on node.items[] (not extended) — delete the old
+  // practice/assessment quiz-wrapper Lessons that occupied positions 2-3.
+  await Lesson.deleteMany({ nodeId: consonantsNode._id, position: { $in: [2, 3] } });
 
   await Roadmap.findByIdAndUpdate(roadmap._id, {
     nodes: [
@@ -180,15 +115,13 @@ export async function seedIsiZuluRoadmap(): Promise<IsiZuluRoadmapSeedResult> {
     ],
   });
 
-  console.log('  Seeded IsiZulu Sounds roadmap: 2 nodes, 6 lessons');
+  console.log('  Seeded IsiZulu Sounds roadmap: 2 nodes, 2 intro lessons (quiz items added separately)');
 
   return {
     roadmapId: roadmap._id.toString(),
     vowelsNodeId: vowelsNode._id.toString(),
-    practiceLessonId: practiceLesson._id.toString(),
-    assessmentLessonId: assessmentLesson._id.toString(),
+    vowelsIntroLessonId,
     consonantsNodeId: consonantsNode._id.toString(),
-    consonantsPracticeLessonId: consonantsPracticeLesson._id.toString(),
-    consonantsAssessmentLessonId: consonantsAssessmentLesson._id.toString(),
+    consonantsIntroLessonId: consonantsIntroLesson._id.toString(),
   };
 }

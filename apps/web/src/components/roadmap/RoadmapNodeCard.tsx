@@ -8,8 +8,8 @@ interface RoadmapNodeCardProps {
   description?: string;
   status: NodeStatus;
   stars: number;
-  lessonCount: number;
-  completedLessons: number;
+  itemCount: number;
+  completedItems: number;
   position: number;
   onClick: () => void;
 }
@@ -26,14 +26,14 @@ export default function RoadmapNodeCard({
   description,
   status,
   stars,
-  lessonCount,
-  completedLessons,
+  itemCount,
+  completedItems,
   position,
   onClick,
 }: RoadmapNodeCardProps) {
   const isLocked = status === 'locked';
   const badge = STATUS_BADGE[status];
-  const pct = lessonCount > 0 ? Math.round((completedLessons / lessonCount) * 100) : 0;
+  const pct = itemCount > 0 ? Math.round((completedItems / itemCount) * 100) : 0;
 
   return (
     <motion.button
@@ -75,7 +75,7 @@ export default function RoadmapNodeCard({
         )}
         <div className="flex items-center gap-3 mt-1.5">
           <span className="text-xs text-gray-500">
-            {completedLessons}/{lessonCount} lessons
+            {completedItems}/{itemCount} items
           </span>
           {status === 'completed' && (
             <div className="flex gap-0.5">

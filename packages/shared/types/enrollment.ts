@@ -7,8 +7,8 @@ export type EnrollmentStatus = 'active' | 'paused' | 'completed';
 export interface IProgressSummary {
   totalNodes: number;
   completedNodes: number;
-  totalLessons: number;
-  completedLessons: number;
+  totalItems: number;
+  completedItems: number;
   overallProgressPercent: number;
   lastActivityAt?: string;
 }

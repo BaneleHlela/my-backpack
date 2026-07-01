@@ -151,20 +151,24 @@ Language (field)
   │     │     └── Quiz (miniApp, type: quiz)
   │     └── Phonics (topic)
   │           └── Phonics Roadmap (miniApp, type: roadmap)
-  │                 ├── Node 1: Vowel Sounds (10 questions: mcq_audio + dnd_single × 5 vowels)
-  │                 └── Node 2: Three-Letter Words (22 questions: mcq_audio + dnd_build × 11 CVC words)
+  │                 ├── Node 1: Vowel Sounds — 7 items: 1 lesson (video intro) + 6 quiz
+  │                 │     items escalating distractor count (1→2→5) and audio-on-tap
+  │                 │     (60 dnd_single questions + 5 mcq_audio kept for reuse)
+  │                 └── Node 2: Three-Letter Words — 3 items: 1 lesson + 2 quiz items (22 questions: mcq_audio + dnd_build × 11 CVC words)
   └── IsiZulu Home Language (subject)
         └── Sounds (topic)
               └── Sounds Roadmap (miniApp, type: roadmap)
-                    ├── Node 1: Izinhlamvu Zokuvuma — Vowels (10 questions — live)
-                    └── Node 2: Izinhlamvu Zongwaqa — Consonants (20 questions: mcq_audio + dnd_build × 10 syllables)
+                    ├── Node 1: Izinhlamvu Zokuvuma — Vowels — 7 items: 1 lesson (video
+                    │     intro) + 6 quiz items escalating distractor count (1→2→5) and
+                    │     audio-on-tap (60 dnd_single questions + 5 mcq_audio kept for reuse)
+                    └── Node 2: Izinhlamvu Zongwaqa — Consonants — 3 items: 1 lesson + 2 quiz items (20 questions: mcq_audio + dnd_build × 10 syllables)
 
 Foundation Phase Mathematics (field)  [note: actual field slug — verify via DB if querying]
   └── Foundation Phase Mathematics (subject)
         └── Number Sense (topic)
               └── Number Sense Roadmap (miniApp, type: roadmap)
-                    ├── Node 1: Let's Learn to Drag! (8 practice + 5 assessment dnd_single questions)
-                    └── Node 2: Counting 1 to 10 (10 dnd_count questions)
+                    ├── Node 1: Let's Learn to Drag! — 3 items: 1 lesson + 2 quiz items (8 practice + 5 assessment dnd_single questions)
+                    └── Node 2: Counting 1 to 10 — 3 items: 1 lesson + 2 quiz items (10 dnd_count questions)
 ```
 
 ---
@@ -326,21 +330,21 @@ totalPointsAwarded, percentageScore, timeTakenMs }, startedAt,
 completedAt.
 
 ### Lesson
-One step inside a RoadmapNode. Fields: nodeId, roadmapId (denormalized),
-position (1-based within node), title, lessonType 
-('introduction' | 'practice' | 'assessment'), studyMaterial (optional) 
-{ notes, audioUrl, videoUrl, bookReference? }, quizId (optional — 
-references a Quiz with mode:'fixed' holding this lesson's questions),
-passingScore (0.0–1.0, only used for 'assessment' type), isActive.
+A pure study-material container — one 'lesson'-type item inside a
+RoadmapNode.items[]. Fields: nodeId, roadmapId (denormalized),
+position (1-based within node), title, resources[] (ordered — see
+IResource below), isActive.
 
-Questions are NOT stored directly on the Lesson — practice/assessment 
-lessons reference a `Quiz` document via `lesson.quizId`. The Quiz holds 
-the ordered `questionIds[]`. Introduction lessons have no quizId.
+Quizzes are NOT wrapped in a Lesson — a 'quiz'-type item on
+RoadmapNode.items[] references a Quiz document directly (itemId =
+Quiz._id). A Lesson never has quizId/passingScore/lessonType; those
+concepts moved to the node's item ref (see RoadmapNode below).
 
-Completion rules by lessonType:
-- `introduction` — auto-completes when study material is viewed
-- `practice` — auto-completes after all questions attempted once (no pass/fail)
-- `assessment` — score must be >= passingScore to complete; gates next lesson
+IResource (one entry per resources[] element): { type: 'video' | 'pdf' |
+'image' | 'notes' | 'audio' | 'steps', position, url? (video/pdf/image/audio),
+caption? (video/image/audio), title? (pdf), markdown? (notes),
+steps? [{ title?, content }] (steps — a read-only stepped/sliding-notes
+viewer, not a quiz) }.
 
 ### Roadmap
 Belongs to a subject, a miniApp, or both. At least one of subjectId or 
@@ -354,28 +358,40 @@ both subjectId and miniAppId.
 ### RoadmapNode
 Fields: roadmapId, title, description, position, type 
 ('lesson' | 'checkpoint' | 'practice'), curriculumTags 
-[{ curriculum, gradeLevel }], lessons [{ lessonId, position }],
-unlockRequires[], rewards { xp, peanuts, badge? }, isActive.
+[{ curriculum, gradeLevel }], items [{ itemType: 'lesson' | 'quiz', itemId,
+position, passingScore? }], unlockRequires[], rewards { xp, peanuts, badge? },
+isActive.
 
-studyMaterial and assessment have moved to individual Lesson documents.
-`lessons[]` lists lessons in order; position here must match lesson.position.
+`items[]` is heterogeneous and is the canonical ordering array — replaces
+the old `lessons[]`. `itemType: 'lesson'` → itemId points to a Lesson
+document (pure study material). `itemType: 'quiz'` → itemId points to a
+Quiz document directly (no wrapper Lesson); `passingScore` (0–1) lives on
+the item ref itself, not on the Quiz (a Quiz can be reused outside
+roadmaps). `itemType` is a plain string union, extensible later to
+'resource' | 'notes' | 'chatbot' etc — not built yet. `itemId` has no
+Mongoose `ref` (polymorphic) — resolved manually in roadmap.service.ts by
+splitting on itemType and querying Lesson/Quiz separately.
 
 ### ProfileRoadmapProgress
 Fields: profileId, roadmapId, miniAppId (optional), nodeProgress 
 (Map of nodeId → { status, stars 0–3, attempts, bestScore, lastAttemptAt, 
-completedAt, lessonProgress (Map of lessonId → { status, completedAt, 
+completedAt, itemProgress (Map of itemId → { status, completedAt, 
 attempts, bestScore, studyMaterialViewedAt, lastAttemptAt }) }), 
 currentNodeId, totalStars, startedAt, lastActivityAt.
 Unique index: profileId + roadmapId.
 
-First lesson of a node is set to 'unlocked' when the node is unlocked.
-Subsequent lessons unlock when the previous lesson is completed.
+`itemProgress` is keyed by itemId uniformly whether it points to a Lesson
+or a Quiz. First item of a node is set to 'unlocked' when the node is
+unlocked. Subsequent items unlock when the previous item is completed.
+A 'quiz' item with `passingScore: 0` always passes (reproduces the old
+"practice lesson" auto-pass behavior); stars are awarded when the last
+item in `items[]` (by position) is passed.
 
 ### ProfileSubjectEnrollment
 One per profile per subject. Fields: profileId, subjectId, fieldId 
 (denormalized), enrolledAt, lastAccessedAt, status 
 ('active' | 'paused' | 'completed'), progressSummary { totalNodes, 
-completedNodes, totalLessons, completedLessons, overallProgressPercent, 
+completedNodes, totalItems, completedItems, overallProgressPercent, 
 lastActivityAt }.
 Unique index: profileId + subjectId.
 Indexes: profileId + fieldId, profileId + status.
@@ -531,8 +547,8 @@ GET  /api/roadmap/subject/:subjectId
 GET  /api/roadmap/node/:nodeId
 GET  /api/roadmap/lesson/:lessonId
 POST /api/roadmap/lesson/:lessonId/study
-POST /api/roadmap/lesson/:lessonId/start
-POST /api/roadmap/lesson/:lessonId/complete
+POST /api/roadmap/node/:nodeId/item/:itemId/start
+POST /api/roadmap/node/:nodeId/item/:itemId/complete
 ```
 
 ### Enrollment
@@ -712,7 +728,8 @@ my-backpack/
 │           │                   # INodeQuestionAssignment, QuestionType
 │           ├── quiz.ts         # IQuizSession, IAnswerRecord
 │           ├── learning.ts     # ILearningRecord, IAdaptiveProfile
-│           ├── roadmap.ts      # IRoadmap, IRoadmapNode, ILesson, IProgress
+│           ├── roadmap.ts      # IRoadmap, IRoadmapNode, INodeItemRef, ILesson,
+│           │                   # IResource, IProgress
 │           └── enrollment.ts   # IProfileSubjectEnrollment, IProgressSummary
 │       └── utils/
 │           └── resolveHelpers.ts  # resolveHelpers(questionDefaults, nodeOverrides)
@@ -746,14 +763,15 @@ my-backpack/
 - [x] Roadmap module (routes, service, unlock logic)
 - [x] Lesson model (replaces studyMaterial + assessment on RoadmapNode)
 - [x] Roadmap restructured — subjectId optional, nodes[] canonical order
-- [x] RoadmapNode restructured — lessons[] replaces studyMaterial + assessment
-- [x] ProfileRoadmapProgress — lesson-level progress tracking added
+- [x] RoadmapNode restructured — items[] replaces lessons[] (heterogeneous 'lesson'/'quiz' items; quiz items reference Quiz documents directly, no wrapper Lesson)
+- [x] Lesson restructured — resources[] (video/pdf/image/notes/audio/steps) replaces the single studyMaterial object; lessonType/quizId/passingScore dropped (moved to the node's item ref)
+- [x] ProfileRoadmapProgress — itemProgress replaces lessonProgress (keyed uniformly by itemId)
 - [x] Subject enrollment system (ProfileSubjectEnrollment model + enrollment module)
-- [x] Roadmap service updated — lesson-level start/complete/study routes
-- [x] IsiZulu Sounds roadmap seeded (vowels node: 10 questions, live)
+- [x] Roadmap service updated — item-level start/complete/study routes (POST /roadmap/node/:nodeId/item/:itemId/{start,complete})
 - [x] Term.word unique index fixed — now compound (miniAppId + word) not global
 - [x] English Phonics content hierarchy (Topic + MiniApp + Roadmap seeded)
-- [x] English Phonics node 1: Vowel Sounds (10 questions: mcq_audio + dnd_single × 5 vowels)
+- [x] Question.seedKey field added — idempotent upsert key for hand-authored seed variants that termId+type can't distinguish (e.g. the 6 vowels dnd_single quiz variants)
+- [x] All roadmaps (isiZulu vowels/consonants, English vowels/CVC, math drag-intro/counting) migrated to the items[] model — vowels nodes: 1 lesson item + 6 quiz items; other nodes: 1 lesson item + 2 quiz items (was practice + assessment)
 - [x] English Phonics node 2: Three-Letter Words (22 questions: mcq_audio + dnd_build × 11 CVC words)
 - [x] Math Number Sense roadmap restructured (2 nodes: drag-intro at pos 1, counting at pos 2)
 - [x] Math drag-intro node: 8 practice + 5 assessment dnd_single questions
@@ -781,8 +799,8 @@ my-backpack/
 - [x] Dashboard skeleton
 - [x] Vocab mini-app UI (search, term detail, dictionary)
 - [x] Bucket UI (My Bucket page — status filter tabs, client-side sort, confidence/accuracy/review info, remove)
-- [x] Quiz UI (12 text-based question types; dnd_* and mcq_audio show a "not yet supported" placeholder)
-- [ ] Roadmap UI (roadmap screen, lesson player, completion screen)
+- [x] Quiz UI (12 text-based question types + dnd_single implemented via DndSinglePattern; remaining 7 dnd_* types and mcq_audio show a "not yet supported" placeholder)
+- [x] Roadmap UI (roadmap screen with node panel, lesson resource-hub page with video/pdf/image/notes/audio/steps rendering, direct quiz-item player reusing the Quiz mini-app's components)
 - [ ] Profile management screens
 
 ### Frontend Mobile (apps/mobile)
@@ -809,10 +827,10 @@ my-backpack/
 - DnD questions require `content.draggables` and `content.dropZones`; dnd_fill/dnd_build also need `content.sentenceTemplate`
 - `resolveHelpers(content.defaultHelpers, nodeOverrides)` from packages/shared gives final IQuestionHelpers
 - DnD rawResponse format: `JSON.stringify({ placements: [{ draggableId, dropZoneId }] })`
-- Lessons own questions via a Quiz reference — `lesson.quizId` → `Quiz.questionIds[]`; questions are NOT directly on lessons or nodes
-- When seeding a lesson's question set: create a `Quiz` (mode:'fixed'), set `lesson.quizId` (see `isizulu/vowels.questions.ts` for the canonical pattern)
+- Quiz items reference a Quiz directly via `RoadmapNode.items[].itemId` (itemType 'quiz') — no wrapper Lesson; `Quiz.questionIds[]` holds the ordered questions
+- When seeding a node's quiz items: create the `Quiz` documents (mode:'fixed'), then the question-seed file is the sole writer of that node's `items[]` (full-array overwrite each run — see `isizulu/vowels.questions.ts` for the canonical pattern)
 - Term.word is unique per miniAppId (compound index) — when upserting Terms, always include `miniAppId` in the query filter
-- Roadmap.nodes[] and RoadmapNode.lessons[] are the canonical ordering arrays
+- Roadmap.nodes[] and RoadmapNode.items[] are the canonical ordering arrays
 - A Roadmap must have at least one of subjectId or miniAppId (enforced by pre-validate hook)
 - Subject enrollment (ProfileSubjectEnrollment) is the entry point for a learner starting a subject
 
@@ -821,7 +839,7 @@ my-backpack/
 ## Notes for Claude Code
 
 - Read this file at the start of every session before doing anything
-- Update this file and any affected docs/ files at the end of every session, as part of the same PR — not as separate follow-up work
+- Update CLAUDE.md and relevant docs/ files at the end of every Claude Code session, in the same PR, as a standing rule — not optional, not deferred.
 - We are not scaling yet — keep solutions simple and straightforward
 - Always use TypeScript, never plain JavaScript
 - When creating new API modules follow the same structure as existing ones
@@ -840,8 +858,8 @@ my-backpack/
 - XP and peanuts reward system exists in the data model 
   but the service layer is not yet built
 - Test readiness scoring is designed but not yet built
-- Lessons reference questions via `Quiz` (mode:'fixed') not directly —
-  always create a Quiz and set `lesson.quizId`, never `lesson.questionIds`
+- Quiz items on `RoadmapNode.items[]` reference a `Quiz` (mode:'fixed') directly by itemId —
+  never wrap a quiz in a Lesson document; Lessons are pure study material (resources[]) only
 - When seeding Term documents, always include `miniAppId` in the upsert 
   query filter — Term.word is unique per miniAppId, not globally
 - isiZulu has no /r/ phoneme as a native consonant — never generate 

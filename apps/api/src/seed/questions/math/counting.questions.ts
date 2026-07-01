@@ -1,13 +1,12 @@
 // Math "Counting 1 to 10" practice/assessment questions. No Term backing — these are
 // procedural counting drills, not vocabulary. Question documents are created directly,
 // nodeId pointing at the counting node. Idempotent — re-running updates existing records.
+import { Types } from 'mongoose';
 import Question from '../../../models/apps/language/vocabulary/question.model';
 import Subject from '../../../models/core/subject.model';
 import Topic from '../../../models/core/topic.model';
 import MiniApp from '../../../models/core/miniApp.model';
-import Roadmap from '../../../models/learning/roadmap.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
-import Lesson from '../../../models/learning/lesson.model';
 import Quiz from '../../../models/learning/quiz.model';
 import { IDraggable, IQuestionContent } from '../../../modules/question/question.types';
 
@@ -103,10 +102,7 @@ async function upsertCountingQuestion(
   return question._id.toString();
 }
 
-export async function seedCountingQuestions(
-  practiceLessonId: string,
-  assessmentLessonId: string
-): Promise<void> {
+export async function seedCountingQuestions(nodeId: string, introLessonId: string): Promise<void> {
   console.log('Seeding Math counting questions...');
 
   const subject = await Subject.findOne({ slug: 'foundation-phase-mathematics' });
@@ -118,14 +114,8 @@ export async function seedCountingQuestions(
   const mathMiniApp = await MiniApp.findOne({ topicId: topic._id, slug: 'roadmap' });
   if (!mathMiniApp) throw new Error('Number Sense roadmap miniApp not found — run content seed first');
 
-  const roadmap = await Roadmap.findOne({ subjectId: subject._id });
-  if (!roadmap) throw new Error('Number Sense Roadmap not found — run roadmap seed first');
-
-  const countingNode = await RoadmapNode.findOne({ roadmapId: roadmap._id, title: 'Counting 1 to 10' });
-  if (!countingNode) throw new Error('Counting 1 to 10 node not found — run roadmap seed first');
-
   const mathMiniAppId = mathMiniApp._id.toString();
-  const countingNodeId = countingNode._id.toString();
+  const countingNodeId = nodeId;
 
   const questionIdByTarget = new Map<number, string>();
   for (const data of countingData) {
@@ -149,7 +139,6 @@ export async function seedCountingQuestions(
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
-  await Lesson.findByIdAndUpdate(practiceLessonId, { quizId: practiceQuiz._id });
 
   // Assessment samples a subset of the same practice questions (counts 2, 4, 6, 8, 10) rather
   // than fabricating new pools — it's testing the same skill the practice set just taught.
@@ -170,7 +159,17 @@ export async function seedCountingQuestions(
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
-  await Lesson.findByIdAndUpdate(assessmentLessonId, { quizId: assessmentQuiz._id });
+
+  // This file is the sole writer of the counting node's items[] — full overwrite (not
+  // $push), safe to re-run. passingScore 0 on the practice item reproduces the old "practice
+  // always passes" behavior without a special case in the service layer.
+  await RoadmapNode.findByIdAndUpdate(nodeId, {
+    items: [
+      { itemType: 'lesson', itemId: new Types.ObjectId(introLessonId), position: 1 },
+      { itemType: 'quiz', itemId: practiceQuiz._id, position: 2, passingScore: 0 },
+      { itemType: 'quiz', itemId: assessmentQuiz._id, position: 3, passingScore: 0.7 },
+    ],
+  });
 
   console.log(
     `  Seeded ${countingData.length} practice counting questions, ${assessmentQuestionIds.length} sampled for assessment`

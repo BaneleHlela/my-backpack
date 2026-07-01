@@ -1,10 +1,13 @@
-// A single step on a roadmap path. Contains an ordered array of lessons.
-// Nodes are ordered via roadmap.nodes[]. unlockRequires lists prerequisite nodeIds.
-// studyMaterial and assessment have moved to individual Lesson documents.
+// A single step on a roadmap path. Contains an ordered array of heterogeneous items —
+// currently 'lesson' (a pure study-material Lesson document) or 'quiz' (references a Quiz
+// document directly, no wrapper Lesson). Extensible later to 'resource' | 'notes' | 'chatbot'
+// etc — not built yet. Nodes are ordered via roadmap.nodes[]. unlockRequires lists
+// prerequisite nodeIds.
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
 
 export type NodeType = 'lesson' | 'checkpoint' | 'practice';
 export type CurriculumType = 'CAPS' | 'IEB' | 'Cambridge' | 'University' | 'Other';
+export type NodeItemType = 'lesson' | 'quiz'; // extensible: future 'resource' | 'notes' | 'chatbot'
 
 export interface ICurriculumTag {
   curriculum: CurriculumType;
@@ -17,9 +20,11 @@ export interface INodeRewards {
   badge?: string;
 }
 
-export interface INodeLessonRef {
-  lessonId: Types.ObjectId;
+export interface INodeItemRef {
+  itemType: NodeItemType;
+  itemId: Types.ObjectId; // Lesson._id or Quiz._id depending on itemType
   position: number;
+  passingScore?: number;  // only meaningful when itemType === 'quiz'
 }
 
 export interface IRoadmapNodeDocument extends Document {
@@ -30,7 +35,7 @@ export interface IRoadmapNodeDocument extends Document {
   position: number;
   type: NodeType;
   curriculumTags: ICurriculumTag[];
-  lessons: INodeLessonRef[];
+  items: INodeItemRef[];
   unlockRequires: Types.ObjectId[];
   rewards: INodeRewards;
   isActive: boolean;
@@ -50,10 +55,14 @@ const curriculumTagSchema = new Schema<ICurriculumTag>(
   { _id: false }
 );
 
-const nodeLessonRefSchema = new Schema<INodeLessonRef>(
+const nodeItemRefSchema = new Schema<INodeItemRef>(
   {
-    lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', required: true },
+    itemType: { type: String, enum: ['lesson', 'quiz'], required: true },
+    // No static `ref` — polymorphic (Lesson or Quiz depending on itemType), resolved manually
+    // in the service layer via two separate find() calls split by itemType.
+    itemId: { type: Schema.Types.ObjectId, required: true },
     position: { type: Number, required: true },
+    passingScore: { type: Number, min: 0, max: 1 },
   },
   { _id: false }
 );
@@ -79,7 +88,7 @@ const roadmapNodeSchema = new Schema<IRoadmapNodeDocument>(
       default: 'lesson',
     },
     curriculumTags: { type: [curriculumTagSchema], default: [] },
-    lessons: { type: [nodeLessonRefSchema], default: [] },
+    items: { type: [nodeItemRefSchema], default: [] },
     unlockRequires: { type: [Schema.Types.ObjectId], ref: 'RoadmapNode', default: [] },
     rewards: { type: rewardsSchema, default: () => ({}) },
     isActive: { type: Boolean, default: true },

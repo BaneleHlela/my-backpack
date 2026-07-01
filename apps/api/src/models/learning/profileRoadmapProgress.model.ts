@@ -1,13 +1,14 @@
 // Tracks one profile's progress through one roadmap.
 // nodeProgress is a Map keyed by nodeId (string); each entry contains
-// a lessonProgress Map keyed by lessonId (string) for O(1) lookups.
+// an itemProgress Map keyed by itemId (string) for O(1) lookups — itemId works uniformly
+// whether it points to a Lesson (itemType 'lesson') or a Quiz (itemType 'quiz').
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
 
 export type NodeStatus = 'locked' | 'unlocked' | 'in_progress' | 'completed';
-export type LessonStatus = 'locked' | 'unlocked' | 'in_progress' | 'completed';
+export type ItemStatus = 'locked' | 'unlocked' | 'in_progress' | 'completed';
 
-export interface ILessonProgressEntry {
-  status: LessonStatus;
+export interface IItemProgressEntry {
+  status: ItemStatus;
   completedAt?: Date;
   attempts: number;
   bestScore: number;
@@ -22,7 +23,7 @@ export interface INodeProgressEntry {
   bestScore: number;
   lastAttemptAt?: Date;
   completedAt?: Date;
-  lessonProgress: Map<string, ILessonProgressEntry>;
+  itemProgress: Map<string, IItemProgressEntry>;
 }
 
 export interface IProfileRoadmapProgressDocument extends Document {
@@ -39,7 +40,7 @@ export interface IProfileRoadmapProgressDocument extends Document {
   updatedAt: Date;
 }
 
-const lessonProgressEntrySchema = new Schema<ILessonProgressEntry>(
+const itemProgressEntrySchema = new Schema<IItemProgressEntry>(
   {
     status: {
       type: String,
@@ -67,9 +68,9 @@ const nodeProgressEntrySchema = new Schema<INodeProgressEntry>(
     bestScore: { type: Number, default: 0, min: 0, max: 1 },
     lastAttemptAt: { type: Date },
     completedAt: { type: Date },
-    lessonProgress: {
+    itemProgress: {
       type: Map,
-      of: lessonProgressEntrySchema,
+      of: itemProgressEntrySchema,
       default: () => new Map(),
     },
   },

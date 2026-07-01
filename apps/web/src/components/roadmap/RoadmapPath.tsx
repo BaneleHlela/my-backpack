@@ -1,6 +1,6 @@
 // Renders the full roadmap — winding circles for children, card list for adults.
 import { useRef, useState, useEffect } from 'react';
-import type { RoadmapWithProgress, AgeGroup, ILesson, LessonStatus } from '@my-backpack/shared';
+import type { RoadmapWithProgress, AgeGroup, NodeItemWithProgress } from '@my-backpack/shared';
 import RoadmapNodeCircle from './RoadmapNodeCircle';
 import RoadmapNodeCard from './RoadmapNodeCard';
 import NodeLessonsPanel, { type NodeForPanel } from './NodeLessonsPanel';
@@ -42,23 +42,24 @@ function toNodeForPanel(node: RoadmapWithProgress['nodes'][number]): NodeForPane
     stars: node.stars,
     isUnlocked: node.isUnlocked,
     progressStatus: node.progressStatus,
-    lessons: node.lessons.map((l) => {
-      const lesson = l as unknown as ILesson & {
-        progressStatus: LessonStatus;
-        isUnlocked: boolean;
-      };
-      return {
-        _id: lesson._id,
-        title: lesson.title,
-        lessonType: lesson.lessonType,
-        studyMaterial: lesson.studyMaterial,
-        quizId: lesson.quizId,
-        passingScore: lesson.passingScore,
-        isActive: lesson.isActive,
-        progressStatus: lesson.progressStatus,
-        isUnlocked: lesson.isUnlocked,
-      };
-    }),
+    items: (node.items as unknown as NodeItemWithProgress[]).map((item) =>
+      item.itemType === 'lesson'
+        ? {
+            _id: item.lesson._id,
+            itemType: 'lesson' as const,
+            title: item.lesson.title,
+            progressStatus: item.progressStatus,
+            isUnlocked: item.isUnlocked,
+          }
+        : {
+            _id: item.quiz._id,
+            itemType: 'quiz' as const,
+            title: item.quiz.title,
+            questionCount: item.quiz.questionCount,
+            progressStatus: item.progressStatus,
+            isUnlocked: item.isUnlocked,
+          }
+    ),
   };
 }
 
@@ -157,8 +158,8 @@ export default function RoadmapPath({ roadmap, ageGroup, subjectSlug }: RoadmapP
 
       <div className="space-y-3 relative">
         {nodes.map((node) => {
-          const completedLessons = toNodeForPanel(node).lessons.filter(
-            (l) => l.progressStatus === 'completed'
+          const completedItems = toNodeForPanel(node).items.filter(
+            (i) => i.progressStatus === 'completed'
           ).length;
 
           return (
@@ -168,8 +169,8 @@ export default function RoadmapPath({ roadmap, ageGroup, subjectSlug }: RoadmapP
               description={node.description}
               status={node.progressStatus}
               stars={node.stars}
-              lessonCount={node.lessons.length}
-              completedLessons={completedLessons}
+              itemCount={node.items.length}
+              completedItems={completedItems}
               position={node.position}
               onClick={() => handleNodeClick(node)}
             />

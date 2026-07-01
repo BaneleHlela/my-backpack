@@ -46,17 +46,19 @@ async function runSeed(): Promise<void> {
     console.log('');
 
     await seedAllQuestions({
-      practiceLessonId: isizuluRoadmapResult.practiceLessonId,
+      vowelsNodeId: isizuluRoadmapResult.vowelsNodeId,
+      vowelsIntroLessonId: isizuluRoadmapResult.vowelsIntroLessonId,
       dictionaryMiniAppId,
-      consonantsPracticeLessonId: isizuluRoadmapResult.consonantsPracticeLessonId,
-      consonantsAssessmentLessonId: isizuluRoadmapResult.consonantsAssessmentLessonId,
-      dragPracticeLessonId: mathRoadmapResult.dragPracticeLessonId,
-      dragAssessmentLessonId: mathRoadmapResult.dragAssessmentLessonId,
-      countingPracticeLessonId: mathRoadmapResult.practiceLessonId,
-      countingAssessmentLessonId: mathRoadmapResult.assessmentLessonId,
-      englishVowelsPracticeLessonId: englishPhonicsResult.vowelsPracticeLessonId,
-      cvcPracticeLessonId: englishPhonicsResult.cvcPracticeLessonId,
-      cvcAssessmentLessonId: englishPhonicsResult.cvcAssessmentLessonId,
+      consonantsNodeId: isizuluRoadmapResult.consonantsNodeId,
+      consonantsIntroLessonId: isizuluRoadmapResult.consonantsIntroLessonId,
+      dragNodeId: mathRoadmapResult.dragNodeId,
+      dragIntroLessonId: mathRoadmapResult.dragIntroLessonId,
+      countingNodeId: mathRoadmapResult.countingNodeId,
+      countingIntroLessonId: mathRoadmapResult.countingIntroLessonId,
+      englishVowelsNodeId: englishPhonicsResult.vowelsNodeId,
+      englishVowelsIntroLessonId: englishPhonicsResult.vowelsIntroLessonId,
+      cvcNodeId: englishPhonicsResult.cvcNodeId,
+      cvcIntroLessonId: englishPhonicsResult.cvcIntroLessonId,
     });
     console.log('');
 

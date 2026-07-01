@@ -22,6 +22,7 @@ import ProfileSetupPage from './pages/ProfileSetupPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import SubjectHomePage from './pages/subject/SubjectHomePage';
 import LessonPlayerPage from './pages/lesson/LessonPlayerPage';
+import QuizItemPlayerPage from './pages/lesson/QuizItemPlayerPage';
 import MiniAppPage from './pages/miniapp/MiniAppPage';
 
 import './index.css';
@@ -87,6 +88,10 @@ function AppRoutes() {
           <Route
             path="/subject/:subjectSlug/lesson/:lessonId"
             element={<LessonPlayerPage />}
+          />
+          <Route
+            path="/subject/:subjectSlug/node/:nodeId/quiz/:itemId"
+            element={<QuizItemPlayerPage />}
           />
           <Route
             path="/field/:fieldSlug/subject/:subjectSlug/topic/:topicSlug/miniapp/:miniAppSlug"

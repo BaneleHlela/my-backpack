@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(curl -sS -o /dev/null -w \"HTTPS to google: %{http_code}\\\\n\" https://www.google.com --max-time 10)",
-      "Bash(curl -sS -o /dev/null -w \"HTTPS to Atlas host: %{http_code}\\\\n\" https://cluster0.jvyheql.mongodb.net --max-time 10)"
+      "Bash(curl -sS -o /dev/null -w \"HTTPS to Atlas host: %{http_code}\\\\n\" https://cluster0.jvyheql.mongodb.net --max-time 10)",
+      "Bash(pnpm --filter api seed)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

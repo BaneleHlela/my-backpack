@@ -56,6 +56,8 @@ export interface IQuestionHelpers {
   allowUndo: boolean;            // child can drag item back out of drop zone
   hintsAllowed: number;          // 0 = none
   hintDelaySeconds: number;      // 0 = never auto-offer
+  retryUntilCorrect: boolean;    // DnD: wrong drops are rejected client-side and must be retried —
+                                 // never submitted to the server; no skip is offered while true
 }
 
 export const defaultHelpers: IQuestionHelpers = {
@@ -70,6 +72,7 @@ export const defaultHelpers: IQuestionHelpers = {
   allowUndo: true,
   hintsAllowed: 3,
   hintDelaySeconds: 10,
+  retryUntilCorrect: false,
 };
 
 // ── Unified content type ──────────────────────────────────

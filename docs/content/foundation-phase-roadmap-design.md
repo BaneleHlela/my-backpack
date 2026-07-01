@@ -3,6 +3,14 @@
 
 *Planning document — for review before we write the Claude Code implementation prompt.*
 
+> **Superseded schema note:** this document describes the pre-item-model roadmap structure
+> (`RoadmapNode.lessons[]`, three nested Lessons per node: `introduction` → `practice` →
+> `assessment`, each quiz wrapped in a Lesson via `lesson.quizId`). That structure was
+> replaced by `RoadmapNode.items[]` — a heterogeneous ordered list of `'lesson'` (pure study
+> material) and `'quiz'` (references a Quiz document directly, no wrapper Lesson) items. See
+> `docs/technical/data-models.md` for the current schema. This doc is kept for its still-valid
+> curriculum decisions, avatar choices, and asset conventions — not as a live schema reference.
+
 ---
 
 ## 0. Terminology, so we're using the same words

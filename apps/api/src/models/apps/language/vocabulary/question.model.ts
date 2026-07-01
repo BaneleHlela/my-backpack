@@ -92,6 +92,11 @@ export interface IQuestionDocument extends Document {
   isGeneric: boolean;
   profileId: Types.ObjectId | null;
   isActive: boolean;
+  // Idempotent upsert key for hand-authored seed content only — lets seed scripts
+  // distinguish multiple variants of "same term, same type" (e.g. six dnd_single
+  // quiz variants per vowel) that termId+type alone can't tell apart. Not used
+  // anywhere in application logic.
+  seedKey?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -127,6 +132,7 @@ const questionSchema = new Schema<IQuestionDocument>(
     isGeneric: { type: Boolean, required: true, default: true },
     profileId: { type: Schema.Types.ObjectId, ref: 'Profile', default: null },
     isActive: { type: Boolean, default: true },
+    seedKey: { type: String, index: true, sparse: true },
   },
   { timestamps: true }
 );

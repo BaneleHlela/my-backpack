@@ -1,21 +1,24 @@
-// Seeds the English "English Phonics" roadmap: two nodes — "Vowel Sounds" then
-// "Three-Letter Words". Same pattern as isizulu-hl.roadmap.seed.ts and
-// math-foundation.roadmap.seed.ts. Idempotent — re-running updates existing records.
-// Practice/assessment lessons are seeded with no quizId — questions/quizzes are added later via
-// the english/vowels.questions.ts and english/cvc-words.questions.ts seed files.
+// Seeds the English "English Phonics" roadmap: two nodes — "Vowel Sounds" (1 lesson item +
+// 6 quiz items, per docs/content/vowels-dnd-quiz-design.md) then "Three-Letter Words" (1
+// lesson item + 2 quiz items — was practice + assessment). Same pattern as
+// isizulu-hl.roadmap.seed.ts and math-foundation.roadmap.seed.ts. Idempotent — re-running
+// updates existing records.
+//
+// Both nodes' `items[]` (the quiz items specifically) are written by their respective
+// question-seed files (english/vowels.questions.ts, english/cvc-words.questions.ts), which
+// know the Quiz ids — this seeder only creates the intro Lesson + node scaffolding.
 import Roadmap from '../../../models/learning/roadmap.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Lesson from '../../../models/learning/lesson.model';
 import Subject from '../../../models/core/subject.model';
+import { seedVowelsLessonSequence } from './vowelsLessonSequence';
 
 export interface EnglishPhonicsRoadmapSeedResult {
   roadmapId: string;
   vowelsNodeId: string;
-  vowelsPracticeLessonId: string;
-  vowelsAssessmentLessonId: string;
+  vowelsIntroLessonId: string;
   cvcNodeId: string;
-  cvcPracticeLessonId: string;
-  cvcAssessmentLessonId: string;
+  cvcIntroLessonId: string;
 }
 
 export async function seedEnglishPhonicsRoadmap(): Promise<EnglishPhonicsRoadmapSeedResult> {
@@ -54,54 +57,12 @@ export async function seedEnglishPhonicsRoadmap(): Promise<EnglishPhonicsRoadmap
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  const vowelsIntroLesson = await Lesson.findOneAndUpdate(
-    { nodeId: vowelsNode._id, position: 1 },
-    {
-      nodeId: vowelsNode._id,
-      roadmapId: roadmap._id,
-      position: 1,
-      title: 'Meet the Vowels',
-      lessonType: 'introduction',
-      studyMaterial: {
-        notes: '# Vowel Sounds\n\nLetters can make sounds: a, e, i, o, u. Listen and learn!',
-      },
-      passingScore: 0,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  const vowelsPracticeLesson = await Lesson.findOneAndUpdate(
-    { nodeId: vowelsNode._id, position: 2 },
-    {
-      nodeId: vowelsNode._id,
-      roadmapId: roadmap._id,
-      position: 2,
-      title: 'Hear the Vowels',
-      lessonType: 'practice',
-      passingScore: 0,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  const vowelsAssessmentLesson = await Lesson.findOneAndUpdate(
-    { nodeId: vowelsNode._id, position: 3 },
-    {
-      nodeId: vowelsNode._id,
-      roadmapId: roadmap._id,
-      position: 3,
-      title: 'Vowels Challenge',
-      lessonType: 'assessment',
-      passingScore: 0.7,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  await RoadmapNode.findByIdAndUpdate(vowelsNode._id, {
-    lessons: [
-      { lessonId: vowelsIntroLesson._id, position: 1 },
-      { lessonId: vowelsPracticeLesson._id, position: 2 },
-      { lessonId: vowelsAssessmentLesson._id, position: 3 },
-    ],
+  const { introLessonId: vowelsIntroLessonId } = await seedVowelsLessonSequence({
+    nodeId: vowelsNode._id,
+    roadmapId: roadmap._id,
+    introTitle: 'Meet the Vowels',
+    introVideoUrl: 'https://www.youtube.com/watch?v=gp1UmVSlLJ4',
+    introNotes: '# Vowel Sounds\n\nLetters can make sounds: a, e, i, o, u. Listen and learn!',
   });
 
   // ── Node 2: Three-Letter Words (CVC words) ─────────────────
@@ -128,48 +89,20 @@ export async function seedEnglishPhonicsRoadmap(): Promise<EnglishPhonicsRoadmap
       roadmapId: roadmap._id,
       position: 1,
       title: 'Building Words',
-      lessonType: 'introduction',
-      studyMaterial: {
-        notes: '# Three-Letter Words\n\nListen to a word, then build it letter by letter!',
-      },
-      passingScore: 0,
+      resources: [
+        {
+          type: 'notes',
+          position: 1,
+          markdown: '# Three-Letter Words\n\nListen to a word, then build it letter by letter!',
+        },
+      ],
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  const cvcPracticeLesson = await Lesson.findOneAndUpdate(
-    { nodeId: cvcNode._id, position: 2 },
-    {
-      nodeId: cvcNode._id,
-      roadmapId: roadmap._id,
-      position: 2,
-      title: 'Practice Building Words',
-      lessonType: 'practice',
-      passingScore: 0,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  const cvcAssessmentLesson = await Lesson.findOneAndUpdate(
-    { nodeId: cvcNode._id, position: 3 },
-    {
-      nodeId: cvcNode._id,
-      roadmapId: roadmap._id,
-      position: 3,
-      title: 'Word Building Challenge',
-      lessonType: 'assessment',
-      passingScore: 0.7,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  await RoadmapNode.findByIdAndUpdate(cvcNode._id, {
-    lessons: [
-      { lessonId: cvcIntroLesson._id, position: 1 },
-      { lessonId: cvcPracticeLesson._id, position: 2 },
-      { lessonId: cvcAssessmentLesson._id, position: 3 },
-    ],
-  });
+  // Superseded by direct quiz items on node.items[] (not extended) — delete the old
+  // practice/assessment quiz-wrapper Lessons that occupied positions 2-3.
+  await Lesson.deleteMany({ nodeId: cvcNode._id, position: { $in: [2, 3] } });
 
   await Roadmap.findByIdAndUpdate(roadmap._id, {
     nodes: [
@@ -178,15 +111,13 @@ export async function seedEnglishPhonicsRoadmap(): Promise<EnglishPhonicsRoadmap
     ],
   });
 
-  console.log('  Seeded English Phonics roadmap: 2 nodes, 6 lessons (questions added separately)');
+  console.log('  Seeded English Phonics roadmap: 2 nodes, 2 intro lessons (quiz items added separately)');
 
   return {
     roadmapId: roadmap._id.toString(),
     vowelsNodeId: vowelsNode._id.toString(),
-    vowelsPracticeLessonId: vowelsPracticeLesson._id.toString(),
-    vowelsAssessmentLessonId: vowelsAssessmentLesson._id.toString(),
+    vowelsIntroLessonId,
     cvcNodeId: cvcNode._id.toString(),
-    cvcPracticeLessonId: cvcPracticeLesson._id.toString(),
-    cvcAssessmentLessonId: cvcAssessmentLesson._id.toString(),
+    cvcIntroLessonId: cvcIntroLesson._id.toString(),
   };
 }

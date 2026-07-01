@@ -2,40 +2,46 @@
 import { Types } from 'mongoose';
 import {
   INodeProgressEntry,
-  ILessonProgressEntry,
+  IItemProgressEntry,
   NodeStatus,
-  LessonStatus,
+  ItemStatus,
 } from '../../models/learning/profileRoadmapProgress.model';
 import { IRoadmapDocument } from '../../models/learning/roadmap.model';
-import { IRoadmapNodeDocument } from '../../models/learning/roadmapNode.model';
-import { ILessonDocument, LessonType, ILessonStudyMaterial } from '../../models/learning/lesson.model';
+import { IRoadmapNodeDocument, NodeItemType } from '../../models/learning/roadmapNode.model';
+import { ILessonDocument } from '../../models/learning/lesson.model';
 import { IQuizSessionDocument } from '../../models/learning/quizSession.model';
 import { IQuestionDocument } from '../../models/apps/language/vocabulary/question.model';
 
-// Plain shape of a lesson document (without Mongoose Document methods).
-export interface LessonPlain {
+export interface QuizItemSummary {
   _id: Types.ObjectId;
-  nodeId: Types.ObjectId;
-  roadmapId: Types.ObjectId;
-  position: number;
   title: string;
-  lessonType: LessonType;
-  studyMaterial?: ILessonStudyMaterial;
-  quizId?: Types.ObjectId;
-  passingScore: number;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  questionCount: number;
 }
 
-export interface LessonWithProgress extends LessonPlain {
-  progressStatus: LessonStatus;
+export interface ResolvedLessonItem {
+  itemType: 'lesson';
+  itemId: Types.ObjectId;
+  position: number;
+  progressStatus: ItemStatus;
   isUnlocked: boolean;
+  lesson: ILessonDocument;
 }
 
-// Omit the typed lessons[] from the parent so we can replace it with LessonWithProgress[].
-export interface NodeWithProgress extends Omit<IRoadmapNodeDocument, 'lessons'> {
-  lessons: LessonWithProgress[];
+export interface ResolvedQuizItem {
+  itemType: 'quiz';
+  itemId: Types.ObjectId;
+  position: number;
+  passingScore: number;
+  progressStatus: ItemStatus;
+  isUnlocked: boolean;
+  quiz: QuizItemSummary;
+}
+
+export type ResolvedNodeItem = ResolvedLessonItem | ResolvedQuizItem;
+
+// Omit the typed items[] from the parent so we can replace it with ResolvedNodeItem[].
+export interface NodeWithProgress extends Omit<IRoadmapNodeDocument, 'items'> {
+  items: ResolvedNodeItem[];
   progressStatus: NodeStatus;
   stars: number;
   isUnlocked: boolean;
@@ -47,28 +53,28 @@ export interface RoadmapWithProgressResult {
   totalStars: number;
   completedNodes: number;
   totalNodes: number;
-  completedLessons: number;
-  totalLessons: number;
+  completedItems: number;
+  totalItems: number;
 }
 
 export interface LessonDetailResult {
   lesson: ILessonDocument;
-  progress: ILessonProgressEntry | null;
-  questions: IQuestionDocument[];
+  progress: IItemProgressEntry | null;
   isUnlocked: boolean;
 }
 
 export interface NodeDetailResult {
   node: IRoadmapNodeDocument;
   progress: INodeProgressEntry | null;
-  lessons: LessonWithProgress[];
+  items: ResolvedNodeItem[];
   isUnlocked: boolean;
 }
 
-export interface LessonCompletionResult {
-  lessonCompleted: boolean;
+export interface ItemCompletionResult {
+  itemCompleted: boolean;
   nodeCompleted: boolean;
-  nextLessonId: Types.ObjectId | null;
+  nextItemId: Types.ObjectId | null;
+  nextItemType: NodeItemType | null;
   rewards: { xp: number; peanuts: number; badge?: string } | null;
 }
 
@@ -80,7 +86,7 @@ export interface NodeCompletionResult {
   nextNodeId: Types.ObjectId | null;
 }
 
-export interface StartLessonResult {
+export interface StartQuizItemResult {
   session: IQuizSessionDocument;
   firstQuestion: IQuestionDocument | null;
 }

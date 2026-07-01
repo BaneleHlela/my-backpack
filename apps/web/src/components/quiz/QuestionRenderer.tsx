@@ -1,10 +1,12 @@
-// Dispatches to one of three shared interaction patterns based on question.type.
-// The 8 dnd_* types and mcq_audio don't have a renderer yet — shown as a clearly
-// labelled placeholder so the switch structure doesn't need a future rewrite.
+// Dispatches to one of the shared interaction patterns based on question.type.
+// dnd_single is implemented (DndSinglePattern); the remaining 7 dnd_* types and mcq_audio
+// don't have a renderer yet — shown as a clearly labelled placeholder so the switch
+// structure doesn't need a future rewrite.
 import type { IQuestion, IQuestionHelpers } from '@my-backpack/shared';
 import McqPattern from './patterns/McqPattern';
 import TrueFalsePattern from './patterns/TrueFalsePattern';
 import TypedInputPattern from './patterns/TypedInputPattern';
+import DndSinglePattern from './patterns/DndSinglePattern';
 
 const MCQ_TYPES = new Set<IQuestion['type']>([
   'mcq_term_to_def',
@@ -73,6 +75,18 @@ export default function QuestionRenderer({
       <TypedInputPattern
         type={question.type}
         termId={question.termId}
+        content={content}
+        helpers={helpers}
+        disabled={disabled}
+        isSubmitting={isSubmitting}
+        onAnswer={onAnswer}
+      />
+    );
+  }
+
+  if (question.type === 'dnd_single') {
+    return (
+      <DndSinglePattern
         content={content}
         helpers={helpers}
         disabled={disabled}

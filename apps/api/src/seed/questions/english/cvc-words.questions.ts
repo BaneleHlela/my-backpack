@@ -7,13 +7,14 @@
 // Each word gets an mcq_audio recognition question (hear it, pick it from similar-sounding
 // options) before a dnd_build construction question (hear it, build it letter by letter) —
 // recognition before production. Term-backed. Idempotent — re-running updates existing records.
+import { Types } from 'mongoose';
 import Term from '../../../models/apps/language/vocabulary/term.model';
 import Definition from '../../../models/apps/language/vocabulary/definition.model';
 import Question from '../../../models/apps/language/vocabulary/question.model';
 import Subject from '../../../models/core/subject.model';
 import Topic from '../../../models/core/topic.model';
 import MiniApp from '../../../models/core/miniApp.model';
-import Lesson from '../../../models/learning/lesson.model';
+import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Quiz from '../../../models/learning/quiz.model';
 import { IBlank, IDraggable, IQuestionContent } from '../../../modules/question/question.types';
 
@@ -153,10 +154,7 @@ async function upsertWordQuestions(
   return { mcqId: mcqQuestion._id.toString(), dndId: dndQuestion._id.toString() };
 }
 
-export async function seedCvcWordsQuestions(
-  practiceLessonId: string,
-  assessmentLessonId: string
-): Promise<void> {
+export async function seedCvcWordsQuestions(nodeId: string, introLessonId: string): Promise<void> {
   console.log('Seeding English CVC words questions...');
 
   const subject = await Subject.findOne({ slug: 'english' });
@@ -193,7 +191,6 @@ export async function seedCvcWordsQuestions(
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
-  await Lesson.findByIdAndUpdate(practiceLessonId, { quizId: practiceQuiz._id });
 
   const assessmentQuestionIds = assessmentWords.flatMap((w) => {
     const ids = idsByWord.get(w)!;
@@ -215,7 +212,17 @@ export async function seedCvcWordsQuestions(
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
-  await Lesson.findByIdAndUpdate(assessmentLessonId, { quizId: assessmentQuiz._id });
+
+  // This file is the sole writer of the CVC node's items[] — full overwrite (not $push),
+  // safe to re-run. passingScore 0 on the practice item reproduces the old "practice always
+  // passes" behavior without a special case in the service layer.
+  await RoadmapNode.findByIdAndUpdate(nodeId, {
+    items: [
+      { itemType: 'lesson', itemId: new Types.ObjectId(introLessonId), position: 1 },
+      { itemType: 'quiz', itemId: practiceQuiz._id, position: 2, passingScore: 0 },
+      { itemType: 'quiz', itemId: assessmentQuiz._id, position: 3, passingScore: 0.7 },
+    ],
+  });
 
   console.log(
     `  Seeded ${wordData.length} words x 2 question types = ${practiceQuestionIds.length} practice questions, ${assessmentQuestionIds.length} sampled for assessment`

@@ -1,4 +1,6 @@
-// Runs all per-subject question seeders.
+// Runs all per-subject question seeders. Each seeder now takes (nodeId, introLessonId) and is
+// the sole writer of that node's RoadmapNode.items[] — it builds the Quiz documents and
+// rebuilds the full ordered items list (1 lesson item + N quiz items) each run.
 import { seedVowelQuestions } from './isizulu/vowels.questions';
 import { seedConsonantQuestions } from './isizulu/consonants.questions';
 import { seedEnglishVocabBasics } from './english/vocab-basics.questions';
@@ -8,32 +10,34 @@ import { seedDragIntroQuestions } from './math/drag-intro.questions';
 import { seedCountingQuestions } from './math/counting.questions';
 
 export interface QuestionSeedContext {
-  // IsiZulu — vowels (existing)
-  practiceLessonId: string;
+  // IsiZulu — vowels
+  vowelsNodeId: string;
+  vowelsIntroLessonId: string;
   dictionaryMiniAppId: string;
   // IsiZulu — consonants
-  consonantsPracticeLessonId: string;
-  consonantsAssessmentLessonId: string;
+  consonantsNodeId: string;
+  consonantsIntroLessonId: string;
   // Math — drag intro
-  dragPracticeLessonId: string;
-  dragAssessmentLessonId: string;
+  dragNodeId: string;
+  dragIntroLessonId: string;
   // Math — counting
-  countingPracticeLessonId: string;
-  countingAssessmentLessonId: string;
+  countingNodeId: string;
+  countingIntroLessonId: string;
   // English — vowels
-  englishVowelsPracticeLessonId: string;
+  englishVowelsNodeId: string;
+  englishVowelsIntroLessonId: string;
   // English — CVC words
-  cvcPracticeLessonId: string;
-  cvcAssessmentLessonId: string;
+  cvcNodeId: string;
+  cvcIntroLessonId: string;
 }
 
 export async function seedAllQuestions(context: QuestionSeedContext): Promise<void> {
   console.log('Seeding questions...');
-  await seedVowelQuestions(context.practiceLessonId);
-  await seedConsonantQuestions(context.consonantsPracticeLessonId, context.consonantsAssessmentLessonId);
+  await seedVowelQuestions(context.vowelsNodeId, context.vowelsIntroLessonId);
+  await seedConsonantQuestions(context.consonantsNodeId, context.consonantsIntroLessonId);
   await seedEnglishVocabBasics(context.dictionaryMiniAppId);
-  await seedEnglishVowelQuestions(context.englishVowelsPracticeLessonId);
-  await seedCvcWordsQuestions(context.cvcPracticeLessonId, context.cvcAssessmentLessonId);
-  await seedDragIntroQuestions(context.dragPracticeLessonId, context.dragAssessmentLessonId);
-  await seedCountingQuestions(context.countingPracticeLessonId, context.countingAssessmentLessonId);
+  await seedEnglishVowelQuestions(context.englishVowelsNodeId, context.englishVowelsIntroLessonId);
+  await seedCvcWordsQuestions(context.cvcNodeId, context.cvcIntroLessonId);
+  await seedDragIntroQuestions(context.dragNodeId, context.dragIntroLessonId);
+  await seedCountingQuestions(context.countingNodeId, context.countingIntroLessonId);
 }

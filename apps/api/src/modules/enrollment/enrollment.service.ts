@@ -5,11 +5,10 @@ import ProfileSubjectEnrollment, {
 } from '../../models/learning/profileSubjectEnrollment.model';
 import ProfileRoadmapProgress, {
   INodeProgressEntry,
-  ILessonProgressEntry,
+  IItemProgressEntry,
 } from '../../models/learning/profileRoadmapProgress.model';
 import Roadmap from '../../models/learning/roadmap.model';
 import RoadmapNode from '../../models/learning/roadmapNode.model';
-import Lesson from '../../models/learning/lesson.model';
 import Subject, { ISubjectDocument } from '../../models/core/subject.model';
 import Field, { IFieldDocument } from '../../models/core/field.model';
 import Topic from '../../models/core/topic.model';
@@ -42,7 +41,7 @@ export async function enrollInSubject(
   const roadmap = await Roadmap.findOne({ subjectId, isActive: true });
   if (roadmap) {
     let totalNodes = 0;
-    let totalLessons = 0;
+    let totalItems = 0;
 
     const sortedNodeRefs = roadmap.nodes.slice().sort((a, b) => a.position - b.position);
     const firstNodeRef = sortedNodeRefs[0];
@@ -52,13 +51,13 @@ export async function enrollInSubject(
       const firstNode = await RoadmapNode.findById(firstNodeRef.nodeId);
       if (firstNode) {
         totalNodes = roadmap.nodes.length;
-        const lessonCount = await Lesson.countDocuments({ roadmapId: roadmap._id, isActive: true });
-        totalLessons = lessonCount;
+        const allNodes = await RoadmapNode.find({ roadmapId: roadmap._id, isActive: true });
+        totalItems = allNodes.reduce((sum, n) => sum + n.items.length, 0);
 
-        const sortedLessons = firstNode.lessons.slice().sort((a, b) => a.position - b.position);
-        const lessonProgress = new Map<string, ILessonProgressEntry>();
-        sortedLessons.forEach((lr, idx) => {
-          lessonProgress.set(lr.lessonId.toString(), {
+        const sortedItems = firstNode.items.slice().sort((a, b) => a.position - b.position);
+        const itemProgress = new Map<string, IItemProgressEntry>();
+        sortedItems.forEach((ir, idx) => {
+          itemProgress.set(ir.itemId.toString(), {
             status: idx === 0 ? 'unlocked' : 'locked',
             attempts: 0,
             bestScore: 0,
@@ -70,7 +69,7 @@ export async function enrollInSubject(
           stars: 0,
           attempts: 0,
           bestScore: 0,
-          lessonProgress,
+          itemProgress,
         });
       }
     }
@@ -83,7 +82,7 @@ export async function enrollInSubject(
     });
 
     enrollment.progressSummary.totalNodes = totalNodes;
-    enrollment.progressSummary.totalLessons = totalLessons;
+    enrollment.progressSummary.totalItems = totalItems;
     enrollment.markModified('progressSummary');
     await enrollment.save();
   }
@@ -253,26 +252,27 @@ export async function updateProgressSummary(profileId: string, subjectId: string
 
   const totalNodes = roadmap.nodes.length;
   let completedNodes = 0;
-  let completedLessons = 0;
+  let completedItems = 0;
 
   progress.nodeProgress.forEach((entry) => {
     if (entry.status === 'completed') completedNodes++;
-    entry.lessonProgress.forEach((lp) => {
-      if (lp.status === 'completed') completedLessons++;
+    entry.itemProgress.forEach((ip) => {
+      if (ip.status === 'completed') completedItems++;
     });
   });
 
-  const totalLessons = await Lesson.countDocuments({ roadmapId: roadmap._id, isActive: true });
+  const allNodes = await RoadmapNode.find({ roadmapId: roadmap._id, isActive: true });
+  const totalItems = allNodes.reduce((sum, n) => sum + n.items.length, 0);
   const overallProgressPercent =
-    totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+    totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
   await ProfileSubjectEnrollment.findOneAndUpdate(
     { profileId, subjectId },
     {
       'progressSummary.totalNodes': totalNodes,
       'progressSummary.completedNodes': completedNodes,
-      'progressSummary.totalLessons': totalLessons,
-      'progressSummary.completedLessons': completedLessons,
+      'progressSummary.totalItems': totalItems,
+      'progressSummary.completedItems': completedItems,
       'progressSummary.overallProgressPercent': overallProgressPercent,
       'progressSummary.lastActivityAt': new Date(),
     }

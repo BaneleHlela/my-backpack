@@ -1,16 +1,16 @@
-// Business logic for the roadmap system: progress tracking, node/lesson unlocking.
-// studyMaterial and assessment now live on Lesson documents, not on RoadmapNode.
+// Business logic for the roadmap system: progress tracking, node/item unlocking.
+// A RoadmapNode contains heterogeneous items — 'lesson' (pure study material) or 'quiz'
+// (references a Quiz document directly). resources now live on Lesson documents.
 import { Types } from 'mongoose';
 import Roadmap from '../../models/learning/roadmap.model';
-import RoadmapNode, { IRoadmapNodeDocument } from '../../models/learning/roadmapNode.model';
-import Lesson, { ILessonDocument } from '../../models/learning/lesson.model';
+import RoadmapNode, { IRoadmapNodeDocument, INodeItemRef, NodeItemType } from '../../models/learning/roadmapNode.model';
+import Lesson from '../../models/learning/lesson.model';
 import ProfileRoadmapProgress, {
   INodeProgressEntry,
-  ILessonProgressEntry,
+  IItemProgressEntry,
   NodeStatus,
-  LessonStatus,
+  ItemStatus,
 } from '../../models/learning/profileRoadmapProgress.model';
-import Question from '../../models/apps/language/vocabulary/question.model';
 import Quiz from '../../models/learning/quiz.model';
 import QuizSession from '../../models/learning/quizSession.model';
 import AnswerRecord from '../../models/learning/answerRecord.model';
@@ -19,11 +19,10 @@ import {
   RoadmapWithProgressResult,
   NodeDetailResult,
   LessonDetailResult,
-  LessonCompletionResult,
-  StartLessonResult,
-  LessonWithProgress,
+  ItemCompletionResult,
+  StartQuizItemResult,
+  ResolvedNodeItem,
 } from './roadmap.types';
-import { QuestionType } from '../../models/apps/language/vocabulary/question.model';
 import { updateProgressSummary } from '../enrollment/enrollment.service';
 import Subject from '../../models/core/subject.model';
 
@@ -33,18 +32,75 @@ function defaultNodeStatus(node: IRoadmapNodeDocument): NodeStatus {
   return 'locked';
 }
 
-// Empty node progress entry with initialised lesson map.
-function emptyNodeEntry(status: NodeStatus, lessonProgress?: Map<string, ILessonProgressEntry>): INodeProgressEntry {
+// Empty node progress entry with initialised item map.
+function emptyNodeEntry(status: NodeStatus, itemProgress?: Map<string, IItemProgressEntry>): INodeProgressEntry {
   return {
     status,
     stars: 0,
     attempts: 0,
     bestScore: 0,
-    lessonProgress: lessonProgress ?? new Map(),
+    itemProgress: itemProgress ?? new Map(),
   };
 }
 
-// Returns roadmap with ordered nodes+lessons and per-item progress.
+// Resolves a node's heterogeneous items[] (lesson + quiz refs) into full documents with
+// per-item progress status, in position order. Shared by getRoadmapWithProgress and
+// getNodeWithProgress so the mixed-item resolution logic isn't duplicated.
+async function resolveNodeItems(
+  node: IRoadmapNodeDocument,
+  nodeEntry: INodeProgressEntry | undefined,
+  isNodeUnlocked: boolean
+): Promise<ResolvedNodeItem[]> {
+  const sortedRefs = node.items.slice().sort((a, b) => a.position - b.position);
+
+  const lessonIds = sortedRefs.filter((r) => r.itemType === 'lesson').map((r) => r.itemId);
+  const quizIds = sortedRefs.filter((r) => r.itemType === 'quiz').map((r) => r.itemId);
+
+  const [lessonDocs, quizDocs] = await Promise.all([
+    lessonIds.length ? Lesson.find({ _id: { $in: lessonIds }, isActive: true }) : Promise.resolve([]),
+    quizIds.length
+      ? Quiz.find({ _id: { $in: quizIds }, isActive: true }).select('title questionIds')
+      : Promise.resolve([]),
+  ]);
+  const lessonMap = new Map(lessonDocs.map((l) => [l._id.toString(), l]));
+  const quizMap = new Map(quizDocs.map((q) => [q._id.toString(), q]));
+
+  return sortedRefs
+    .map((ref: INodeItemRef, idx): ResolvedNodeItem | null => {
+      const itemKey = ref.itemId.toString();
+      const ip = nodeEntry?.itemProgress?.get(itemKey);
+      const status: ItemStatus = ip ? ip.status : isNodeUnlocked && idx === 0 ? 'unlocked' : 'locked';
+      const isUnlocked = status !== 'locked';
+
+      if (ref.itemType === 'lesson') {
+        const lesson = lessonMap.get(itemKey);
+        if (!lesson) return null;
+        return {
+          itemType: 'lesson',
+          itemId: ref.itemId,
+          position: ref.position,
+          progressStatus: status,
+          isUnlocked,
+          lesson,
+        };
+      }
+
+      const quiz = quizMap.get(itemKey);
+      if (!quiz) return null;
+      return {
+        itemType: 'quiz',
+        itemId: ref.itemId,
+        position: ref.position,
+        passingScore: ref.passingScore ?? 0.7,
+        progressStatus: status,
+        isUnlocked,
+        quiz: { _id: quiz._id, title: quiz.title, questionCount: quiz.questionIds.length },
+      };
+    })
+    .filter((i): i is ResolvedNodeItem => i !== null);
+}
+
+// Returns roadmap with ordered nodes+items and per-item progress.
 // Accepts either miniAppId or subjectId to locate the roadmap.
 export async function getRoadmapWithProgress(
   profileId: string,
@@ -76,8 +132,8 @@ export async function getRoadmapWithProgress(
   }
 
   let completedNodes = 0;
-  let completedLessons = 0;
-  let totalLessons = 0;
+  let completedItems = 0;
+  let totalItems = 0;
 
   const nodesWithProgress = await Promise.all(
     sortedNodeRefs.map(async (ref) => {
@@ -91,29 +147,13 @@ export async function getRoadmapWithProgress(
       const isUnlocked = progressStatus !== 'locked';
       if (progressStatus === 'completed') completedNodes++;
 
-      // Attach ordered lessons with progress.
-      const sortedLessonRefs = node.lessons.slice().sort((a, b) => a.position - b.position);
-      const lessonIds = sortedLessonRefs.map((l) => l.lessonId);
-      const lessonDocs = await Lesson.find({ _id: { $in: lessonIds }, isActive: true });
-      const lessonDocMap = new Map(lessonDocs.map((l) => [l._id.toString(), l]));
+      const items = await resolveNodeItems(node, entry, isUnlocked);
+      items.forEach((item) => {
+        totalItems++;
+        if (item.progressStatus === 'completed') completedItems++;
+      });
 
-      const lessons: LessonWithProgress[] = sortedLessonRefs
-        .map((lr) => {
-          const lesson = lessonDocMap.get(lr.lessonId.toString());
-          if (!lesson) return null;
-          const lessonId = lesson._id.toString();
-          const lp = entry?.lessonProgress?.get(lessonId);
-          const lessonStatus: LessonStatus = lp ? lp.status : (isUnlocked && sortedLessonRefs[0]?.lessonId.toString() === lessonId ? 'unlocked' : 'locked');
-          if (lp?.status === 'completed') completedLessons++;
-          totalLessons++;
-          return Object.assign(lesson.toObject(), {
-            progressStatus: lessonStatus,
-            isUnlocked: lessonStatus !== 'locked',
-          }) as LessonWithProgress;
-        })
-        .filter((l): l is LessonWithProgress => l !== null);
-
-      return Object.assign(node.toObject(), { progressStatus, stars, isUnlocked, lessons });
+      return Object.assign(node.toObject(), { progressStatus, stars, isUnlocked, items });
     })
   );
 
@@ -125,12 +165,12 @@ export async function getRoadmapWithProgress(
     totalStars: progress.totalStars,
     completedNodes,
     totalNodes: sortedNodeRefs.length,
-    completedLessons,
-    totalLessons,
+    completedItems,
+    totalItems,
   };
 }
 
-// Returns a node with its ordered lessons and per-lesson progress.
+// Returns a node with its ordered items and per-item progress.
 export async function getNodeWithProgress(
   nodeId: string,
   profileId: string
@@ -143,38 +183,15 @@ export async function getNodeWithProgress(
   const progressStatus: NodeStatus = entry ? entry.status : defaultNodeStatus(node);
   const isUnlocked = progressStatus !== 'locked';
 
-  const sortedLessonRefs = node.lessons.slice().sort((a, b) => a.position - b.position);
-  const lessonDocs = await Lesson.find({
-    _id: { $in: sortedLessonRefs.map((l) => l.lessonId) },
-    isActive: true,
-  });
-  const lessonDocMap = new Map(lessonDocs.map((l) => [l._id.toString(), l]));
+  const items = await resolveNodeItems(node, entry ?? undefined, isUnlocked);
 
-  const lessons: LessonWithProgress[] = sortedLessonRefs
-    .map((lr, idx) => {
-      const lesson = lessonDocMap.get(lr.lessonId.toString());
-      if (!lesson) return null;
-      const lp = entry?.lessonProgress?.get(lesson._id.toString());
-      const lessonStatus: LessonStatus = lp
-        ? lp.status
-        : isUnlocked && idx === 0
-          ? 'unlocked'
-          : 'locked';
-      return Object.assign(lesson.toObject(), {
-        progressStatus: lessonStatus,
-        isUnlocked: lessonStatus !== 'locked',
-      }) as LessonWithProgress;
-    })
-    .filter((l): l is LessonWithProgress => l !== null);
-
-  return { node, progress: entry, lessons, isUnlocked };
+  return { node, progress: entry, items, isUnlocked };
 }
 
-// Returns a lesson with its questions and progress for this profile.
+// Returns a lesson (pure study material — resources[]) with its progress for this profile.
 export async function getLessonWithProgress(
   lessonId: string,
-  profileId: string,
-  ageGroupFilter?: QuestionType[]
+  profileId: string
 ): Promise<LessonDetailResult> {
   const lesson = await Lesson.findById(lessonId);
   if (!lesson || !lesson.isActive) throw new Error('Lesson not found');
@@ -185,86 +202,20 @@ export async function getLessonWithProgress(
   });
 
   const nodeEntry = progress?.nodeProgress.get(lesson.nodeId.toString()) ?? null;
-  const lp = nodeEntry?.lessonProgress?.get(lessonId) ?? null;
-  const isUnlocked = lp ? lp.status !== 'locked' : false;
+  const ip = nodeEntry?.itemProgress?.get(lessonId) ?? null;
+  const isUnlocked = ip ? ip.status !== 'locked' : false;
 
-  const quiz = lesson.quizId ? await Quiz.findById(lesson.quizId) : null;
-  const quizQuestionIds = quiz?.questionIds ?? [];
-
-  const questionQuery: Record<string, unknown> = {
-    _id: { $in: quizQuestionIds },
-    isActive: true,
-  };
-  if (ageGroupFilter && ageGroupFilter.length > 0) {
-    questionQuery['type'] = { $in: ageGroupFilter };
-  }
-  const questions = await Question.find(questionQuery);
-  // Preserve the quiz's question order.
-  const questionMap = new Map(questions.map((q) => [q._id.toString(), q]));
-  const orderedQuestions = quizQuestionIds
-    .map((id) => questionMap.get(id.toString()))
-    .filter((q): q is NonNullable<typeof q> => !!q);
-
-  return { lesson, progress: lp, questions: orderedQuestions, isUnlocked };
+  return { lesson, progress: ip, isUnlocked };
 }
 
-// Marks study material viewed on a lesson. Auto-completes if lessonType === 'introduction'.
-export async function markLessonStudyViewed(
+// Marks a lesson's resources viewed. Every lesson item unconditionally auto-completes on
+// /study — a Lesson is always "just study material" now, with no practice/assessment notion.
+export async function markLessonViewed(
   lessonId: string,
   profileId: string
-): Promise<{ progress: ILessonProgressEntry; lessonCompleted: boolean }> {
+): Promise<{ progress: IItemProgressEntry } & ItemCompletionResult> {
   const lesson = await Lesson.findById(lessonId);
   if (!lesson) throw new Error('Lesson not found');
-
-  let progress = await ProfileRoadmapProgress.findOne({
-    roadmapId: lesson.roadmapId,
-    profileId,
-  });
-  if (!progress) throw new Error('Roadmap progress not found — enroll first');
-
-  const nodeKey = lesson.nodeId.toString();
-  const lessonKey = lessonId.toString();
-  const nodeEntry = progress.nodeProgress.get(nodeKey) ?? emptyNodeEntry('unlocked');
-
-  const existing = nodeEntry.lessonProgress.get(lessonKey);
-  const now = new Date();
-
-  const isIntro = lesson.lessonType === 'introduction';
-  const updated: ILessonProgressEntry = {
-    status: isIntro ? 'completed' : (existing?.status === 'locked' ? 'unlocked' : (existing?.status ?? 'in_progress')),
-    attempts: existing?.attempts ?? 0,
-    bestScore: existing?.bestScore ?? 0,
-    studyMaterialViewedAt: existing?.studyMaterialViewedAt ?? now,
-    completedAt: isIntro ? (existing?.completedAt ?? now) : existing?.completedAt,
-    lastAttemptAt: existing?.lastAttemptAt,
-  };
-
-  nodeEntry.lessonProgress.set(lessonKey, updated);
-
-  // For 'introduction' type, auto-complete the lesson and cascade.
-  let lessonCompleted = false;
-  if (isIntro && updated.status === 'completed') {
-    lessonCompleted = true;
-    await cascadeAfterLessonComplete(lesson, nodeEntry, nodeKey, progress, profileId);
-  } else {
-    progress.nodeProgress.set(nodeKey, nodeEntry);
-  }
-
-  progress.lastActivityAt = now;
-  progress.markModified('nodeProgress');
-  await progress.save();
-
-  return { progress: updated, lessonCompleted };
-}
-
-// Validates lesson is unlocked and has questions, creates a QuizSession.
-export async function startLesson(
-  lessonId: string,
-  profileId: string
-): Promise<StartLessonResult> {
-  const lesson = await Lesson.findById(lessonId);
-  if (!lesson || !lesson.isActive) throw new Error('Lesson not found');
-  if (!lesson.quizId) throw new Error('Lesson has no questions');
 
   const progress = await ProfileRoadmapProgress.findOne({
     roadmapId: lesson.roadmapId,
@@ -272,21 +223,71 @@ export async function startLesson(
   });
   if (!progress) throw new Error('Roadmap progress not found — enroll first');
 
-  const nodeEntry = progress.nodeProgress.get(lesson.nodeId.toString());
-  const lp = nodeEntry?.lessonProgress?.get(lessonId);
-  if (!lp || lp.status === 'locked') throw new Error('Lesson is locked');
+  const nodeKey = lesson.nodeId.toString();
+  const itemKey = lessonId.toString();
+  const nodeEntry = progress.nodeProgress.get(nodeKey) ?? emptyNodeEntry('unlocked');
 
-  return createQuizSession(profileId, lesson.quizId.toString());
+  const existing = nodeEntry.itemProgress.get(itemKey);
+  const now = new Date();
+
+  const updated: IItemProgressEntry = {
+    status: 'completed',
+    attempts: existing?.attempts ?? 0,
+    bestScore: existing?.bestScore ?? 0,
+    studyMaterialViewedAt: existing?.studyMaterialViewedAt ?? now,
+    completedAt: existing?.completedAt ?? now,
+    lastAttemptAt: existing?.lastAttemptAt,
+  };
+
+  nodeEntry.itemProgress.set(itemKey, updated);
+
+  const cascadeResult = await cascadeAfterItemComplete(lesson.nodeId, itemKey, nodeEntry, nodeKey, progress, profileId);
+
+  progress.lastActivityAt = now;
+  progress.markModified('nodeProgress');
+  await progress.save();
+
+  return { progress: updated, itemCompleted: true, ...cascadeResult };
 }
 
-// Completes a lesson: evaluates quiz results, updates progress, unlocks next lesson/node.
-export async function completeLesson(
-  lessonId: string,
+// Validates the quiz item is unlocked, creates a QuizSession. itemId IS the quizId — quiz
+// items reference Quiz documents directly, no wrapper Lesson/quizId indirection anymore.
+export async function startQuizItem(
+  nodeId: string,
+  itemId: string,
+  profileId: string
+): Promise<StartQuizItemResult> {
+  const node = await RoadmapNode.findById(nodeId);
+  if (!node || !node.isActive) throw new Error('Node not found');
+
+  const ref = node.items.find((i) => i.itemType === 'quiz' && i.itemId.toString() === itemId);
+  if (!ref) throw new Error('Quiz item not found on this node');
+
+  const progress = await ProfileRoadmapProgress.findOne({
+    roadmapId: node.roadmapId,
+    profileId,
+  });
+  if (!progress) throw new Error('Roadmap progress not found — enroll first');
+
+  const nodeEntry = progress.nodeProgress.get(nodeId);
+  const ip = nodeEntry?.itemProgress?.get(itemId);
+  if (!ip || ip.status === 'locked') throw new Error('Item is locked');
+
+  return createQuizSession(profileId, itemId);
+}
+
+// Completes a quiz item: evaluates quiz results, updates progress, unlocks next item/node.
+export async function completeQuizItem(
+  nodeId: string,
+  itemId: string,
   profileId: string,
   sessionId: string
-): Promise<LessonCompletionResult> {
-  const lesson = await Lesson.findById(lessonId);
-  if (!lesson) throw new Error('Lesson not found');
+): Promise<ItemCompletionResult> {
+  const node = await RoadmapNode.findById(nodeId);
+  if (!node) throw new Error('Node not found');
+
+  const ref = node.items.find((i) => i.itemType === 'quiz' && i.itemId.toString() === itemId);
+  if (!ref) throw new Error('Quiz item not found on this node');
 
   const session = await QuizSession.findOne({ _id: sessionId, profileId });
   if (!session) throw new Error('Session not found');
@@ -296,43 +297,46 @@ export async function completeLesson(
   const totalPointsAwarded = answers.reduce((s, a) => s + a.pointsAwarded, 0);
   const scoreRatio = totalPointsAvailable > 0 ? totalPointsAwarded / totalPointsAvailable : 0;
 
-  let progress = await ProfileRoadmapProgress.findOne({
-    roadmapId: lesson.roadmapId,
+  const progress = await ProfileRoadmapProgress.findOne({
+    roadmapId: node.roadmapId,
     profileId,
   });
   if (!progress) throw new Error('Roadmap progress not found — enroll first');
 
-  const nodeKey = lesson.nodeId.toString();
-  const lessonKey = lessonId.toString();
+  const nodeKey = nodeId;
+  const itemKey = itemId;
   const nodeEntry = progress.nodeProgress.get(nodeKey) ?? emptyNodeEntry('unlocked');
-  const existing = nodeEntry.lessonProgress.get(lessonKey);
+  const existing = nodeEntry.itemProgress.get(itemKey);
   const now = new Date();
 
-  const isPractice = lesson.lessonType === 'practice';
-  const isAssessment = lesson.lessonType === 'assessment';
-  const passed = isPractice || scoreRatio >= lesson.passingScore;
+  // A "practice" quiz item is seeded with passingScore 0, so scoreRatio >= 0 always passes —
+  // reproduces the old lessonType === 'practice' auto-pass behavior without a special case.
+  const passingScore = ref.passingScore ?? 0.7;
+  const passed = scoreRatio >= passingScore;
 
-  const updatedLp: ILessonProgressEntry = {
+  const updated: IItemProgressEntry = {
     status: passed ? 'completed' : 'in_progress',
     attempts: (existing?.attempts ?? 0) + 1,
     bestScore: Math.max(existing?.bestScore ?? 0, scoreRatio),
     lastAttemptAt: now,
-    completedAt: passed ? (existing?.completedAt ?? now) : existing?.completedAt,
+    completedAt: passed ? existing?.completedAt ?? now : existing?.completedAt,
     studyMaterialViewedAt: existing?.studyMaterialViewedAt,
   };
 
-  nodeEntry.lessonProgress.set(lessonKey, updatedLp);
+  nodeEntry.itemProgress.set(itemKey, updated);
 
-  let lessonCompleted = false;
+  let itemCompleted = false;
   let nodeCompleted = false;
-  let nextLessonId: Types.ObjectId | null = null;
+  let nextItemId: Types.ObjectId | null = null;
+  let nextItemType: NodeItemType | null = null;
   let rewards: { xp: number; peanuts: number; badge?: string } | null = null;
 
   if (passed) {
-    lessonCompleted = true;
-    const result = await cascadeAfterLessonComplete(lesson, nodeEntry, nodeKey, progress, profileId);
+    itemCompleted = true;
+    const result = await cascadeAfterItemComplete(node._id, itemKey, nodeEntry, nodeKey, progress, profileId);
     nodeCompleted = result.nodeCompleted;
-    nextLessonId = result.nextLessonId;
+    nextItemId = result.nextItemId;
+    nextItemType = result.nextItemType;
     if (nodeCompleted) rewards = result.rewards;
   } else {
     progress.nodeProgress.set(nodeKey, nodeEntry);
@@ -342,8 +346,12 @@ export async function completeLesson(
   progress.markModified('nodeProgress');
   await progress.save();
 
-  // Stars on assessment lessons — track against the node.
-  if (isAssessment && passed) {
+  // Stars — awarded when the just-completed item is the last item in the node (structural
+  // rule, no new field needed: every node's last item today is its assessment/challenge quiz,
+  // reproducing the old lessonType === 'assessment' star-awarding behavior exactly).
+  const sortedRefs = node.items.slice().sort((a, b) => a.position - b.position);
+  const isLastItem = sortedRefs[sortedRefs.length - 1]?.itemId.toString() === itemId;
+  if (isLastItem && passed) {
     let stars = 0;
     if (scoreRatio >= 1.0) stars = 3;
     else if (scoreRatio >= 0.85) stars = 2;
@@ -352,56 +360,64 @@ export async function completeLesson(
     if (ne) {
       ne.stars = Math.max(ne.stars, stars);
       let totalStars = 0;
-      progress.nodeProgress.forEach((e) => { totalStars += e.stars; });
+      progress.nodeProgress.forEach((e) => {
+        totalStars += e.stars;
+      });
       progress.totalStars = totalStars;
       progress.markModified('nodeProgress');
       await progress.save();
     }
   }
 
-  return { lessonCompleted, nodeCompleted, nextLessonId, rewards };
+  return { itemCompleted, nodeCompleted, nextItemId, nextItemType, rewards };
 }
 
-// Shared logic after a lesson is marked completed:
-// unlocks the next lesson in the node, or completes the node and unlocks next nodes.
-async function cascadeAfterLessonComplete(
-  lesson: ILessonDocument,
+// Shared logic after an item is marked completed:
+// unlocks the next item in the node, or completes the node and unlocks next nodes.
+async function cascadeAfterItemComplete(
+  nodeId: Types.ObjectId,
+  itemId: string,
   nodeEntry: INodeProgressEntry,
   nodeKey: string,
   progress: Awaited<ReturnType<typeof ProfileRoadmapProgress.findOne>> & NonNullable<unknown>,
   profileId: string
-): Promise<{ nodeCompleted: boolean; nextLessonId: Types.ObjectId | null; rewards: { xp: number; peanuts: number; badge?: string } | null }> {
-  const node = await RoadmapNode.findById(lesson.nodeId);
-  if (!node) return { nodeCompleted: false, nextLessonId: null, rewards: null };
+): Promise<{
+  nodeCompleted: boolean;
+  nextItemId: Types.ObjectId | null;
+  nextItemType: NodeItemType | null;
+  rewards: { xp: number; peanuts: number; badge?: string } | null;
+}> {
+  const node = await RoadmapNode.findById(nodeId);
+  if (!node) return { nodeCompleted: false, nextItemId: null, nextItemType: null, rewards: null };
 
-  const sortedLessonRefs = node.lessons.slice().sort((a, b) => a.position - b.position);
-  const currentIdx = sortedLessonRefs.findIndex((l) => l.lessonId.toString() === lesson._id.toString());
-  const nextRef = sortedLessonRefs[currentIdx + 1];
+  const sortedRefs = node.items.slice().sort((a, b) => a.position - b.position);
+  const currentIdx = sortedRefs.findIndex((i) => i.itemId.toString() === itemId);
+  const nextRef = sortedRefs[currentIdx + 1];
 
-  let nextLessonId: Types.ObjectId | null = null;
+  let nextItemId: Types.ObjectId | null = null;
   if (nextRef) {
-    // Unlock the next lesson.
-    const nextLp = nodeEntry.lessonProgress.get(nextRef.lessonId.toString());
-    if (!nextLp || nextLp.status === 'locked') {
-      nodeEntry.lessonProgress.set(nextRef.lessonId.toString(), {
+    // Unlock the next item.
+    const nextIp = nodeEntry.itemProgress.get(nextRef.itemId.toString());
+    if (!nextIp || nextIp.status === 'locked') {
+      nodeEntry.itemProgress.set(nextRef.itemId.toString(), {
         status: 'unlocked',
         attempts: 0,
         bestScore: 0,
       });
     }
-    nextLessonId = nextRef.lessonId as Types.ObjectId;
+    nextItemId = nextRef.itemId as Types.ObjectId;
     nodeEntry.status = 'in_progress';
     progress.nodeProgress.set(nodeKey, nodeEntry);
-    return { nodeCompleted: false, nextLessonId, rewards: null };
+    return { nodeCompleted: false, nextItemId, nextItemType: nextRef.itemType, rewards: null };
   }
 
-  // No next lesson — check if all lessons are complete.
-  const allLessonsDone = sortedLessonRefs.every((lr) => {
-    const lp = nodeEntry.lessonProgress.get(lr.lessonId.toString());
-    return lp?.status === 'completed';
+  // No next item — check if all items are complete.
+  const allItemsDone = sortedRefs.every((ir) => {
+    const ip = nodeEntry.itemProgress.get(ir.itemId.toString());
+    return ip?.status === 'completed';
   });
 
-  if (allLessonsDone) {
+  if (allItemsDone) {
     const now = new Date();
     nodeEntry.status = 'completed';
     nodeEntry.completedAt = nodeEntry.completedAt ?? now;
@@ -412,7 +428,9 @@ async function cascadeAfterLessonComplete(
 
     // Recalculate total stars.
     let totalStars = 0;
-    progress.nodeProgress.forEach((e) => { totalStars += e.stars; });
+    progress.nodeProgress.forEach((e) => {
+      totalStars += e.stars;
+    });
     progress.totalStars = totalStars;
 
     // Update subject enrollment progress summary if applicable.
@@ -425,15 +443,15 @@ async function cascadeAfterLessonComplete(
     }
 
     console.log(`Node completed: ${node.title} — xp=${node.rewards.xp}, peanuts=${node.rewards.peanuts}`);
-    return { nodeCompleted: true, nextLessonId: null, rewards: node.rewards };
+    return { nodeCompleted: true, nextItemId: null, nextItemType: null, rewards: node.rewards };
   }
 
   progress.nodeProgress.set(nodeKey, nodeEntry);
-  return { nodeCompleted: false, nextLessonId: null, rewards: null };
+  return { nodeCompleted: false, nextItemId: null, nextItemType: null, rewards: null };
 }
 
 // Finds nodes whose unlockRequires are all completed and sets them to 'unlocked'.
-// Unlocks the first lesson of each newly unlocked node.
+// Unlocks the first item of each newly unlocked node.
 async function unlockNextNodes(
   completedNodeId: Types.ObjectId,
   roadmapId: Types.ObjectId,
@@ -456,17 +474,17 @@ async function unlockNextNodes(
     });
 
     if (allDone) {
-      const lessonProgress: Map<string, ILessonProgressEntry> = new Map();
-      const sortedLessons = candidate.lessons.slice().sort((a, b) => a.position - b.position);
-      sortedLessons.forEach((lr, idx) => {
-        lessonProgress.set(lr.lessonId.toString(), {
+      const itemProgress: Map<string, IItemProgressEntry> = new Map();
+      const sortedItems = candidate.items.slice().sort((a, b) => a.position - b.position);
+      sortedItems.forEach((ir, idx) => {
+        itemProgress.set(ir.itemId.toString(), {
           status: idx === 0 ? 'unlocked' : 'locked',
           attempts: 0,
           bestScore: 0,
         });
       });
 
-      progress.nodeProgress.set(candidateKey, emptyNodeEntry('unlocked', lessonProgress));
+      progress.nodeProgress.set(candidateKey, emptyNodeEntry('unlocked', itemProgress));
     }
   }
 }

@@ -1,28 +1,36 @@
 // Shared types for the roadmap system.
 // Mirrors roadmap.model.ts, roadmapNode.model.ts, lesson.model.ts,
 // and profileRoadmapProgress.model.ts.
+//
+// A RoadmapNode contains an ordered list of heterogeneous `items` — currently 'lesson'
+// (pure study material) or 'quiz' (references a Quiz document directly, no wrapper Lesson).
+// Extensible later to 'resource' | 'notes' | 'chatbot' etc — not built yet.
 
 export type NodeStatus = 'locked' | 'unlocked' | 'in_progress' | 'completed';
-export type LessonStatus = 'locked' | 'unlocked' | 'in_progress' | 'completed';
-export type LessonType = 'introduction' | 'practice' | 'assessment';
+export type ItemStatus = 'locked' | 'unlocked' | 'in_progress' | 'completed';
 export type CurriculumType = 'CAPS' | 'IEB' | 'Cambridge' | 'University' | 'Other';
 export type NodeType = 'lesson' | 'checkpoint' | 'practice';
+export type NodeItemType = 'lesson' | 'quiz'; // extensible later: 'resource' | 'notes' | 'chatbot'
+export type ResourceType = 'video' | 'pdf' | 'image' | 'notes' | 'audio' | 'steps';
 
 export interface ICurriculumTag {
   curriculum: CurriculumType;
   gradeLevel: string;
 }
 
-export interface ILessonStudyMaterial {
-  notes?: string;
-  audioUrl?: string;
-  videoUrl?: string;
-  bookReference?: {
-    bookId?: string;
-    chapterNumber?: number;
-    pageStart?: number;
-    pageEnd?: number;
-  };
+export interface IResourceStep {
+  title?: string;
+  content: string; // markdown
+}
+
+export interface IResource {
+  type: ResourceType;
+  position: number;
+  url?: string;            // video/pdf/image/audio
+  caption?: string;        // video/image/audio
+  title?: string;          // pdf
+  markdown?: string;       // notes
+  steps?: IResourceStep[]; // steps
 }
 
 export interface INodeRewards {
@@ -37,10 +45,7 @@ export interface ILesson {
   roadmapId: string;
   position: number;
   title: string;
-  lessonType: LessonType;
-  studyMaterial?: ILessonStudyMaterial;
-  quizId?: string;
-  passingScore: number;
+  resources: IResource[];
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -58,6 +63,13 @@ export interface IRoadmap {
   updatedAt: string;
 }
 
+export interface INodeItemRef {
+  itemType: NodeItemType;
+  itemId: string;        // Lesson._id when itemType==='lesson', Quiz._id when itemType==='quiz'
+  position: number;
+  passingScore?: number; // only meaningful when itemType==='quiz'
+}
+
 export interface IRoadmapNode {
   _id: string;
   roadmapId: string;
@@ -66,7 +78,7 @@ export interface IRoadmapNode {
   position: number;
   type: NodeType;
   curriculumTags: ICurriculumTag[];
-  lessons: { lessonId: string; position: number }[];
+  items: INodeItemRef[];
   unlockRequires: string[];
   rewards: INodeRewards;
   isActive: boolean;
@@ -74,8 +86,8 @@ export interface IRoadmapNode {
   updatedAt: string;
 }
 
-export interface ILessonProgressEntry {
-  status: LessonStatus;
+export interface IItemProgressEntry {
+  status: ItemStatus;
   completedAt?: string;
   attempts: number;
   bestScore: number;
@@ -90,7 +102,7 @@ export interface INodeProgressEntry {
   bestScore: number;
   lastAttemptAt?: string;
   completedAt?: string;
-  lessonProgress: Record<string, ILessonProgressEntry>;
+  itemProgress: Record<string, IItemProgressEntry>;
 }
 
 export interface IProfileRoadmapProgress {
@@ -105,12 +117,39 @@ export interface IProfileRoadmapProgress {
   lastActivityAt?: string;
 }
 
-export interface LessonCompletionResult {
-  lessonCompleted: boolean;
+export interface ItemCompletionResult {
+  itemCompleted: boolean;
   nodeCompleted: boolean;
-  nextLessonId: string | null;
+  nextItemId: string | null;
+  nextItemType: NodeItemType | null;
   rewards: INodeRewards | null;
 }
+
+// Minimal Quiz metadata needed for display — not the full Quiz document.
+export interface IQuizItemSummary {
+  _id: string;
+  title: string;
+  questionCount: number;
+}
+
+export type NodeItemWithProgress =
+  | {
+      itemType: 'lesson';
+      itemId: string;
+      position: number;
+      progressStatus: ItemStatus;
+      isUnlocked: boolean;
+      lesson: ILesson;
+    }
+  | {
+      itemType: 'quiz';
+      itemId: string;
+      position: number;
+      passingScore: number;
+      progressStatus: ItemStatus;
+      isUnlocked: boolean;
+      quiz: IQuizItemSummary;
+    };
 
 export interface RoadmapWithProgress {
   roadmap: IRoadmap;
@@ -118,16 +157,13 @@ export interface RoadmapWithProgress {
     progressStatus: NodeStatus;
     stars: number;
     isUnlocked: boolean;
-    lessons: (ILesson & {
-      progressStatus: LessonStatus;
-      isUnlocked: boolean;
-    })[];
+    items: NodeItemWithProgress[];
   })[];
   totalStars: number;
   completedNodes: number;
   totalNodes: number;
-  completedLessons: number;
-  totalLessons: number;
+  completedItems: number;
+  totalItems: number;
 }
 
 export interface NodeCompletionResult {

@@ -3,13 +3,14 @@
 // vocabulary exposure (Term/Definition-backed), same as IsiZulu vowels plug into adaptive
 // learning. Fully self-contained: creates its own terms/definitions and the questions that use
 // them. Idempotent — re-running updates existing records instead of creating duplicates.
+import { Types } from 'mongoose';
 import Term from '../../../models/apps/language/vocabulary/term.model';
 import Definition from '../../../models/apps/language/vocabulary/definition.model';
 import Question from '../../../models/apps/language/vocabulary/question.model';
 import Subject from '../../../models/core/subject.model';
 import Topic from '../../../models/core/topic.model';
 import MiniApp from '../../../models/core/miniApp.model';
-import Lesson from '../../../models/learning/lesson.model';
+import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Quiz from '../../../models/learning/quiz.model';
 import { IQuestionContent, IQuestionHelpers } from '../../../modules/question/question.types';
 
@@ -220,10 +221,7 @@ async function upsertObjectQuestion(
   return question._id.toString();
 }
 
-export async function seedDragIntroQuestions(
-  practiceLessonId: string,
-  assessmentLessonId: string
-): Promise<void> {
+export async function seedDragIntroQuestions(nodeId: string, introLessonId: string): Promise<void> {
   console.log('Seeding Math drag-intro questions...');
 
   const subject = await Subject.findOne({ slug: 'foundation-phase-mathematics' });
@@ -262,7 +260,6 @@ export async function seedDragIntroQuestions(
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
-  await Lesson.findByIdAndUpdate(practiceLessonId, { quizId: practiceQuiz._id });
 
   const assessmentQuiz = await Quiz.findOneAndUpdate(
     { miniAppId: mathMiniAppId, mode: 'fixed', title: "Let's Learn to Drag! Assessment" },
@@ -279,7 +276,17 @@ export async function seedDragIntroQuestions(
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
-  await Lesson.findByIdAndUpdate(assessmentLessonId, { quizId: assessmentQuiz._id });
+
+  // This file is the sole writer of the drag-intro node's items[] — full overwrite (not
+  // $push), safe to re-run. passingScore 0 on the practice item reproduces the old "practice
+  // always passes" behavior without a special case in the service layer.
+  await RoadmapNode.findByIdAndUpdate(nodeId, {
+    items: [
+      { itemType: 'lesson', itemId: new Types.ObjectId(introLessonId), position: 1 },
+      { itemType: 'quiz', itemId: practiceQuiz._id, position: 2, passingScore: 0 },
+      { itemType: 'quiz', itemId: assessmentQuiz._id, position: 3, passingScore: 0.7 },
+    ],
+  });
 
   console.log(
     `  Seeded ${practiceObjects.length} practice + ${assessmentObjects.length} assessment drag-intro questions`

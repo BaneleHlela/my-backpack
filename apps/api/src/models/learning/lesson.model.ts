@@ -1,21 +1,24 @@
-// One step inside a RoadmapNode. Nodes contain an ordered array of lessons.
-// lessonType controls auto-completion rules and pass/fail behaviour.
-// quizId references the Quiz document holding this lesson's question set (mode: 'fixed').
-// Lessons with no questions (e.g. introduction lessons) leave quizId unset.
+// A pure study-material container — one lesson item inside a RoadmapNode.items[].
+// Holds an ordered array of resources (video/pdf/image/notes/audio/steps) rendered on the
+// lesson resource-hub page. Quizzes are no longer wrapped in a Lesson — a "quiz" item on
+// RoadmapNode.items[] references a Quiz document directly (see roadmapNode.model.ts).
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
 
-export type LessonType = 'introduction' | 'practice' | 'assessment';
+export type ResourceType = 'video' | 'pdf' | 'image' | 'notes' | 'audio' | 'steps';
 
-export interface ILessonStudyMaterial {
-  notes?: string;
-  audioUrl?: string;
-  videoUrl?: string;
-  bookReference?: {
-    bookId?: Types.ObjectId;
-    chapterNumber?: number;
-    pageStart?: number;
-    pageEnd?: number;
-  };
+export interface IResourceStep {
+  title?: string;
+  content: string; // markdown
+}
+
+export interface IResource {
+  type: ResourceType;
+  position: number;
+  url?: string;            // video/pdf/image/audio
+  caption?: string;        // video/image/audio
+  title?: string;          // pdf
+  markdown?: string;       // notes
+  steps?: IResourceStep[]; // steps
 }
 
 export interface ILessonDocument extends Document {
@@ -24,31 +27,32 @@ export interface ILessonDocument extends Document {
   roadmapId: Types.ObjectId;
   position: number;
   title: string;
-  lessonType: LessonType;
-  studyMaterial?: ILessonStudyMaterial;
-  quizId?: Types.ObjectId;
-  passingScore: number;
+  resources: IResource[];
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const bookReferenceSchema = new Schema(
+const resourceStepSchema = new Schema<IResourceStep>(
   {
-    bookId: { type: Schema.Types.ObjectId },
-    chapterNumber: { type: Number },
-    pageStart: { type: Number },
-    pageEnd: { type: Number },
+    title: { type: String },
+    content: { type: String, required: true },
   },
   { _id: false }
 );
 
-const studyMaterialSchema = new Schema<ILessonStudyMaterial>(
+// Flat, optional-fields schema (not a Mongoose discriminator union) — matches the project's
+// "keep it simple" convention; the shared-types layer still expresses IResource as a proper
+// discriminated union for frontend type safety.
+const resourceSchema = new Schema<IResource>(
   {
-    notes: { type: String },
-    audioUrl: { type: String },
-    videoUrl: { type: String },
-    bookReference: { type: bookReferenceSchema },
+    type: { type: String, enum: ['video', 'pdf', 'image', 'notes', 'audio', 'steps'], required: true },
+    position: { type: Number, required: true },
+    url: { type: String },
+    caption: { type: String },
+    title: { type: String },
+    markdown: { type: String },
+    steps: { type: [resourceStepSchema] },
   },
   { _id: false }
 );
@@ -59,14 +63,7 @@ const lessonSchema = new Schema<ILessonDocument>(
     roadmapId: { type: Schema.Types.ObjectId, ref: 'Roadmap', required: true },
     position: { type: Number, required: true },
     title: { type: String, required: true },
-    lessonType: {
-      type: String,
-      enum: ['introduction', 'practice', 'assessment'],
-      required: true,
-    },
-    studyMaterial: { type: studyMaterialSchema },
-    quizId: { type: Schema.Types.ObjectId, ref: 'Quiz' },
-    passingScore: { type: Number, default: 0.7, min: 0, max: 1 },
+    resources: { type: [resourceSchema], default: [] },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

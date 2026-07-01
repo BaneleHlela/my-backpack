@@ -1,6 +1,7 @@
-// Scaffold for the lesson player. Introduction lessons show study material + complete button.
-// Practice and assessment lessons show a placeholder until the quiz UI is built.
-import { useEffect } from 'react';
+// Lesson resource-hub page. A lesson is always pure study material now — no more
+// lessonType/practice/assessment branching (those are separate quiz items, played on
+// QuizItemPlayerPage instead). Renders resources[] sorted by position, one block per type.
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronLeft, Loader2, CheckCircle } from 'lucide-react';
@@ -9,13 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import axiosInstance from '../../lib/axios';
 import { fetchLesson } from '../../features/roadmap/roadmapSlice';
 import type { AppDispatch, RootState } from '../../app/store';
-import { useState } from 'react';
-
-const LESSON_TYPE_META = {
-  introduction: { label: 'Study', classes: 'bg-blue-100 text-blue-700' },
-  practice: { label: 'Practice', classes: 'bg-green-100 text-green-700' },
-  assessment: { label: 'Challenge', classes: 'bg-orange-100 text-orange-700' },
-};
+import SteppedNotesViewer from '../../components/lesson/SteppedNotesViewer';
 
 export default function LessonPlayerPage() {
   const { subjectSlug, lessonId } = useParams<{ subjectSlug: string; lessonId: string }>();
@@ -51,7 +46,7 @@ export default function LessonPlayerPage() {
     );
   }
 
-  const meta = LESSON_TYPE_META[currentLesson.lessonType];
+  const sortedResources = [...currentLesson.resources].sort((a, b) => a.position - b.position);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
@@ -71,76 +66,81 @@ export default function LessonPlayerPage() {
         animate={{ opacity: 1, y: 0 }}
         className="bg-white/30 backdrop-blur rounded-3xl border border-white/40 p-6 mb-4"
       >
-        <div className="flex items-start gap-3">
-          <div className="flex-1">
-            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${meta.classes}`}>
-              {meta.label}
-            </span>
-            <h1 className="text-xl font-bold text-gray-800 mt-2">{currentLesson.title}</h1>
-          </div>
-        </div>
+        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+          Study
+        </span>
+        <h1 className="text-xl font-bold text-gray-800 mt-2">{currentLesson.title}</h1>
       </motion.div>
 
-      {/* Introduction: show study material */}
-      {currentLesson.lessonType === 'introduction' && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white/30 backdrop-blur rounded-3xl border border-white/40 p-6 mb-6"
-        >
-          {currentLesson.studyMaterial?.notes ? (
-            <div className="prose prose-sm max-w-none text-gray-700">
-              <ReactMarkdown>{currentLesson.studyMaterial.notes}</ReactMarkdown>
-            </div>
-          ) : (
-            <p className="text-gray-500 text-sm">No study material available for this lesson.</p>
-          )}
+      {/* Resources */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="bg-white/30 backdrop-blur rounded-3xl border border-white/40 p-6 mb-6 space-y-6"
+      >
+        {sortedResources.length === 0 && (
+          <p className="text-gray-500 text-sm">No study material available for this lesson.</p>
+        )}
 
-          {currentLesson.studyMaterial?.audioUrl && (
-            <audio controls className="mt-4 w-full rounded-xl">
-              <source src={currentLesson.studyMaterial.audioUrl} />
-            </audio>
-          )}
-        </motion.div>
-      )}
+        {sortedResources.map((resource, i) => {
+          switch (resource.type) {
+            case 'video':
+              return (
+                <video key={i} controls className="w-full rounded-xl">
+                  <source src={resource.url} />
+                </video>
+              );
+            case 'pdf':
+              return (
+                <div key={i} className="space-y-2">
+                  <iframe src={resource.url} title={resource.title ?? 'PDF'} className="w-full h-[500px] rounded-xl border border-white/40" />
+                  <a
+                    href={resource.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-violet-600 hover:text-violet-800 underline"
+                  >
+                    Open PDF in a new tab
+                  </a>
+                </div>
+              );
+            case 'image':
+              return (
+                <div key={i}>
+                  <img src={resource.url} alt={resource.caption ?? ''} className="w-full rounded-xl" />
+                  {resource.caption && <p className="text-xs text-gray-500 mt-1">{resource.caption}</p>}
+                </div>
+              );
+            case 'notes':
+              return (
+                <div key={i} className="prose prose-sm max-w-none text-gray-700">
+                  <ReactMarkdown>{resource.markdown ?? ''}</ReactMarkdown>
+                </div>
+              );
+            case 'audio':
+              return (
+                <audio key={i} controls className="w-full rounded-xl">
+                  <source src={resource.url} />
+                </audio>
+              );
+            case 'steps':
+              return <SteppedNotesViewer key={i} steps={resource.steps ?? []} />;
+            default:
+              return null;
+          }
+        })}
+      </motion.div>
 
-      {/* Practice / Assessment: placeholder */}
-      {(currentLesson.lessonType === 'practice' || currentLesson.lessonType === 'assessment') && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white/30 backdrop-blur rounded-3xl border border-white/40 p-8 mb-6 flex flex-col items-center gap-4 text-center"
-        >
-          <span className="text-5xl">🧠</span>
-          <p className="font-semibold text-gray-700">Quiz coming soon</p>
-          <p className="text-sm text-gray-500">
-            {currentLesson.quizId ? 'This lesson has practice questions.' : 'This lesson has no questions yet.'}
-          </p>
-          <button
-            type="button"
-            onClick={() => navigate(`/subject/${subjectSlug}`)}
-            className="mt-2 px-5 py-2 rounded-xl bg-white/50 border border-white/50 text-sm font-medium text-gray-700 hover:bg-white/70 transition-colors"
-          >
-            Back to roadmap
-          </button>
-        </motion.div>
-      )}
-
-      {/* Complete button for introduction lessons */}
-      {currentLesson.lessonType === 'introduction' && !done && (
+      {/* Complete button */}
+      {!done && (
         <button
           type="button"
           onClick={() => void handleMarkComplete()}
           disabled={completing}
           className="w-full py-3 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
         >
-          {completing ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            'Mark as complete'
-          )}
+          {completing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Mark as complete'}
         </button>
       )}
 

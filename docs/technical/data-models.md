@@ -265,7 +265,7 @@ These models track what learners have done. They are subject-agnostic — the sa
 
 ### RoadmapNode
 
-**Purpose:** A single lesson, checkpoint, or practice activity within a Roadmap.
+**Purpose:** A single step on a roadmap path, containing an ordered list of heterogeneous items.
 
 **Key fields:**
 
@@ -276,23 +276,54 @@ These models track what learners have done. They are subject-agnostic — the sa
 | `description` | String | Brief description |
 | `position` | Number | Display order in the roadmap |
 | `type` | Enum | `lesson` \| `checkpoint` \| `practice` |
-| `curriculumTags` | Array | `[{ curriculum: 'CAPS'\|'IEB'\|'Cambridge', gradeLevel: string }]` |
-| `studyMaterial` | Object | `{ notes, audioUrl, videoUrl, bookReference }` |
-| `assessment` | Object | See below |
+| `curriculumTags` | Array | `[{ curriculum: 'CAPS'\|'IEB'\|'Cambridge'\|'University'\|'Other', gradeLevel: string }]` |
+| `items` | Array | `[{ itemType, itemId, position, passingScore? }]` — canonical ordered list, replaces the old `lessons[]` |
 | `unlockRequires` | ObjectId[] | Node IDs that must be completed before this unlocks |
 | `rewards` | Object | `{ xp, peanuts, badge? }` |
 | `isActive` | Boolean | Whether this node is live |
 
-**Assessment sub-document:**
+**`items[]` entry (`INodeItemRef`):**
 
 | Field | Type | Description |
 |---|---|---|
-| `passingScore` | Number | Minimum score (percentage) required to complete |
-| `attemptsAllowed` | Number | Maximum attempts before the node locks |
-| `timeLimitSeconds` | Number | Optional time limit per question |
-| `questionAssignments` | Array | `[{ questionId, order, helperOverrides? }]` |
+| `itemType` | Enum | `'lesson'` \| `'quiz'` — a plain string union, extensible later to `'resource'` \| `'notes'` \| `'chatbot'` etc. (not built yet) |
+| `itemId` | ObjectId | `Lesson._id` when `itemType: 'lesson'`, `Quiz._id` when `itemType: 'quiz'`. No static Mongoose `ref` — polymorphic, resolved manually in `roadmap.service.ts` by splitting on `itemType` |
+| `position` | Number | Order within the node |
+| `passingScore` | Number (optional) | Only meaningful when `itemType: 'quiz'` — the score ratio (0–1) required to pass. `0` reproduces "practice always passes"; a Quiz document itself has no `passingScore` since it can be reused outside roadmaps |
 
-The `questionAssignments` array links Question documents to this node with a display order and optional per-node helper overrides (`INodeQuestionAssignment`).
+A `'quiz'` item references a `Quiz` document **directly** — there is no wrapper `Lesson` for quizzes. A `'lesson'` item is pure study material (see Lesson below).
+
+---
+
+### Lesson
+
+**Purpose:** A pure study-material container — one `'lesson'`-type item inside a RoadmapNode's `items[]`.
+
+**Key fields:**
+
+| Field | Type | Description |
+|---|---|---|
+| `nodeId` | ObjectId | The parent RoadmapNode |
+| `roadmapId` | ObjectId | Denormalised for fast queries |
+| `position` | Number | This lesson's slot in `node.items[]` |
+| `title` | String | Lesson title |
+| `resources` | Array | Ordered list of `IResource` (see below) |
+| `isActive` | Boolean | Whether this lesson is live |
+
+**`resources[]` entry (`IResource`):** a flat, optional-fields Mongoose schema (not a discriminator union — matches the project's "keep it simple" convention); the shared-types layer expresses it as a proper discriminated union on `type` for frontend type safety.
+
+| Field | Type | Used by |
+|---|---|---|
+| `type` | Enum | `'video'` \| `'pdf'` \| `'image'` \| `'notes'` \| `'audio'` \| `'steps'` |
+| `position` | Number | All types — display order |
+| `url` | String | video / pdf / image / audio |
+| `caption` | String | video / image / audio |
+| `title` | String | pdf |
+| `markdown` | String | notes |
+| `steps` | `[{ title?, content }]` | steps — a read-only, sequentially-navigated slideshow ("sliding notes"), not a quiz |
+
+**Business rules:**
+- A Lesson has no `lessonType`/`quizId`/`passingScore` — those concepts moved to the node's `items[]` ref (quizzes) or don't apply (a lesson is always "just study material" and unconditionally auto-completes when its resources are marked viewed via `POST /roadmap/lesson/:lessonId/study`)
 
 ---
 
@@ -307,15 +338,17 @@ The `questionAssignments` array links Question documents to this node with a dis
 | `profileId` | ObjectId | The learner |
 | `roadmapId` | ObjectId | The roadmap being tracked |
 | `miniAppId` | ObjectId | Denormalised for fast queries |
-| `nodeProgress` | Map | `nodeId → { status, stars, attempts, bestScore, lastAttemptAt, completedAt, studyMaterialViewedAt }` |
+| `nodeProgress` | Map | `nodeId → { status, stars, attempts, bestScore, lastAttemptAt, completedAt, itemProgress }` |
 | `currentNodeId` | ObjectId | The node currently in progress |
 | `totalStars` | Number | Accumulated stars across all completed nodes |
 | `startedAt` | Date | When the learner first entered this roadmap |
 | `lastActivityAt` | Date | Most recent interaction |
 
-**Node status values:** `locked` \| `unlocked` \| `in_progress` \| `completed`
+**`itemProgress`:** `Map<itemId, { status, completedAt, attempts, bestScore, studyMaterialViewedAt, lastAttemptAt }>` — keyed uniformly by `itemId` whether it points to a Lesson or a Quiz (replaces the old `lessonProgress`).
 
-**Stars:** 0–3 per node, awarded based on performance.
+**Node/item status values:** `locked` \| `unlocked` \| `in_progress` \| `completed`
+
+**Stars:** 0–3 per node, awarded when the last item in the node's `items[]` (by position) passes — a structural rule requiring no extra field, since every node's last item is its assessment/challenge quiz.
 
 **Unique index:** `profileId + roadmapId` — one document per learner per roadmap.
 
@@ -351,6 +384,7 @@ These models are specific to the vocabulary mini-app and live in `models/apps/la
 - Failed terms can be retried via the admin endpoint
 - Sound "terms" (vowels, syllables) are also Term documents — they plug into the same adaptive learning system
 - `aiGenerationStatus: 'not_needed'` is set when a term has no definitions that require AI questions
+- `word` is unique **per `miniAppId`** (compound index), not globally — the same word (e.g. a vowel letter) can exist as a Term under multiple mini-apps independently (isiZulu Sounds and English Phonics both seed Terms for 'a'-'u'). Always include `miniAppId` in the query filter when upserting a Term.
 
 ---
 
@@ -429,6 +463,7 @@ These models are specific to the vocabulary mini-app and live in `models/apps/la
 | `isGeneric` | Boolean | `true` = reusable across all users; `false` = user-specific (future) |
 | `profileId` | ObjectId | Null for generic questions |
 | `isActive` | Boolean | Whether this question is in use |
+| `seedKey` | String (optional) | Idempotent upsert key for hand-authored seed content — indexed, sparse, not unique. Lets seed scripts distinguish variants that `termId + type` can't (e.g. six dnd_single quiz variants per vowel across the vowels roadmap sequence). Not used anywhere in application logic. |
 
 **The `content` field (Schema.Types.Mixed):**
 

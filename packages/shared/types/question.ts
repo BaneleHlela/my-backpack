@@ -76,6 +76,8 @@ export interface IQuestionHelpers {
   allowUndo: boolean;
   hintsAllowed: number;
   hintDelaySeconds: number;
+  retryUntilCorrect: boolean; // DnD: wrong drops are rejected client-side and must be retried —
+                              // never submitted to the server; no skip is offered while true
 }
 
 export const defaultHelpers: IQuestionHelpers = {
@@ -90,6 +92,7 @@ export const defaultHelpers: IQuestionHelpers = {
   allowUndo: true,
   hintsAllowed: 3,
   hintDelaySeconds: 10,
+  retryUntilCorrect: false,
 };
 
 // ── Unified content type ──────────────────────────────────
@@ -145,6 +148,8 @@ export interface IQuestion {
   isGeneric: boolean;
   profileId?: string | null;
   isActive: boolean;
+  // Idempotent upsert key used only by seed scripts — not used in application logic.
+  seedKey?: string;
   createdAt: string;
   updatedAt: string;
 }

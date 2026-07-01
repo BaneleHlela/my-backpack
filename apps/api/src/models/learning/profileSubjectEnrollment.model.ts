@@ -7,8 +7,8 @@ export type EnrollmentStatus = 'active' | 'paused' | 'completed';
 export interface IProgressSummary {
   totalNodes: number;
   completedNodes: number;
-  totalLessons: number;
-  completedLessons: number;
+  totalItems: number;
+  completedItems: number;
   overallProgressPercent: number;
   lastActivityAt?: Date;
 }
@@ -30,8 +30,8 @@ const progressSummarySchema = new Schema<IProgressSummary>(
   {
     totalNodes: { type: Number, default: 0 },
     completedNodes: { type: Number, default: 0 },
-    totalLessons: { type: Number, default: 0 },
-    completedLessons: { type: Number, default: 0 },
+    totalItems: { type: Number, default: 0 },
+    completedItems: { type: Number, default: 0 },
     overallProgressPercent: { type: Number, default: 0, min: 0, max: 100 },
     lastActivityAt: { type: Date },
   },

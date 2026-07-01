@@ -42,6 +42,21 @@ Here is how the South African CAPS curriculum maps to My Backpack's structure fo
 
 The roadmap contains nodes for each vowel sound. Each node has study material (audio of the sound) and an assessment (questions asking the learner to identify the sound).
 
+### Example 1b: Grade R–1 English Home Language — Phonics
+
+| CAPS Level | My Backpack |
+|---|---|
+| Learning area: Languages | Field: Language |
+| Subject: English Home Language | Subject: English Home Language |
+| CAPS strand: Phonics and word recognition | Topic: Phonics |
+| Activity type: Learn and practise letter names | Mini-App: Phonics Roadmap (type: roadmap) |
+
+The "Vowel Sounds" node holds 7 items: a video introduction lesson item followed by six
+escalating dnd_single quiz items (distractor count 1 → 2 → 5, audio-on-tap toggled per
+quiz) — see [docs/content/vowels-dnd-quiz-design.md](vowels-dnd-quiz-design.md) for the full
+item sequence and rationale. The same pattern is mirrored on the IsiZulu Sounds roadmap's
+"Izinhlamvu Zokuvuma" node above.
+
 ### Example 2: Grade 1 Mathematics — Number Sense
 
 | CAPS Level | My Backpack |

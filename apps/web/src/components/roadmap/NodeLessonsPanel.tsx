@@ -1,26 +1,19 @@
-// Slide-in panel (bottom sheet on mobile, side panel on desktop) showing lessons for a node.
+// Slide-in panel (bottom sheet on mobile, side panel on desktop) showing the items in a node.
+// An item is either a 'lesson' (study material — routes to the lesson resource-hub page) or
+// a 'quiz' (references a Quiz directly — routes straight to the quiz-taking page, no lesson
+// wrapper in between).
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Lock, Play, CheckCircle, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
-import type { RootState } from '../../app/store';
-import type {
-  LessonType,
-  LessonStatus,
-  NodeStatus,
-  ILessonStudyMaterial,
-} from '@my-backpack/shared';
+import type { NodeItemType, ItemStatus, NodeStatus } from '@my-backpack/shared';
 
-// Local enriched types derived from RoadmapWithProgress
-interface LessonWithProgress {
+// Local enriched item shape derived from RoadmapWithProgress's NodeItemWithProgress union.
+interface ItemForPanel {
   _id: string;
+  itemType: NodeItemType;
   title: string;
-  lessonType: LessonType;
-  studyMaterial?: ILessonStudyMaterial;
-  quizId?: string;
-  passingScore: number;
-  isActive: boolean;
-  progressStatus: LessonStatus;
+  questionCount?: number; // only present for itemType === 'quiz'
+  progressStatus: ItemStatus;
   isUnlocked: boolean;
 }
 
@@ -31,7 +24,7 @@ export interface NodeForPanel {
   stars: number;
   isUnlocked: boolean;
   progressStatus: NodeStatus;
-  lessons: LessonWithProgress[];
+  items: ItemForPanel[];
 }
 
 interface NodeLessonsPanelProps {
@@ -40,20 +33,21 @@ interface NodeLessonsPanelProps {
   onClose: () => void;
 }
 
-const LESSON_TYPE_META: Record<LessonType, { label: string; classes: string }> = {
-  introduction: { label: 'Study', classes: 'bg-blue-100/80 text-blue-700' },
-  practice: { label: 'Practice', classes: 'bg-green-100/80 text-green-700' },
-  assessment: { label: 'Challenge', classes: 'bg-orange-100/80 text-orange-700' },
+const ITEM_TYPE_META: Record<NodeItemType, { label: string; classes: string }> = {
+  lesson: { label: 'Study', classes: 'bg-blue-100/80 text-blue-700' },
+  quiz: { label: 'Quiz', classes: 'bg-violet-100/80 text-violet-700' },
 };
 
 export default function NodeLessonsPanel({ node, subjectSlug, onClose }: NodeLessonsPanelProps) {
   const navigate = useNavigate();
-  const { activeProfile } = useSelector((state: RootState) => state.auth);
-  void activeProfile;
 
-  const handleLessonClick = (lesson: LessonWithProgress) => {
-    if (!lesson.isUnlocked) return;
-    navigate(`/subject/${subjectSlug}/lesson/${lesson._id}`);
+  const handleItemClick = (item: ItemForPanel) => {
+    if (!item.isUnlocked) return;
+    if (item.itemType === 'lesson') {
+      navigate(`/subject/${subjectSlug}/lesson/${item._id}`);
+    } else {
+      navigate(`/subject/${subjectSlug}/node/${node._id}/quiz/${item._id}`);
+    }
     onClose();
   };
 
@@ -91,20 +85,20 @@ export default function NodeLessonsPanel({ node, subjectSlug, onClose }: NodeLes
         <div className="w-10 h-1 bg-gray-300 rounded-full" />
       </div>
 
-      {/* Lessons list */}
+      {/* Items list */}
       <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-2">
-        {node.lessons.map((lesson, i) => {
-          const meta = LESSON_TYPE_META[lesson.lessonType];
-          const isLocked = !lesson.isUnlocked;
-          const isDone = lesson.progressStatus === 'completed';
+        {node.items.map((item, i) => {
+          const meta = ITEM_TYPE_META[item.itemType];
+          const isLocked = !item.isUnlocked;
+          const isDone = item.progressStatus === 'completed';
           const isActive =
-            lesson.progressStatus === 'unlocked' || lesson.progressStatus === 'in_progress';
+            item.progressStatus === 'unlocked' || item.progressStatus === 'in_progress';
 
           return (
             <button
-              key={lesson._id}
+              key={item._id}
               type="button"
-              onClick={() => handleLessonClick(lesson)}
+              onClick={() => handleItemClick(item)}
               disabled={isLocked}
               className={`w-full text-left flex items-center gap-3 p-4 rounded-2xl border transition-colors ${
                 isLocked
@@ -133,13 +127,15 @@ export default function NodeLessonsPanel({ node, subjectSlug, onClose }: NodeLes
 
               {/* Details */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-800 truncate">{lesson.title}</p>
+                <p className="text-sm font-semibold text-gray-800 truncate">{item.title}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium ${meta.classes}`}>
                     {meta.label}
                   </span>
-                  {lesson.quizId && (
-                    <span className="text-xs text-gray-400">Has questions</span>
+                  {item.itemType === 'quiz' && item.questionCount !== undefined && (
+                    <span className="text-xs text-gray-400">
+                      Has {item.questionCount} question{item.questionCount === 1 ? '' : 's'}
+                    </span>
                   )}
                 </div>
               </div>
@@ -156,8 +152,8 @@ export default function NodeLessonsPanel({ node, subjectSlug, onClose }: NodeLes
           );
         })}
 
-        {node.lessons.length === 0 && (
-          <p className="text-sm text-gray-500 text-center py-6">No lessons yet.</p>
+        {node.items.length === 0 && (
+          <p className="text-sm text-gray-500 text-center py-6">No items yet.</p>
         )}
       </div>
     </div>

@@ -1,9 +1,11 @@
 // Seeds the Foundation Phase Mathematics "Number Sense Roadmap": two nodes —
-// "Let's Learn to Drag!" (DnD mechanic intro) then "Counting 1 to 10".
-// Same pattern as isizulu-hl.roadmap.seed.ts. Idempotent — re-running updates existing records.
-// Practice/assessment lessons are seeded with no quizId — questions/quizzes are added later via
-// dedicated question seed files (drag-intro.questions.ts, counting.questions.ts), the same way
-// vowels.questions.ts works for isiZulu.
+// "Let's Learn to Drag!" (DnD mechanic intro, 1 lesson item + 2 quiz items) then
+// "Counting 1 to 10" (1 lesson item + 2 quiz items). Same pattern as
+// isizulu-hl.roadmap.seed.ts. Idempotent — re-running updates existing records.
+//
+// Both nodes' `items[]` (the quiz items specifically) are written by their respective
+// question-seed files (drag-intro.questions.ts, counting.questions.ts), which know the Quiz
+// ids — this seeder only creates the intro Lesson + node scaffolding.
 import Roadmap from '../../../models/learning/roadmap.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Lesson from '../../../models/learning/lesson.model';
@@ -12,11 +14,9 @@ import Subject from '../../../models/core/subject.model';
 export interface MathFoundationRoadmapSeedResult {
   roadmapId: string;
   dragNodeId: string;
-  dragPracticeLessonId: string;
-  dragAssessmentLessonId: string;
+  dragIntroLessonId: string;
   countingNodeId: string;
-  practiceLessonId: string;
-  assessmentLessonId: string;
+  countingIntroLessonId: string;
 }
 
 export async function seedMathFoundationRoadmap(): Promise<MathFoundationRoadmapSeedResult> {
@@ -61,48 +61,20 @@ export async function seedMathFoundationRoadmap(): Promise<MathFoundationRoadmap
       roadmapId: roadmap._id,
       position: 1,
       title: "Let's Play!",
-      lessonType: 'introduction',
-      studyMaterial: {
-        notes: "# Let's Play!\n\nDrag things to where they belong. Ready? Let's go!",
-      },
-      passingScore: 0,
+      resources: [
+        {
+          type: 'notes',
+          position: 1,
+          markdown: "# Let's Play!\n\nDrag things to where they belong. Ready? Let's go!",
+        },
+      ],
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  const dragPracticeLesson = await Lesson.findOneAndUpdate(
-    { nodeId: dragNode._id, position: 2 },
-    {
-      nodeId: dragNode._id,
-      roadmapId: roadmap._id,
-      position: 2,
-      title: 'Practice Dragging',
-      lessonType: 'practice',
-      passingScore: 0,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  const dragAssessmentLesson = await Lesson.findOneAndUpdate(
-    { nodeId: dragNode._id, position: 3 },
-    {
-      nodeId: dragNode._id,
-      roadmapId: roadmap._id,
-      position: 3,
-      title: 'Dragging Challenge',
-      lessonType: 'assessment',
-      passingScore: 0.7,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  await RoadmapNode.findByIdAndUpdate(dragNode._id, {
-    lessons: [
-      { lessonId: dragIntroLesson._id, position: 1 },
-      { lessonId: dragPracticeLesson._id, position: 2 },
-      { lessonId: dragAssessmentLesson._id, position: 3 },
-    ],
-  });
+  // Superseded by direct quiz items on node.items[] (not extended) — delete the old
+  // practice/assessment quiz-wrapper Lessons that occupied positions 2-3.
+  await Lesson.deleteMany({ nodeId: dragNode._id, position: { $in: [2, 3] } });
 
   // ── Node 2: Counting 1 to 10 (existing, shifted to position 2) ──
 
@@ -121,56 +93,28 @@ export async function seedMathFoundationRoadmap(): Promise<MathFoundationRoadmap
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  const introLesson = await Lesson.findOneAndUpdate(
+  const countingIntroLesson = await Lesson.findOneAndUpdate(
     { nodeId: countingNode._id, position: 1 },
     {
       nodeId: countingNode._id,
       roadmapId: roadmap._id,
       position: 1,
       title: 'What is counting?',
-      lessonType: 'introduction',
-      studyMaterial: {
-        notes:
-          '# Counting\n\nCounting is saying numbers in order to find out how many things there are.\n\nWe count from 1 to 10: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10.',
-      },
-      passingScore: 0,
+      resources: [
+        {
+          type: 'notes',
+          position: 1,
+          markdown:
+            '# Counting\n\nCounting is saying numbers in order to find out how many things there are.\n\nWe count from 1 to 10: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10.',
+        },
+      ],
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  const practiceLesson = await Lesson.findOneAndUpdate(
-    { nodeId: countingNode._id, position: 2 },
-    {
-      nodeId: countingNode._id,
-      roadmapId: roadmap._id,
-      position: 2,
-      title: 'Practice Counting',
-      lessonType: 'practice',
-      passingScore: 0,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  const assessmentLesson = await Lesson.findOneAndUpdate(
-    { nodeId: countingNode._id, position: 3 },
-    {
-      nodeId: countingNode._id,
-      roadmapId: roadmap._id,
-      position: 3,
-      title: 'Counting Challenge',
-      lessonType: 'assessment',
-      passingScore: 0.7,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  await RoadmapNode.findByIdAndUpdate(countingNode._id, {
-    lessons: [
-      { lessonId: introLesson._id, position: 1 },
-      { lessonId: practiceLesson._id, position: 2 },
-      { lessonId: assessmentLesson._id, position: 3 },
-    ],
-  });
+  // Superseded by direct quiz items on node.items[] (not extended) — delete the old
+  // practice/assessment quiz-wrapper Lessons that occupied positions 2-3.
+  await Lesson.deleteMany({ nodeId: countingNode._id, position: { $in: [2, 3] } });
 
   await Roadmap.findByIdAndUpdate(roadmap._id, {
     nodes: [
@@ -179,15 +123,13 @@ export async function seedMathFoundationRoadmap(): Promise<MathFoundationRoadmap
     ],
   });
 
-  console.log('  Seeded Number Sense Roadmap: 2 nodes, 6 lessons (questions added separately)');
+  console.log('  Seeded Number Sense Roadmap: 2 nodes, 2 intro lessons (quiz items added separately)');
 
   return {
     roadmapId: roadmap._id.toString(),
     dragNodeId: dragNode._id.toString(),
-    dragPracticeLessonId: dragPracticeLesson._id.toString(),
-    dragAssessmentLessonId: dragAssessmentLesson._id.toString(),
+    dragIntroLessonId: dragIntroLesson._id.toString(),
     countingNodeId: countingNode._id.toString(),
-    practiceLessonId: practiceLesson._id.toString(),
-    assessmentLessonId: assessmentLesson._id.toString(),
+    countingIntroLessonId: countingIntroLesson._id.toString(),
   };
 }

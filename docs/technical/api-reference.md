@@ -451,11 +451,24 @@ Marks the session as abandoned. Partial results are preserved.
 
 ## Roadmap
 
+A RoadmapNode contains an ordered, heterogeneous `items[]` — each item is either `'lesson'`
+(pure study material) or `'quiz'` (references a Quiz document directly, no wrapper Lesson).
+See `docs/technical/data-models.md` for the full RoadmapNode/Lesson/ProfileRoadmapProgress
+field reference.
+
 ### `GET /api/roadmap/:miniAppId`
 
 **Auth:** requireProfile
 
-**Response:** The Roadmap for the specified mini-app, with all nodes and the current profile's progress per node (locked/unlocked/completed, stars, best score).
+**Response:** The Roadmap for the specified mini-app, with all nodes (each with resolved `items[]`) and the current profile's progress (locked/unlocked/completed, stars, best score).
+
+---
+
+### `GET /api/roadmap/subject/:subjectId`
+
+**Auth:** requireProfile
+
+Same response shape as above, looked up by subject instead of mini-app.
 
 ---
 
@@ -463,42 +476,48 @@ Marks the session as abandoned. Partial results are preserved.
 
 **Auth:** requireProfile
 
-**Response:** Full node detail including study material, question assignments, and the profile's progress on this specific node.
+**Response:** Full node detail — resolved `items[]` (each lesson item includes the full Lesson document with `resources[]`; each quiz item includes `{ _id, title, questionCount }`) and the profile's progress on this node.
 
 ---
 
-### `POST /api/roadmap/node/:nodeId/study`
+### `GET /api/roadmap/lesson/:lessonId`
 
 **Auth:** requireProfile
 
-Marks the study material for this node as viewed. Sets `studyMaterialViewedAt` on the node's progress record.
+**Response:** `{ lesson, progress, isUnlocked }` — the Lesson document (`resources[]`) and the profile's item-progress entry. A lesson never has questions attached; those live exclusively on quiz items.
 
 ---
 
-### `POST /api/roadmap/node/:nodeId/start`
+### `POST /api/roadmap/lesson/:lessonId/study`
 
 **Auth:** requireProfile
 
-Starts an attempt on this node. Creates a QuizSession with the node's assigned questions. Returns the session.
-
-**Errors:** 403 if the node is still locked (prerequisites not met).
+Marks a lesson's resources as viewed. Every lesson item unconditionally auto-completes (a Lesson is always "just study material" — no pass/fail gating), cascading to unlock the next item or node.
 
 ---
 
-### `POST /api/roadmap/node/:nodeId/complete`
+### `POST /api/roadmap/node/:nodeId/item/:itemId/start`
+
+**Auth:** requireProfile
+
+Starts a quiz session for a `'quiz'`-type item. `itemId` **is** the Quiz id — `createQuizSession(profileId, itemId)` is called directly, no indirection through a wrapper Lesson. Returns `{ session, firstQuestion }`.
+
+**Errors:** 403 if the item is still locked (prerequisites not met).
+
+---
+
+### `POST /api/roadmap/node/:nodeId/item/:itemId/complete`
 
 **Auth:** requireProfile
 
 **Body:**
 ```json
 {
-  "sessionId": "...",
-  "score": 85,
-  "timeTakenMs": 120000
+  "sessionId": "..."
 }
 ```
 
-Records the node attempt result. Awards stars based on score. Checks if any locked nodes are now unlocked.
+Scores the session's AnswerRecords against the item's `passingScore` (from the node's `items[]` ref — `0` always passes, reproducing the old "practice" auto-pass behavior). On pass, unlocks the next item, or completes the node (awarding stars if this was the last item) and unlocks any dependent nodes. Returns `{ itemCompleted, nodeCompleted, nextItemId, rewards }`.
 
 ---
 

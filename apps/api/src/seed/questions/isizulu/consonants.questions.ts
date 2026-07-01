@@ -7,13 +7,14 @@
 // isiZulu has no /r/ phoneme as a native consonant — never generate ra/re/ri/ro/ru syllables.
 // excludeVowels is a per-consonant guard for this; empty for b/c since both pair with all 5
 // vowels, but it stays here as a real check (not just a comment) for future consonants.
+import { Types } from 'mongoose';
 import Term from '../../../models/apps/language/vocabulary/term.model';
 import Definition from '../../../models/apps/language/vocabulary/definition.model';
 import Question from '../../../models/apps/language/vocabulary/question.model';
 import Subject from '../../../models/core/subject.model';
 import Topic from '../../../models/core/topic.model';
 import MiniApp from '../../../models/core/miniApp.model';
-import Lesson from '../../../models/learning/lesson.model';
+import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Quiz from '../../../models/learning/quiz.model';
 import { IBlank, IDraggable, IQuestionContent } from '../../../modules/question/question.types';
 
@@ -153,10 +154,7 @@ async function upsertSyllableQuestions(
   return { mcqId: mcqQuestion._id.toString(), dndId: dndQuestion._id.toString() };
 }
 
-export async function seedConsonantQuestions(
-  practiceLessonId: string,
-  assessmentLessonId: string
-): Promise<void> {
+export async function seedConsonantQuestions(nodeId: string, introLessonId: string): Promise<void> {
   console.log('Seeding IsiZulu consonant questions...');
 
   const subject = await Subject.findOne({ slug: 'isizulu-hl' });
@@ -199,7 +197,6 @@ export async function seedConsonantQuestions(
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
-  await Lesson.findByIdAndUpdate(practiceLessonId, { quizId: practiceQuiz._id });
 
   const assessmentQuestionIds = assessmentSyllables.flatMap((s) => {
     const ids = idsBySyllable.get(s)!;
@@ -221,7 +218,17 @@ export async function seedConsonantQuestions(
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
-  await Lesson.findByIdAndUpdate(assessmentLessonId, { quizId: assessmentQuiz._id });
+
+  // This file is the sole writer of the consonants node's items[] — full overwrite (not
+  // $push), safe to re-run. passingScore 0 on the practice item reproduces the old
+  // "practice always passes" behavior without a special case in the service layer.
+  await RoadmapNode.findByIdAndUpdate(nodeId, {
+    items: [
+      { itemType: 'lesson', itemId: new Types.ObjectId(introLessonId), position: 1 },
+      { itemType: 'quiz', itemId: practiceQuiz._id, position: 2, passingScore: 0 },
+      { itemType: 'quiz', itemId: assessmentQuiz._id, position: 3, passingScore: 0.7 },
+    ],
+  });
 
   console.log(
     `  Seeded ${consonantData.length} consonants x ${VOWELS.length} vowels x 2 question types = ${practiceQuestionIds.length} practice questions, ${assessmentQuestionIds.length} sampled for assessment`

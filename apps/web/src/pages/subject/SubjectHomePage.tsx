@@ -56,7 +56,7 @@ export default function SubjectHomePage() {
   const ageGroup: AgeGroup = activeProfile?.ageGroup ?? 'adult';
 
   const pct = currentRoadmap
-    ? Math.round((currentRoadmap.completedLessons / (currentRoadmap.totalLessons || 1)) * 100)
+    ? Math.round((currentRoadmap.completedItems / (currentRoadmap.totalItems || 1)) * 100)
     : 0;
 
   if (!subjectId && enrolledSubjects) {
@@ -90,7 +90,7 @@ export default function SubjectHomePage() {
         {currentRoadmap && (
           <div className="mt-2">
             <p className="text-sm text-gray-600 mb-1.5">
-              {currentRoadmap.completedLessons} of {currentRoadmap.totalLessons} lessons complete
+              {currentRoadmap.completedItems} of {currentRoadmap.totalItems} items complete
               {' · '}
               <span className="font-semibold">{pct}% done</span>
             </p>

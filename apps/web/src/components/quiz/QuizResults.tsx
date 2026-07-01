@@ -10,6 +10,7 @@ interface QuizResultsProps {
   answeredQuestions?: AnsweredQuestionSummary[];
   onQuizAgain: () => void;
   onReturnToDictionary: () => void;
+  returnLabel?: string;
 }
 
 export default function QuizResults({
@@ -17,6 +18,7 @@ export default function QuizResults({
   answeredQuestions,
   onQuizAgain,
   onReturnToDictionary,
+  returnLabel = 'Return to dictionary',
 }: QuizResultsProps) {
   const seconds = Math.round(results.timeTakenMs / 1000);
   const timeLabel = seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
@@ -91,7 +93,7 @@ export default function QuizResults({
           className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-white/50 border border-white/50 text-sm font-medium text-gray-700 hover:bg-white/70 transition-colors"
         >
           <BookOpen className="w-4 h-4" />
-          Return to dictionary
+          {returnLabel}
         </button>
         <button
           type="button"

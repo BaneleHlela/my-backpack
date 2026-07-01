@@ -5,9 +5,9 @@ import {
   getRoadmapWithProgress,
   getNodeWithProgress,
   getLessonWithProgress,
-  markLessonStudyViewed,
-  startLesson,
-  completeLesson,
+  markLessonViewed,
+  startQuizItem,
+  completeQuizItem,
 } from './roadmap.service';
 
 export async function getRoadmapByMiniAppHandler(req: Request, res: Response): Promise<void> {
@@ -50,8 +50,7 @@ export async function getLessonHandler(req: Request, res: Response): Promise<voi
   try {
     const profileId = req.profile!._id.toString();
     const lessonId = req.params['lessonId'] as string;
-    const allowedTypes = req.contentPrefs?.allowedQuestionTypes;
-    const result = await getLessonWithProgress(lessonId, profileId, allowedTypes);
+    const result = await getLessonWithProgress(lessonId, profileId);
     sendSuccess(res, result);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to load lesson';
@@ -63,7 +62,7 @@ export async function markLessonStudyViewedHandler(req: Request, res: Response):
   try {
     const profileId = req.profile!._id.toString();
     const lessonId = req.params['lessonId'] as string;
-    const result = await markLessonStudyViewed(lessonId, profileId);
+    const result = await markLessonViewed(lessonId, profileId);
     sendSuccess(res, result);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to mark study viewed';
@@ -71,32 +70,34 @@ export async function markLessonStudyViewedHandler(req: Request, res: Response):
   }
 }
 
-export async function startLessonHandler(req: Request, res: Response): Promise<void> {
+export async function startQuizItemHandler(req: Request, res: Response): Promise<void> {
   try {
     const profileId = req.profile!._id.toString();
-    const lessonId = req.params['lessonId'] as string;
-    const result = await startLesson(lessonId, profileId);
+    const nodeId = req.params['nodeId'] as string;
+    const itemId = req.params['itemId'] as string;
+    const result = await startQuizItem(nodeId, itemId, profileId);
     sendSuccess(res, result, 201);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to start lesson';
-    const status = message === 'Lesson is locked' ? 403 : 400;
+    const message = err instanceof Error ? err.message : 'Failed to start quiz item';
+    const status = message === 'Item is locked' ? 403 : 400;
     sendError(res, message, status);
   }
 }
 
-export async function completeLessonHandler(req: Request, res: Response): Promise<void> {
+export async function completeQuizItemHandler(req: Request, res: Response): Promise<void> {
   try {
     const profileId = req.profile!._id.toString();
-    const lessonId = req.params['lessonId'] as string;
+    const nodeId = req.params['nodeId'] as string;
+    const itemId = req.params['itemId'] as string;
     const { sessionId } = req.body as { sessionId: string };
     if (!sessionId) {
       sendError(res, 'sessionId is required', 400);
       return;
     }
-    const result = await completeLesson(lessonId, profileId, sessionId);
+    const result = await completeQuizItem(nodeId, itemId, profileId, sessionId);
     sendSuccess(res, result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to complete lesson';
+    const message = err instanceof Error ? err.message : 'Failed to complete quiz item';
     sendError(res, message, 400);
   }
 }
