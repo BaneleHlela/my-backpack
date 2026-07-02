@@ -137,7 +137,7 @@ export const getAlphabetHandler = catchAsync(async (req: Request, res: Response)
   if (!miniAppId) throw new AppError('miniAppId query parameter is required', 400);
 
   const result = await getAlphabet(miniAppId);
-  sendSuccess(res, result);
+  sendSuccess(res, result); 
 });
 
 export const getRecentHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {

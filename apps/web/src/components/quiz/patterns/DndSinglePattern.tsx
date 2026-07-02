@@ -171,6 +171,14 @@ export default function DndSinglePattern({
     if (disabled) return;
     const { active, over } = event;
     if (over?.id === dropZone.id) {
+      const isCorrectDrop = dropZone.requiredDraggableIds.includes(active.id as string);
+      if (helpers.retryUntilCorrect && !isCorrectDrop) {
+        // Rejected client-side — never reaches onAnswer, item bounces back to the pool.
+        playAudio(content.tryAgainFeedback?.audioUrl);
+        setWrongAttempt(true);
+        setTimeout(() => setWrongAttempt(false), 700);
+        return;
+      }
       setPlacedId(active.id as string);
       if (helpers.autoSubmit) submit(active.id as string);
     } else if (helpers.allowUndo) {
@@ -206,7 +214,13 @@ export default function DndSinglePattern({
           ))}
         </div>
 
-        <DropZoneArea id={dropZone.id} label={dropZone.label} placed={placedItem} disabled={disabled} />
+        <DropZoneArea
+          id={dropZone.id}
+          label={dropZone.label}
+          placed={placedItem}
+          disabled={disabled}
+          wrong={wrongAttempt}
+        />
 
         <div className="flex items-center justify-center gap-3">
           <button

@@ -492,7 +492,7 @@ Same response shape as above, looked up by subject instead of mini-app.
 
 **Auth:** requireProfile
 
-Marks a lesson's resources as viewed. Every lesson item unconditionally auto-completes (a Lesson is always "just study material" — no pass/fail gating), cascading to unlock the next item or node.
+Marks a lesson's resources as viewed. Every lesson item unconditionally auto-completes (a Lesson is always "just study material" — no pass/fail gating), cascading to unlock the next item or node. Returns `{ progress, itemCompleted, nodeCompleted, nextItemId, nextItemType, rewards }` — the frontend uses `nextItemId`/`nextItemType` to auto-navigate straight to the next item (`'lesson'` → the lesson route, `'quiz'` → the quiz-item route) instead of requiring a manual "back to roadmap" click.
 
 ---
 
@@ -517,7 +517,7 @@ Starts a quiz session for a `'quiz'`-type item. `itemId` **is** the Quiz id — 
 }
 ```
 
-Scores the session's AnswerRecords against the item's `passingScore` (from the node's `items[]` ref — `0` always passes, reproducing the old "practice" auto-pass behavior). On pass, unlocks the next item, or completes the node (awarding stars if this was the last item) and unlocks any dependent nodes. Returns `{ itemCompleted, nodeCompleted, nextItemId, rewards }`.
+Scores the session's AnswerRecords against the item's `passingScore` (from the node's `items[]` ref — `0` always passes, reproducing the old "practice" auto-pass behavior). On pass, unlocks the next item, or completes the node (awarding stars if this was the last item) and unlocks any dependent nodes. Returns `{ itemCompleted, nodeCompleted, nextItemId, nextItemType, rewards }` — the frontend auto-navigates to `nextItemId` (using `nextItemType` to pick the right route) after a brief pause on a pass, or back to the roadmap overview if there's no next item.
 
 ---
 

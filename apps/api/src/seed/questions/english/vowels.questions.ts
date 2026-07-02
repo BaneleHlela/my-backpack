@@ -273,6 +273,7 @@ export async function seedEnglishVowelQuestions(nodeId: string, introLessonId: s
           hintsAllowed: 3,
           hintDelaySeconds: 10,
           showItemLabels: true,
+          retryUntilCorrect: true,
         },
       };
 

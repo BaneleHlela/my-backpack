@@ -269,6 +269,7 @@ export async function seedVowelQuestions(nodeId: string, introLessonId: string):
           hintsAllowed: 3,
           hintDelaySeconds: 10,
           showItemLabels: true,
+          retryUntilCorrect: true,
         },
       };
 

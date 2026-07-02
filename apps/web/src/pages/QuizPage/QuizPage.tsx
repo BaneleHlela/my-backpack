@@ -154,6 +154,10 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
     dispatch(resetQuiz());
   };
 
+  const currentHelpers = quiz.currentQuestion
+    ? resolveHelpers(quiz.currentQuestion.content.defaultHelpers, undefined)
+    : null;
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <button
@@ -214,21 +218,22 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
         )}
 
         {(quiz.status === 'active' || quiz.status === 'submitting' || quiz.status === 'awaiting_advance') &&
-          quiz.currentQuestion && (
+          quiz.currentQuestion &&
+          currentHelpers && (
             <motion.div key="active" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <QuizProgress answered={quiz.progress.answered} total={quiz.progress.total} />
 
               <div className="bg-white/40 backdrop-blur rounded-3xl border border-white/50 p-6">
                 <QuestionRenderer
                   question={quiz.currentQuestion}
-                  helpers={resolveHelpers(quiz.currentQuestion.content.defaultHelpers, undefined)}
+                  helpers={currentHelpers}
                   disabled={quiz.status !== 'active'}
                   isSubmitting={quiz.status === 'submitting'}
                   onAnswer={handleAnswer}
                 />
               </div>
 
-              {quiz.status === 'active' && (
+              {quiz.status === 'active' && !currentHelpers.retryUntilCorrect && (
                 <button
                   type="button"
                   onClick={handleSkip}

@@ -285,9 +285,14 @@ Example: `"audio:sounds/isizulu/questions/khetha-umsindo-a.mp3"`
 
 **IQuestionHelpers system:**
 Each question has `content.defaultHelpers: Partial<IQuestionHelpers>`.
-Nodes can override per-assignment via `assessment.questionAssignments[].helperOverrides`.
 Frontend calls `resolveHelpers(content.defaultHelpers, nodeOverrides)` 
-from `packages/shared/utils/resolveHelpers.ts` to get the final config.
+from `packages/shared/utils/resolveHelpers.ts` to get the final config — `nodeOverrides` is
+currently always `undefined` at every call site (no per-node override mechanism is wired up
+yet; the second param exists for future use).
+`retryUntilCorrect` — DnD only: a wrong drop is rejected client-side (checked against
+`content.dropZones[].requiredDraggableIds`) and never submitted to the server; the learner
+must get the current question right before advancing, and the host quiz page hides its Skip
+button. All 6 vowels dnd_single quiz variants (isiZulu + English) set this to `true`.
 
 **DnD answer capture:**
 `rawResponse = JSON.stringify({ placements: [{ draggableId, dropZoneId }] })`
@@ -768,6 +773,8 @@ my-backpack/
 - [x] ProfileRoadmapProgress — itemProgress replaces lessonProgress (keyed uniformly by itemId)
 - [x] Subject enrollment system (ProfileSubjectEnrollment model + enrollment module)
 - [x] Roadmap service updated — item-level start/complete/study routes (POST /roadmap/node/:nodeId/item/:itemId/{start,complete})
+- [x] Item-complete/lesson-study responses return nextItemId/nextItemType — frontend auto-advances to the next item on pass/complete instead of requiring a manual "back to roadmap" click
+- [x] IQuestionHelpers.retryUntilCorrect — DnD wrong drops rejected client-side, never submitted, no skip while active; enabled on all 6 vowels dnd_single quiz variants
 - [x] Term.word unique index fixed — now compound (miniAppId + word) not global
 - [x] English Phonics content hierarchy (Topic + MiniApp + Roadmap seeded)
 - [x] Question.seedKey field added — idempotent upsert key for hand-authored seed variants that termId+type can't distinguish (e.g. the 6 vowels dnd_single quiz variants)

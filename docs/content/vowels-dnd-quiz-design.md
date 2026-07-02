@@ -42,6 +42,20 @@ for these roadmap quiz items. Confidence-threshold marking (using the existing
 `LearningRecord.confidenceScore` / `AdaptiveProfile.masteryThreshold`) is reserved for
 dynamic quizzes later — not used here.
 
+**Unskippable mode:** all 6 quiz variants (both languages) set
+`defaultHelpers.retryUntilCorrect: true`. A wrong drop is rejected entirely client-side in
+`DndSinglePattern` — checked against `content.dropZones[0].requiredDraggableIds` before ever
+calling `onAnswer` — so it's never submitted to the server (no AnswerRecord, no partial-credit
+scoring) and bounces back to the pool with a brief red flash + the question's
+`tryAgainFeedback` audio. The host quiz page hides its "Skip question" button whenever the current question resolves `retryUntilCorrect: true`. The learner cannot move to the next
+question without first getting the current one right.
+
+**Auto-advance:** passing a quiz item (or completing a lesson item) now auto-navigates
+straight to the next item in the node after a short pause (so the learner sees their score
+first) — no manual "back to roadmap" click needed between items. See
+`POST /roadmap/lesson/:lessonId/study` and `POST /roadmap/node/:nodeId/item/:itemId/complete`
+in `docs/technical/api-reference.md`, which both now return `nextItemId`/`nextItemType`.
+
 ---
 
 ## 2. Question element mapping (no schema changes needed)

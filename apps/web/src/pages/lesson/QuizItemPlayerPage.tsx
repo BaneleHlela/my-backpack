@@ -5,7 +5,9 @@
 // (startQuizItemSession posts to the node/item-scoped roadmap endpoint). After the quiz
 // session itself completes, one extra call to the roadmap item-complete endpoint runs the
 // pass/fail + unlock-cascade logic (this result is page-local navigation state, not shared
-// quiz-session state, so it isn't threaded through quizSlice).
+// quiz-session state, so it isn't threaded through quizSlice). On a pass, auto-advances to
+// the next item (lesson or quiz) after a brief pause to show the score; falls back to the
+// roadmap overview when the node has no next item.
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -13,6 +15,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, Loader2, SkipForward } from 'lucide-react';
 import { resolveHelpers } from '@my-backpack/shared';
 import type { AppDispatch, RootState } from '../../app/store';
+import type { ItemCompletionResult } from '@my-backpack/shared';
 import axiosInstance from '../../lib/axios';
 import {
   startQuizItemSession,
@@ -27,12 +30,7 @@ import QuizProgress from '../../components/quiz/QuizProgress';
 import AnswerFeedback from '../../components/quiz/AnswerFeedback';
 import QuizResults from '../../components/quiz/QuizResults';
 
-interface ItemCompletionResult {
-  itemCompleted: boolean;
-  nodeCompleted: boolean;
-  nextItemId: string | null;
-  rewards: { xp: number; peanuts: number; badge?: string } | null;
-}
+const AUTO_ADVANCE_DELAY_MS = 1800;
 
 export default function QuizItemPlayerPage() {
   const { subjectSlug, nodeId, itemId } = useParams<{
@@ -115,6 +113,23 @@ export default function QuizItemPlayerPage() {
       });
   }, [quiz.status, quiz.results, quiz.sessionId, nodeId, itemId]);
 
+  // On a pass, auto-advance after a brief pause so the learner sees their score first —
+  // straight to the next item if there is one, otherwise back to the roadmap overview.
+  useEffect(() => {
+    if (!itemCompletion?.itemCompleted) return;
+    const timer = setTimeout(() => {
+      if (itemCompletion.nextItemId && itemCompletion.nextItemType === 'lesson') {
+        navigate(`/subject/${subjectSlug}/lesson/${itemCompletion.nextItemId}`);
+      } else if (itemCompletion.nextItemId && itemCompletion.nextItemType === 'quiz') {
+        navigate(`/subject/${subjectSlug}/node/${nodeId}/quiz/${itemCompletion.nextItemId}`);
+      } else {
+        navigate(`/subject/${subjectSlug}`);
+      }
+    }, AUTO_ADVANCE_DELAY_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemCompletion]);
+
   const handleAnswer = (rawResponse: string, selectedOptionIndex?: number) => {
     if (!quiz.sessionId || !quiz.currentQuestion) return;
     void dispatch(
@@ -156,6 +171,10 @@ export default function QuizItemPlayerPage() {
     startQuiz();
   };
 
+  const currentHelpers = quiz.currentQuestion
+    ? resolveHelpers(quiz.currentQuestion.content.defaultHelpers, undefined)
+    : null;
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <button
@@ -193,21 +212,22 @@ export default function QuizItemPlayerPage() {
         )}
 
         {(quiz.status === 'active' || quiz.status === 'submitting' || quiz.status === 'awaiting_advance') &&
-          quiz.currentQuestion && (
+          quiz.currentQuestion &&
+          currentHelpers && (
             <motion.div key="active" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <QuizProgress answered={quiz.progress.answered} total={quiz.progress.total} />
 
               <div className="bg-white/40 backdrop-blur rounded-3xl border border-white/50 p-6">
                 <QuestionRenderer
                   question={quiz.currentQuestion}
-                  helpers={resolveHelpers(quiz.currentQuestion.content.defaultHelpers, undefined)}
+                  helpers={currentHelpers}
                   disabled={quiz.status !== 'active'}
                   isSubmitting={quiz.status === 'submitting'}
                   onAnswer={handleAnswer}
                 />
               </div>
 
-              {quiz.status === 'active' && (
+              {quiz.status === 'active' && !currentHelpers.retryUntilCorrect && (
                 <button
                   type="button"
                   onClick={handleSkip}
@@ -256,6 +276,15 @@ export default function QuizItemPlayerPage() {
               >
                 Node complete! +{itemCompletion.rewards?.xp ?? 0} XP, +{itemCompletion.rewards?.peanuts ?? 0} peanuts
               </motion.div>
+            )}
+            {itemCompletion?.itemCompleted && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mt-3 text-center text-xs text-gray-400"
+              >
+                {itemCompletion.nextItemId ? 'Moving to the next item…' : 'Returning to the roadmap…'}
+              </motion.p>
             )}
           </motion.div>
         )}

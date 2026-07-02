@@ -1,6 +1,8 @@
 // Lesson resource-hub page. A lesson is always pure study material now — no more
 // lessonType/practice/assessment branching (those are separate quiz items, played on
 // QuizItemPlayerPage instead). Renders resources[] sorted by position, one block per type.
+// Marking complete auto-advances straight to the next item (lesson or quiz) after a brief
+// pause, falling back to the roadmap overview when there's no next item in the node.
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -10,7 +12,10 @@ import ReactMarkdown from 'react-markdown';
 import axiosInstance from '../../lib/axios';
 import { fetchLesson } from '../../features/roadmap/roadmapSlice';
 import type { AppDispatch, RootState } from '../../app/store';
+import type { ItemCompletionResult } from '@my-backpack/shared';
 import SteppedNotesViewer from '../../components/lesson/SteppedNotesViewer';
+
+const AUTO_ADVANCE_DELAY_MS = 1500;
 
 export default function LessonPlayerPage() {
   const { subjectSlug, lessonId } = useParams<{ subjectSlug: string; lessonId: string }>();
@@ -19,18 +24,29 @@ export default function LessonPlayerPage() {
   const { currentLesson, isLoading } = useSelector((state: RootState) => state.roadmap);
   const [completing, setCompleting] = useState(false);
   const [done, setDone] = useState(false);
+  const [nextItem, setNextItem] = useState<ItemCompletionResult | null>(null);
 
   useEffect(() => {
     if (lessonId) void dispatch(fetchLesson(lessonId));
   }, [dispatch, lessonId]);
 
   const handleMarkComplete = async () => {
-    if (!lessonId) return;
+    if (!lessonId || !currentLesson) return;
     setCompleting(true);
     try {
-      await axiosInstance.post(`/roadmap/lesson/${lessonId}/study`);
+      const res = await axiosInstance.post(`/roadmap/lesson/${lessonId}/study`);
+      const result = res.data.data as ItemCompletionResult;
       setDone(true);
-      setTimeout(() => navigate(`/subject/${subjectSlug}`), 1500);
+      setNextItem(result);
+      setTimeout(() => {
+        if (result.nextItemId && result.nextItemType === 'lesson') {
+          navigate(`/subject/${subjectSlug}/lesson/${result.nextItemId}`);
+        } else if (result.nextItemId && result.nextItemType === 'quiz') {
+          navigate(`/subject/${subjectSlug}/node/${currentLesson.nodeId}/quiz/${result.nextItemId}`);
+        } else {
+          navigate(`/subject/${subjectSlug}`);
+        }
+      }, AUTO_ADVANCE_DELAY_MS);
     } catch {
       // ignore — let user retry
     } finally {
@@ -153,6 +169,9 @@ export default function LessonPlayerPage() {
         >
           <CheckCircle className="w-10 h-10 text-emerald-500" />
           <p className="font-semibold text-gray-700">Lesson complete!</p>
+          <p className="text-xs text-gray-400">
+            {nextItem?.nextItemId ? 'Moving to the next item…' : 'Returning to the roadmap…'}
+          </p>
         </motion.div>
       )}
     </div>

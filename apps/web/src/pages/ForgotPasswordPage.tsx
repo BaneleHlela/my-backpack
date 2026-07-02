@@ -16,7 +16,7 @@ export default function ForgotPasswordPage() {
 
   useEffect(() => {
     return () => {
-      dispatch(clearError());
+      dispatch(clearError()); 
     };
   }, [dispatch]);
 
