@@ -51,15 +51,18 @@ function DraggableItem({
   item,
   disabled,
   highlight,
+  showLabel = true,
 }: {
   item: IDraggable;
   disabled?: boolean;
   highlight?: boolean;
+  showLabel?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: item.id,
     disabled,
   });
+  const imageUrl = resolveAssetUrl(item.imageUrl);
 
   return (
     <button
@@ -69,14 +72,19 @@ function DraggableItem({
       {...listeners}
       {...attributes}
       onClick={() => playAudio(item.audioUrl)}
-      className={`px-5 py-4 rounded-2xl border font-semibold text-lg bg-white/50 border-white/60 text-gray-800 hover:bg-white/70 transition-colors touch-none select-none ${
+      className={`rounded-2xl font-semibold text-lg text-gray-800 hover:bg-white/70 transition-colors touch-none select-none flex flex-col items-center gap-1.5 ${
         isDragging ? 'opacity-40' : ''
       } ${highlight ? 'ring-4 ring-amber-300' : ''}`}
     >
-      {item.label}
+      {imageUrl && <img src={imageUrl} alt={item.label} className="w-16 h-16 object-contain pointer-events-none" />}
+      {showLabel && <span>{item.label}</span>}
     </button>
   );
 }
+
+// Default background for every dnd_single drop zone — a question's own
+// dropZone.imageUrl (if set) takes priority over this.
+const DEFAULT_DROP_ZONE_BACKGROUND = ASSETS.DROP_ZONES.CLASSROOM_BOARD;
 
 function DropZoneArea({
   id,
@@ -84,28 +92,34 @@ function DropZoneArea({
   placed,
   disabled,
   wrong,
+  showLabel,
+  imageUrl,
 }: {
   id: string;
   label?: string;
   placed: IDraggable | null;
   disabled?: boolean;
   wrong?: boolean;
+  showLabel?: boolean;
+  imageUrl?: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled });
+  const background = resolveAssetUrl(imageUrl) ?? DEFAULT_DROP_ZONE_BACKGROUND;
 
   return (
     <div
       ref={setNodeRef}
+      style={{ backgroundImage: `url(${background})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
       className={`min-h-[170px] rounded-2xl border-2 border-dashed flex items-center justify-center transition-colors ${
         wrong
           ? 'border-rose-400 bg-rose-50/40'
           : isOver
           ? 'border-violet-400 bg-violet-50/40'
-          : 'border-white/60 bg-white/20'
+          : 'border-white/60'
       }`}
     >
       {placed ? (
-        <DraggableItem item={placed} disabled={disabled} />
+        <DraggableItem item={placed} disabled={disabled} showLabel={showLabel} />
       ) : (
         <span className="text-sm text-gray-400">{label ?? 'Drop here'}</span>
       )}
@@ -198,9 +212,24 @@ export default function DndSinglePattern({
     else if (placedItem) playAudio(placedItem.audioUrl);
   };
 
+  const dragAreaBackground = resolveAssetUrl(content.dragAreaImageUrl);
+  const wrongAvatarUrl =
+    content.avatar &&
+    ASSETS.AVATARS.image(
+      content.avatar.avatarId,
+      content.tryAgainFeedback?.avatarEmotion ?? content.avatar.emotion
+    );
+
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="justify-between space-y-5 bg-amber-600 min-h-[70vh]">
+      <div
+        className={`flex flex-col justify-between space-y-5 min-h-[70vh] ${dragAreaBackground ? '' : 'bg-amber-600'}`}
+        style={
+          dragAreaBackground
+            ? { backgroundImage: `url(${dragAreaBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+            : undefined
+        }
+      >
         {content.avatar?.dialogue && <p className="text-lg text-gray-800">{content.avatar.dialogue}</p>}
 
         <div className="flex flex-wrap gap-3 justify-center">
@@ -210,6 +239,7 @@ export default function DndSinglePattern({
               item={item}
               disabled={disabled}
               highlight={hintActive && item.id === correctId}
+              showLabel={false}
             />
           ))}
         </div>
@@ -220,7 +250,15 @@ export default function DndSinglePattern({
           placed={placedItem}
           disabled={disabled}
           wrong={wrongAttempt}
+          showLabel={helpers.showItemLabels}
+          imageUrl={dropZone.imageUrl}
         />
+
+        {wrongAttempt && wrongAvatarUrl && (
+          <div className="flex justify-center">
+            <img src={wrongAvatarUrl} alt="" className="w-20 h-20 object-contain" />
+          </div>
+        )}
 
         <div className="flex items-center justify-center gap-3">
           <button

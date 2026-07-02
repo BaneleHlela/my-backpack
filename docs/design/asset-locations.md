@@ -30,6 +30,20 @@ my-backpack-assets/
 │   └── landscape/       ← Landscape orientation (web/tablet)
 ├── ui/
 │   └── illustrations/   ← UI illustrations, empty state images, onboarding visuals
+│       └── bucket/       ← bucket/board UI illustrations (planned, not yet populated)
+├── illustrations/         ← all illustration assets (avatars, DnD backgrounds, draggables) live under this one prefix
+│   ├── avatars/           ← lesson avatar characters, one subfolder per avatarId
+│   │   └── miss-tutor/
+│   │       ├── happy.png
+│   │       ├── sad.png
+│   │       ├── serious.png
+│   │       └── smiling.png
+│   ├── drag-areas/       ← full-width backgrounds for the whole DnD widget (draggable tray + drop zone)
+│   ├── drop-zones/       ← backgrounds for individual drop zones only — classroom-board.png is the
+│   │                        universal default applied to every dnd_single drop zone
+│   └── draggables/       ← reusable DnD asset library, organized by theme not subject
+│       └── alphabet/
+│           └── cartoon-grouped/  ← uppercase+lowercase pairs in one image, from Vecteezy
 ├── sounds/
 │   ├── isizulu/
 │   │   ├── vowels/       ← a.mp3, e.mp3, i.mp3, o.mp3, u.mp3
@@ -113,6 +127,8 @@ Avoid WAV files for distribution (too large). Avoid very low bitrate (poor quali
 | Logos | SVG (primary), PNG (fallback) | Always store both formats |
 
 Minimum resolution for illustrations: 512×512px. For wallpapers: 1920×1080px minimum (landscape), 1080×1920px minimum (portrait).
+
+Draggable tile images (`draggables/`) are exempt from the 512×512 minimum — that rule targets hero/wallpaper-scale art, not small drag chips.
 
 ---
 

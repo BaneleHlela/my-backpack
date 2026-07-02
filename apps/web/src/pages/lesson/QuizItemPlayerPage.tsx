@@ -217,7 +217,7 @@ export default function QuizItemPlayerPage() {
             <motion.div key="active" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <QuizProgress answered={quiz.progress.answered} total={quiz.progress.total} />
 
-              <div className="bg-white/40 backdrop-blur rounded-3xl border border-white/50 p-6">
+              <div className="bg-white/40 backdrop-blur rounded-3xl border border-white/50">
                 <QuestionRenderer
                   question={quiz.currentQuestion}
                   helpers={currentHelpers}

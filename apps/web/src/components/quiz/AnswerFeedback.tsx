@@ -4,6 +4,7 @@
 // is the only way out, via the button, so the learner can't skip past the result.
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, SkipForward } from 'lucide-react';
+import { ASSETS } from '@my-backpack/shared';
 import type { AgeGroup, IQuestionContent } from '@my-backpack/shared';
 
 interface AnswerFeedbackProps {
@@ -41,6 +42,14 @@ export default function AnswerFeedback({
 
   const ring = wasSkipped ? 'border-gray-200' : isCorrect ? 'border-emerald-200' : 'border-rose-200';
 
+  const feedback = isCorrect ? content.successFeedback : content.tryAgainFeedback;
+  const avatarUrl =
+    !wasSkipped && content.avatar
+      ? ASSETS.AVATARS.image(content.avatar.avatarId, feedback?.avatarEmotion ?? content.avatar.emotion)
+      : undefined;
+
+  console.log(avatarUrl)
+
   return (
     <AnimatePresence>
       <motion.div
@@ -55,6 +64,12 @@ export default function AnswerFeedback({
           exit={{ scale: 0.9, opacity: 0, y: 12 }}
           className={`bg-white/95 backdrop-blur rounded-3xl border shadow-2xl p-6 w-full max-w-md ${ring}`}
         >
+          {avatarUrl && (
+            <div className="flex justify-center mb-3">
+              <img src={avatarUrl} alt="" className="w-16 h-16 object-contain" />
+            </div>
+          )}
+
           <div className="flex items-start gap-3">
             {wasSkipped ? (
               <SkipForward className="w-7 h-7 text-gray-400 flex-shrink-0" />

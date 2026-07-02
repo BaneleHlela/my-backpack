@@ -7,5 +7,22 @@ export const ASSETS = {
   },
   branding: {
     logo: "https://storage.googleapis.com/my-backpack-assets/branding/logos/logo.png",
-  }
+  },
+  DRAG_AREAS: {
+    CLASSROOM_BOARD: "https://storage.googleapis.com/my-backpack-assets/illustrations/drag-areas/26552.jpg",
+  },
+  DROP_ZONES: {
+    // used as the default background for every dnd_single drop zone, covering it entirely
+    CLASSROOM_BOARD: "https://storage.googleapis.com/my-backpack-assets/illustrations/drop-zones/classroom-board.png",
+  },
+  ALPHABET: {
+    // cartoon-grouped: uppercase+lowercase pair in one image (e.g. "Aa"), sourced from Vecteezy
+    letterCard: (letter: string) =>
+      `https://storage.googleapis.com/my-backpack-assets/illustrations/draggables/alphabet/cartoon-grouped/letter-${letter}.png`,
+  },
+  AVATARS: {
+    // generic — works for any avatarId, not just miss-tutor
+    image: (avatarId: string, emotion: string) =>
+      `https://storage.googleapis.com/my-backpack-assets/illustrations/avatars/${avatarId}/${emotion}.png`,
+  },
 }

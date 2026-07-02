@@ -298,6 +298,20 @@ button. All 6 vowels dnd_single quiz variants (isiZulu + English) set this to `t
 `rawResponse = JSON.stringify({ placements: [{ draggableId, dropZoneId }] })`
 Evaluated by `evaluateDnDAnswer()` in quizSession.service.ts.
 
+**Illustration fields:**
+`IQuestionContent.dragAreaImageUrl` — background image for the entire DnD widget
+(draggable tray + drop zone), distinct from `IDropZone.imageUrl` (single-zone
+background only). `DndSinglePattern` (frontend) applies
+`ASSETS.DROP_ZONES.CLASSROOM_BOARD` as the drop zone's background by default on
+every `dnd_single` question — `dropZone.imageUrl` overrides it per-question if set,
+but no seed data sets it today, so all `dnd_single` drop zones currently show the
+same classroom-board image regardless of subject. `IFeedback.avatarEmotion` — which
+emotion `content.avatar`'s character shows when `successFeedback`/`tryAgainFeedback`
+fires (same `avatarId`, different expression). `IAvatarConfig.emotion` is `'happy' |
+'thinking' | 'excited' | 'encouraging' | 'sad' | 'serious' | 'smiling'` — not every
+avatar has the full set (e.g. `miss-tutor` has no `'excited'` asset; check
+`illustrations/avatars/{avatarId}/` in GCS before assigning a new emotion).
+
 ### BucketEntry
 Per-definition adding — one entry per term+definition combination.
 Fields: bucketId, termId, definitionId, profileId, partOfSpeech 
@@ -592,6 +606,16 @@ my-backpack-assets/
 │   └── landscape/
 ├── ui/
 │   └── illustrations/
+│       └── bucket/          ← bucket/board UI illustrations (planned, not yet populated)
+├── illustrations/             ← all illustration assets (avatars, DnD backgrounds, draggables) live under this one prefix
+│   ├── avatars/               ← lesson avatar characters, one subfolder per avatarId
+│   │   └── miss-tutor/        ← happy.png, sad.png, serious.png, smiling.png
+│   ├── drag-areas/           ← full-width backgrounds for the whole DnD widget (draggable tray + drop zone)
+│   ├── drop-zones/           ← backgrounds for individual drop zones only — classroom-board.png is the
+│   │                            universal default applied to every dnd_single drop zone
+│   └── draggables/           ← reusable DnD asset library, organized by theme not subject
+│       └── alphabet/
+│           └── cartoon-grouped/  ← uppercase+lowercase pairs in one image (from Vecteezy)
 ├── sounds/
 │   ├── isizulu/
 │   │   ├── vowels/         ← a.mp3, e.mp3, i.mp3, o.mp3, u.mp3
@@ -608,7 +632,7 @@ my-backpack-assets/
     ├── math/
     │   └── objects/        ← apple.png, cabbage.png, car.png, etc.
     └── english/
-        ├── vowels/         ← card-a.png, card-e.png, etc.
+        ├── vowels/         ← card-a.png, card-e.png, etc. (superseded by draggables/alphabet/ for dnd_single)
         └── cvc/            ← letter tile images
 ```
 

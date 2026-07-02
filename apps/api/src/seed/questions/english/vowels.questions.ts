@@ -92,6 +92,7 @@ const vowelData = [
 const tryAgainFeedback = {
   text: 'Try again!',
   audioUrl: 'sounds/english/feedback/try-again.mp3',
+  avatarEmotion: 'sad',
 };
 
 // ── 6-lesson quiz variant escalation — see docs/content/vowels-dnd-quiz-design.md § 1 ──
@@ -246,7 +247,7 @@ export async function seedEnglishVowelQuestions(nodeId: string, introLessonId: s
         const draggable: IDraggable = {
           id: `vowel-${dv.word}`,
           label: dv.letter,
-          imageUrl: `content/english/vowels/card-${dv.word}.png`,
+          imageUrl: `illustrations/draggables/alphabet/cartoon-grouped/letter-${dv.word}.png`,
         };
         if (variant.audioOn) draggable.audioUrl = dv.soundPath;
         return draggable;
@@ -254,17 +255,19 @@ export async function seedEnglishVowelQuestions(nodeId: string, introLessonId: s
 
       const dndContent: IQuestionContent = {
         avatar: {
-          avatarId: 'zoe',
+          avatarId: 'miss-tutor',
           dialogue: `Drag the letter ${v.letter}!`,
           dialogueAudioUrl: `sounds/english/avatar/zoe-drag-${v.word}.mp3`,
-          emotion: 'excited',
+          emotion: 'smiling',
         },
         draggables,
         dropZones: [{ id: 'zone-main', requiredDraggableIds: [`vowel-${v.word}`], requiredCount: 1 }],
+        dragAreaImageUrl: 'illustrations/drag-areas/26552.jpg',
         successFeedback: {
           text: v.successText,
           audioUrl: v.successAudioUrl,
           highlightWords: v.successText.split(' '),
+          avatarEmotion: 'happy',
         },
         tryAgainFeedback,
         defaultHelpers: {

@@ -58,7 +58,11 @@ in `docs/technical/api-reference.md`, which both now return `nextItemId`/`nextIt
 
 ---
 
-## 2. Question element mapping (no schema changes needed)
+## 2. Question element mapping
+
+> **Update:** the "no schema changes needed" framing below no longer fully holds —
+> see §2a. Two fields (`IQuestionContent.dragAreaImageUrl`, `IFeedback.avatarEmotion`)
+> were added to illustrate the English vowels build (Phase 1, July 2026).
 
 | Requirement | Existing field |
 |---|---|
@@ -73,6 +77,40 @@ in `docs/technical/api-reference.md`, which both now return `nextItemId`/`nextIt
 Layout (v1, functionality over styling): top half = draggable items in plain text/font
 (no icons yet), bottom half = single drop zone styled as a classroom board/bucket.
 Teacher avatar optional in v1, styled in a later pass.
+
+---
+
+## 2a. Illustration fields (English vowels, Phase 1)
+
+Added to illustrate the English vowels `dnd_single` build (illustrations only, no new
+sounds this pass):
+
+| Field | Type | Purpose |
+|---|---|---|
+| `IQuestionContent.dragAreaImageUrl` | `string?` | Background image for the entire drag-and-drop widget (draggable tray + drop zone) — distinct from `IDropZone.imageUrl`, which only backgrounds one zone. |
+| `IFeedback.avatarEmotion` | `string?` | Which emotion `content.avatar`'s character shows when this feedback fires (same `avatarId`, different expression). Set on `successFeedback` (e.g. `'happy'`) and `tryAgainFeedback` (e.g. `'sad'`). |
+
+`IAvatarConfig.emotion` was also extended with `'sad' | 'serious' | 'smiling'` (see
+`docs/design/avatar-guide.md`) to support the `miss-tutor` avatar, which replaces
+`zoe` as the avatar on the English vowels `dnd_single` questions. `miss-tutor` has no
+`'excited'` asset — `'smiling'` is used as the closest neutral/intro state instead.
+
+Draggable letter cards now use
+`illustrations/draggables/alphabet/cartoon-grouped/letter-{letter}.png`
+(uppercase+lowercase pair in one image) instead of the old
+`content/english/vowels/card-{letter}.png` path. `isizulu/vowels.questions.ts` is
+unchanged — still uses `zoe` and has no illustration fields set.
+
+**Drop zone background (correction, same session):** the initial `illustrations/`
+folder assumption was wrong for `draggables/` (missing the `illustrations/` prefix —
+fixed above), and a separate `illustrations/drop-zones/` folder exists alongside
+`drag-areas/` and `draggables/`. `classroom-board.png` in that folder
+(`ASSETS.DROP_ZONES.CLASSROOM_BOARD`) is applied as the **default background for
+every `dnd_single` drop zone**, in `DndSinglePattern` itself (not per-question seed
+data) — so it covers isiZulu vowels and math drag-intro too, not just English
+vowels. A question's own `dropZone.imageUrl` overrides it if ever set. This is
+distinct from `dragAreaImageUrl` (still English-vowels-only via seed data), which
+backgrounds the whole widget, not just the drop zone box.
 
 ---
 

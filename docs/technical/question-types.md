@@ -280,6 +280,15 @@ The rawResponse format for all DnD answers:
 { "placements": [{ "draggableId": "...", "dropZoneId": "..." }] }
 ```
 
+**Illustration fields:** `content.dragAreaImageUrl` sets a background image for the
+whole drag-and-drop widget (draggable tray + drop zone), distinct from
+`content.dropZones[].imageUrl` which backgrounds a single zone only.
+`IFeedback.avatarEmotion` (on `successFeedback` / `tryAgainFeedback`) sets which
+emotion `content.avatar`'s character shows when that feedback fires — same
+`avatarId`, different expression. Not every avatar has the full emotion set (e.g.
+`miss-tutor` has no `'excited'` asset) — check available art in
+`avatar/{avatarId}/` before assigning an emotion to new dialogue.
+
 ---
 
 ### `dnd_single` — Drag One Item to One Zone

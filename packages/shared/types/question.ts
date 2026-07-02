@@ -53,13 +53,16 @@ export interface IFeedback {
   text?: string;             // e.g. "Well done! That IS a cat!"
   audioUrl?: string;         // GCS path
   highlightWords?: string[]; // ["I", "AM", "A", "CAT"] word-by-word highlight
+  avatarEmotion?: string;    // which emotion content.avatar's character should show
+                              // when this feedback fires (same avatarId, different expression)
 }
 
 export interface IAvatarConfig {
   avatarId: string;
   dialogue: string;          // what the avatar says in text
   dialogueAudioUrl?: string; // GCS path to voiced dialogue
-  emotion: 'happy' | 'thinking' | 'excited' | 'encouraging';
+  // TODO: celebrating documented but not implemented, see avatar-guide.md
+  emotion: 'happy' | 'thinking' | 'excited' | 'encouraging' | 'sad' | 'serious' | 'smiling';
 }
 
 // ── Helpers ──────────────────────────────────────────────
@@ -107,6 +110,9 @@ export interface IQuestionContent {
   // DnD fields (used by dnd_* types)
   draggables?: IDraggable[];
   dropZones?: IDropZone[];
+  dragAreaImageUrl?: string; // background covering the entire drag-and-drop widget
+                             // (draggable tray + drop zone) — distinct from
+                             // IDropZone.imageUrl, which only backgrounds one zone
 
   // For dnd_fill and dnd_build
   sentenceTemplate?: string; // e.g. "The ___ sat on the ___"

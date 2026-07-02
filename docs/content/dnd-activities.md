@@ -17,6 +17,15 @@ Drag-and-drop (DnD) activities are My Backpack's most interactive question forma
 | `dnd_fill` | Drag words into blank spaces in a sentence |
 | `dnd_build` | Drag letters or syllables to build a word |
 
+### Illustration fields
+
+`content.dragAreaImageUrl` sets a background image for the whole widget (draggable
+tray + drop zone). `IFeedback.avatarEmotion` (on `successFeedback` /
+`tryAgainFeedback`) sets which emotion the avatar shows for that feedback moment.
+Not every avatar has a full emotion set — e.g. `miss-tutor` only has
+happy/sad/serious/smiling (no `'excited'`) — so check available art before writing
+new avatar dialogue that assumes a given emotion exists.
+
 ---
 
 ## `dnd_single` — Drag One Item to One Zone
