@@ -96,7 +96,7 @@ function DropZoneArea({
   return (
     <div
       ref={setNodeRef}
-      className={`min-h-[96px] rounded-2xl border-2 border-dashed flex items-center justify-center transition-colors ${
+      className={`min-h-[170px] rounded-2xl border-2 border-dashed flex items-center justify-center transition-colors ${
         wrong
           ? 'border-rose-400 bg-rose-50/40'
           : isOver
@@ -200,7 +200,7 @@ export default function DndSinglePattern({
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="space-y-5">
+      <div className="justify-between space-y-5 bg-amber-600 min-h-[70vh]">
         {content.avatar?.dialogue && <p className="text-lg text-gray-800">{content.avatar.dialogue}</p>}
 
         <div className="flex flex-wrap gap-3 justify-center">
