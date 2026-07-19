@@ -16,6 +16,8 @@ export interface QuizSettings {
   questionTypes: string[];
   bucketFilter: BucketFilter;
   feedbackMode: FeedbackMode;
+  shuffleQuestions: boolean; // randomize question order at session-start time instead of
+                             // using the quiz's authored/selected order
 }
 
 export interface IQuiz {

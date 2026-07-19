@@ -279,6 +279,33 @@ When `content.prompt` starts with `"audio:"`, the frontend plays the
 remainder as a GCS path rather than displaying text.
 Example: `"audio:sounds/isizulu/questions/khetha-umsindo-a.mp3"`
 
+**Live TTS with word highlighting (interim):**
+`apps/web/src/components/quiz/SpokenText.tsx` reads question prompts, avatar
+dialogue, and answer feedback aloud with live word highlighting, using the
+browser's Web Speech API via the `react-text-to-speech` npm package
+(manual playback via a speaker-icon button — never autoplay). Language is
+derived per-page from `subjectSlug` via `subjectSlugToLangCode()`
+(`apps/web/src/lib/lang.ts`): `'isizulu-hl'` → `zu-ZA`, else `'en-US'`.
+Prerecorded audio always wins — `SpokenText` is never rendered where an
+`audioUrl` already exists (`content.prompt`'s `audio:` prefix,
+`text_input_audio`'s fetched term audio, `feedback.audioUrl`) — **except**
+`DndSinglePattern`'s avatar dialogue Replay control, which always speaks
+`content.avatar.dialogue` live via TTS regardless of `avatar.dialogueAudioUrl`
+(explicit product decision for that one control; `DndSinglePattern` calls
+`useSpeech` directly rather than using `SpokenText`, since the existing Replay
+button triggers `start()`/`stop()` itself). `DndSinglePattern` also speaks a
+draggable item's `label` (via `useSpeak`'s imperative `speak()`) on tap/drag-start
+when that item has no `audioUrl` — ordinary fallback rule here, not the dialogue's
+override, since draggable audio is often phonetically load-bearing (isiZulu
+vowel/consonant recordings). `IFeedback.text` (success/tryAgain) is now rendered
+as visible text for the first time (previously schema-only, never displayed).
+All live TTS requests `voiceURI: 'Google US English'` (`DEFAULT_TTS_VOICE` in
+`apps/web/src/lib/lang.ts`) — silently falls back to the browser default voice
+where that voice isn't installed (non-Chrome browsers).
+This whole layer is explicitly interim, pending a future pre-generated
+cloud-TTS pipeline (Azure AI Speech, authored via the teacher dashboard) —
+see [docs/content/live-tts-word-highlighting.md](docs/content/live-tts-word-highlighting.md).
+
 **isGeneric flag:**
 - `true` — reusable across all users (generated from term+definition alone)
 - `false` — user-specific (uses bucket context, future feature)
@@ -293,6 +320,11 @@ yet; the second param exists for future use).
 `content.dropZones[].requiredDraggableIds`) and never submitted to the server; the learner
 must get the current question right before advancing, and the host quiz page hides its Skip
 button. All 6 vowels dnd_single quiz variants (isiZulu + English) set this to `true`.
+`shuffleDraggables` — DnD only: randomizes `content.draggables`' pool display order once per
+question load (`DndSinglePattern` shuffles client-side via `useState` initializer, reshuffled
+in the same effect that resets other per-question state — not re-shuffled on every re-render).
+Defaults to `false` (authored order). Set per-question via `content.defaultHelpers` — no
+teacher-facing toggle UI exists yet (schema + logic only).
 
 **DnD answer capture:**
 `rawResponse = JSON.stringify({ placements: [{ draggableId, dropZoneId }] })`
@@ -343,10 +375,21 @@ confidenceBefore, confidenceAfter.
 ### QuizSession
 Groups answer records. Fields: profileId, miniAppId, status 
 ('active' | 'completed' | 'abandoned'), questionIds[], settings 
-{ questionCount, timeLimit, questionTypes, bucketFilter }, results 
+{ questionCount, timeLimit, questionTypes, bucketFilter, feedbackMode,
+shuffleQuestions }, results 
 { totalQuestions, answered, skipped, correct, totalPointsAvailable, 
 totalPointsAwarded, percentageScore, timeTakenMs }, startedAt, 
 completedAt.
+
+`settings` is snapshotted from the parent `Quiz.settings` at session-creation time
+(`createQuizSession` in `quizSession.service.ts`), with `overrideSettings` (from
+`isUserAdjustable` quizzes) taking priority per-field.
+`shuffleQuestions` (default `false`) — when `true`, `createQuizSession` shuffles the final
+`questionIds` order (Fisher-Yates) after either the `mode: 'fixed'` quiz's authored order or
+the `mode: 'dynamic'` adaptive-priority selection is resolved. No teacher-facing toggle UI
+exists yet — schema + logic only, set directly on `Quiz.settings.shuffleQuestions`.
+`mode: 'fixed'` question order is preserved by mapping over `quiz.questionIds` rather than
+trusting `Question.find({ _id: { $in } })`'s return order, which MongoDB does not guarantee.
 
 ### Lesson
 A pure study-material container — one 'lesson'-type item inside a
@@ -725,8 +768,12 @@ my-backpack/
 │   │   └── src/
 │   │       ├── app/            # Redux store
 │   │       ├── components/
-│   │       │   └── auth/       # Input, SocialLoginButtons, 
-│   │       │                   # ProfileCard, PinModal
+│   │       │   ├── auth/       # Input, SocialLoginButtons, 
+│   │       │   │               # ProfileCard, PinModal
+│   │       │   └── quiz/       # QuestionRenderer, QuizProgress, AnswerFeedback,
+│   │       │                   # QuizPageShell (shared no-scroll viewport shell),
+│   │       │                   # patterns/ (McqPattern, TrueFalsePattern,
+│   │       │                   # TypedInputPattern, DndSinglePattern)
 │   │       ├── features/
 │   │       │   ├── auth/       # authSlice
 │   │       │   └── theme/      # themeSlice
@@ -786,6 +833,9 @@ my-backpack/
 - [x] Question generation system (auto + AI via Anthropic Haiku)
 - [x] Adaptive learning service (confidence scores, velocity, spaced repetition)
 - [x] Quiz session service (create, answer capture, complete, abandon)
+- [x] Shuffle support — `IQuestionHelpers.shuffleDraggables` (per-question, DnD pool order) and
+      `Quiz.settings.shuffleQuestions`/`ISessionSettings.shuffleQuestions` (per-quiz, question
+      order at session-start); schema + logic only, no teacher-facing toggle UI yet
 - [x] DnD answer evaluation (evaluateDnDAnswer in quizSession.service.ts)
 - [x] Answer record model (full capture including confidenceBefore/After)
 - [x] Roadmap system (Roadmap, RoadmapNode, ProfileRoadmapProgress models)
@@ -832,6 +882,9 @@ my-backpack/
 - [x] Bucket UI (My Bucket page — status filter tabs, client-side sort, confidence/accuracy/review info, remove)
 - [x] Quiz UI (12 text-based question types + dnd_single implemented via DndSinglePattern; remaining 7 dnd_* types and mcq_audio show a "not yet supported" placeholder)
 - [x] Roadmap UI (roadmap screen with node panel, lesson resource-hub page with video/pdf/image/notes/audio/steps rendering, direct quiz-item player reusing the Quiz mini-app's components)
+- [x] Age-group-aware DnD/quiz-chrome styling — `DndSinglePattern`, `QuizProgress`, `AnswerFeedback` take an `ageGroup` prop and render a distinct child-mode glassmorphism treatment (large glass prompt bubble + stacked replay/hint buttons, clamp-sized draggable tiles, flex-1 drop zone) alongside the unchanged adult/teen default; see [docs/design/child-dnd-quiz-style.md](docs/design/child-dnd-quiz-style.md)
+- [x] No-scroll viewport contract for the active-question view — shared `QuizPageShell` (`apps/web/src/components/quiz/QuizPageShell.tsx`) locks `QuizPage`/`QuizItemPlayerPage` to `h-[calc(100dvh-60px)]` (accounts for AppLayout's 60px TopNav) with `overflow-hidden`; the active question region is `flex-1 min-h-0 overflow-hidden` so a 5-draggable `dnd_single` question never forces scrolling, while start/results/error/loading states keep their natural scrollable-if-needed treatment
+- [x] Live TTS with word highlighting (interim) — `SpokenText` component (browser Web Speech API via `react-text-to-speech`) reads question prompts, avatar dialogue, and answer feedback aloud with manual playback; always defers to prerecorded audio where it exists; see [docs/content/live-tts-word-highlighting.md](docs/content/live-tts-word-highlighting.md)
 - [ ] Profile management screens
 
 ### Frontend Mobile (apps/mobile)

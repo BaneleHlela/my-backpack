@@ -119,6 +119,17 @@ export interface CreateSessionSettingsOverride {
   questionTypes?: string[];
   bucketFilter?: BucketFilter;
   feedbackMode?: FeedbackMode;
+  shuffleQuestions?: boolean;
+}
+
+// Fisher-Yates — unbiased in-place shuffle, returns a new array.
+function shuffle<T>(items: T[]): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
 }
 
 export interface CaptureAnswerInput {
@@ -246,18 +257,27 @@ export async function createQuizSession(
     questionTypes: overrideSettings?.questionTypes ?? quiz.settings.questionTypes,
     bucketFilter: overrideSettings?.bucketFilter ?? quiz.settings.bucketFilter,
     feedbackMode: overrideSettings?.feedbackMode ?? quiz.settings.feedbackMode,
+    shuffleQuestions: overrideSettings?.shuffleQuestions ?? quiz.settings.shuffleQuestions,
   };
 
   let questionIds: Types.ObjectId[];
   if (quiz.mode === 'fixed') {
     const questions = await Question.find({ _id: { $in: quiz.questionIds }, isActive: true });
-    questionIds = questions.map((q) => q._id as Types.ObjectId);
+    const activeById = new Map(questions.map((q) => [q._id.toString(), q._id as Types.ObjectId]));
+    // Preserve the quiz's authored order — Question.find({ $in }) does not guarantee it.
+    questionIds = quiz.questionIds
+      .map((id) => activeById.get(id.toString()))
+      .filter((id): id is Types.ObjectId => id !== undefined);
   } else {
     questionIds = await selectQuestions(
       profileId,
       quiz.sourceMiniAppIds.map((id) => id.toString()),
       settings
     );
+  }
+
+  if (settings.shuffleQuestions) {
+    questionIds = shuffle(questionIds);
   }
 
   const session = new QuizSession({

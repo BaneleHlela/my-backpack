@@ -23,6 +23,8 @@ export interface IQuizSettings {
   questionTypes: string[];
   bucketFilter: BucketFilter;
   feedbackMode: FeedbackMode;
+  shuffleQuestions: boolean; // randomize question order at session-start time instead of
+                             // using the quiz's authored/selected order
 }
 
 export interface IQuizDocument extends Document {
@@ -55,6 +57,7 @@ const quizSettingsSchema = new Schema<IQuizSettings>(
       enum: ['immediate', 'end'],
       default: 'immediate',
     },
+    shuffleQuestions: { type: Boolean, default: false },
   },
   { _id: false }
 );

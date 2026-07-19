@@ -11,12 +11,14 @@ import { Loader2, Volume2 } from 'lucide-react';
 import { ASSETS } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers, QuestionType } from '@my-backpack/shared';
 import axiosInstance from '../../../lib/axios';
+import SpokenText from '../SpokenText';
 
 interface TypedInputPatternProps {
   type: QuestionType;
   termId?: string;
   content: IQuestionContent;
   helpers: IQuestionHelpers;
+  lang: string;
   disabled?: boolean;
   isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
@@ -26,6 +28,7 @@ export default function TypedInputPattern({
   type,
   termId,
   content,
+  lang,
   disabled,
   isSubmitting,
   onAnswer,
@@ -63,7 +66,11 @@ export default function TypedInputPattern({
 
   return (
     <div className="space-y-4">
-      <p className="text-lg text-gray-800 whitespace-pre-line">{content.prompt}</p>
+      {promptIsAudio || type === 'text_input_audio' ? (
+        <p className="text-lg text-gray-800 whitespace-pre-line">{content.prompt}</p>
+      ) : (
+        <SpokenText text={content.prompt ?? ''} lang={lang} />
+      )}
 
       {type === 'text_input_audio' && (
         <div className="flex items-center gap-3">

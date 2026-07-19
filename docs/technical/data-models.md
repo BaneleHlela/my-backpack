@@ -474,11 +474,11 @@ All question data lives inside `content`. Always cast to `IQuestionContent` imme
 | `prompt` | The question text. If prefixed with `audio:`, the frontend plays audio instead |
 | `options` | MCQ answer options |
 | `correctAnswer` | The correct answer (string or index) |
-| `explanation` | Shown after the learner answers |
+| `explanation` | Shown after the learner answers — displayed in `AnswerFeedback` and spoken via live TTS (`SpokenText`, see below) |
 | `draggables` | DnD questions — items the learner drags |
 | `dropZones` | DnD questions — zones items are dropped into |
 | `sentenceTemplate` | `dnd_fill` and `dnd_build` — the sentence with blanks |
-| `feedback` | Per-outcome feedback messages |
+| `feedback` | Per-outcome feedback messages (`IFeedback`: `text`, `audioUrl`, `highlightWords`, `avatarEmotion`) |
 | `avatar` | Avatar configuration for this question |
 | `defaultHelpers` | `Partial<IQuestionHelpers>` — hints, audio, skip button configuration |
 
@@ -486,6 +486,7 @@ All question data lives inside `content`. Always cast to `IQuestionContent` imme
 - `isGeneric: true` questions are generated once and reused by all learners who encounter the same definition
 - The `audio:` prefix on `content.prompt` tells the frontend to play the remainder as a GCS path
 - See `question.types.ts` for the full `IQuestionContent` interface definition
+- `IFeedback.text` (success/tryAgain) is now rendered as visible text and spoken aloud in `AnswerFeedback` — previously this field existed on the schema but was never displayed. If `IFeedback.audioUrl` is set it plays that prerecorded audio instead of live TTS. `IFeedback.highlightWords` remains unused (see [docs/content/live-tts-word-highlighting.md](../content/live-tts-word-highlighting.md))
 
 ---
 

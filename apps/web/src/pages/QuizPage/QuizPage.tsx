@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, Loader2, BookOpen, SkipForward } from 'lucide-react';
+import { Loader2, BookOpen, SkipForward } from 'lucide-react';
 import { resolveHelpers } from '@my-backpack/shared';
 import type { IMiniApp } from '@my-backpack/shared';
 import type { AppDispatch, RootState } from '../../app/store';
 import axiosInstance from '../../lib/axios';
+import { subjectSlugToLangCode } from '../../lib/lang';
 import {
   startSession,
   submitAnswer,
@@ -19,6 +20,7 @@ import {
 } from '../../features/quiz/quizSlice';
 import QuizStartScreen from './components/QuizStartScreen';
 import type { QuizStartSettings } from './components/QuizStartScreen';
+import QuizPageShell from '../../components/quiz/QuizPageShell';
 import QuestionRenderer from '../../components/quiz/QuestionRenderer';
 import QuizProgress from '../../components/quiz/QuizProgress';
 import AnswerFeedback from '../../components/quiz/AnswerFeedback';
@@ -35,6 +37,7 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
   const quiz = useSelector((state: RootState) => state.quiz);
   const { activeProfile } = useSelector((state: RootState) => state.auth);
   const ageGroup = activeProfile?.ageGroup ?? 'adult';
+  const lang = subjectSlugToLangCode(subjectSlug);
 
   const [bucketHasTerms, setBucketHasTerms] = useState<boolean | null>(null);
   const questionStartedAt = useRef<number>(Date.now());
@@ -159,18 +162,10 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
     : null;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
-      <button
-        type="button"
-        onClick={() => navigate(`/subject/${subjectSlug}`)}
-        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 mb-4 transition-colors"
-      >
-        <ChevronLeft className="w-4 h-4" />
-        Back to roadmap
-      </button>
-
-      <h1 className="text-2xl font-bold text-gray-800 mb-4">{miniApp.name}</h1>
-
+    <QuizPageShell
+      onBack={() => navigate(`/subject/${subjectSlug}`)}
+      title={<h1 className="text-2xl font-bold text-gray-800 mb-4">{miniApp.name}</h1>}
+    >
       <AnimatePresence mode="wait">
         {quiz.status === 'idle' && bucketHasTerms === null && (
           <motion.div key="loading" className="flex justify-center py-16">
@@ -220,13 +215,20 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
         {(quiz.status === 'active' || quiz.status === 'submitting' || quiz.status === 'awaiting_advance') &&
           quiz.currentQuestion &&
           currentHelpers && (
-            <motion.div key="active" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <QuizProgress answered={quiz.progress.answered} total={quiz.progress.total} />
+            <motion.div
+              key="active"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex-1 min-h-0 flex flex-col overflow-hidden"
+            >
+              <QuizProgress answered={quiz.progress.answered} total={quiz.progress.total} ageGroup={ageGroup} />
 
-              <div className="bg-white/40 backdrop-blur rounded-3xl border border-white/50">
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white/40 backdrop-blur rounded-3xl border border-white/50">
                 <QuestionRenderer
                   question={quiz.currentQuestion}
                   helpers={currentHelpers}
+                  ageGroup={ageGroup}
+                  lang={lang}
                   disabled={quiz.status !== 'active'}
                   isSubmitting={quiz.status === 'submitting'}
                   onAnswer={handleAnswer}
@@ -237,7 +239,7 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
                 <button
                   type="button"
                   onClick={handleSkip}
-                  className="flex items-center gap-1.5 mx-auto mt-3 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  className="flex-shrink-0 flex items-center gap-1.5 mx-auto mt-3 text-xs text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   <SkipForward className="w-3.5 h-3.5" />
                   Skip question
@@ -251,6 +253,7 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
                   maxPoints={quiz.lastAnswer.maxPoints}
                   content={quiz.currentQuestion.content}
                   ageGroup={ageGroup}
+                  lang={lang}
                   isLastQuestion={quiz.lastAnswer.sessionComplete}
                   wasSkipped={quiz.lastAnswer.wasSkipped}
                   onAdvance={handleAdvance}
@@ -276,6 +279,6 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </QuizPageShell>
   );
 }

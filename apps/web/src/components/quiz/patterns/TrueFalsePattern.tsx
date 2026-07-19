@@ -8,16 +8,18 @@
 import { useState } from 'react';
 import { Check, X, Loader2 } from 'lucide-react';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
+import SpokenText from '../SpokenText';
 
 interface TrueFalsePatternProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
+  lang: string;
   disabled?: boolean;
   isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
 }
 
-export default function TrueFalsePattern({ content, disabled, isSubmitting, onAnswer }: TrueFalsePatternProps) {
+export default function TrueFalsePattern({ content, lang, disabled, isSubmitting, onAnswer }: TrueFalsePatternProps) {
   const [selected, setSelected] = useState<'True' | 'False' | null>(null);
 
   const choose = (value: 'True' | 'False') => {
@@ -32,7 +34,11 @@ export default function TrueFalsePattern({ content, disabled, isSubmitting, onAn
 
   return (
     <div className="space-y-4">
-      <p className="text-lg text-gray-800 whitespace-pre-line">{content.prompt}</p>
+      {content.prompt?.startsWith('audio:') ? (
+        <p className="text-lg text-gray-800 whitespace-pre-line">{content.prompt}</p>
+      ) : (
+        <SpokenText text={content.prompt ?? ''} lang={lang} />
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <button

@@ -2,7 +2,7 @@
 // dnd_single is implemented (DndSinglePattern); the remaining 7 dnd_* types and mcq_audio
 // don't have a renderer yet — shown as a clearly labelled placeholder so the switch
 // structure doesn't need a future rewrite.
-import type { IQuestion, IQuestionHelpers } from '@my-backpack/shared';
+import type { AgeGroup, IQuestion, IQuestionHelpers } from '@my-backpack/shared';
 import McqPattern from './patterns/McqPattern';
 import TrueFalsePattern from './patterns/TrueFalsePattern';
 import TypedInputPattern from './patterns/TypedInputPattern';
@@ -32,6 +32,8 @@ const TYPED_INPUT_TYPES = new Set<IQuestion['type']>([
 export interface QuestionRendererProps {
   question: IQuestion;
   helpers: IQuestionHelpers;
+  ageGroup?: AgeGroup;
+  lang: string;
   disabled?: boolean;
   isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
@@ -40,6 +42,8 @@ export interface QuestionRendererProps {
 export default function QuestionRenderer({
   question,
   helpers,
+  ageGroup,
+  lang,
   disabled,
   isSubmitting,
   onAnswer,
@@ -51,6 +55,7 @@ export default function QuestionRenderer({
       <McqPattern
         content={content}
         helpers={helpers}
+        lang={lang}
         disabled={disabled}
         isSubmitting={isSubmitting}
         onAnswer={onAnswer}
@@ -63,6 +68,7 @@ export default function QuestionRenderer({
       <TrueFalsePattern
         content={content}
         helpers={helpers}
+        lang={lang}
         disabled={disabled}
         isSubmitting={isSubmitting}
         onAnswer={onAnswer}
@@ -77,6 +83,7 @@ export default function QuestionRenderer({
         termId={question.termId}
         content={content}
         helpers={helpers}
+        lang={lang}
         disabled={disabled}
         isSubmitting={isSubmitting}
         onAnswer={onAnswer}
@@ -89,6 +96,8 @@ export default function QuestionRenderer({
       <DndSinglePattern
         content={content}
         helpers={helpers}
+        ageGroup={ageGroup}
+        lang={lang}
         disabled={disabled}
         isSubmitting={isSubmitting}
         onAnswer={onAnswer}

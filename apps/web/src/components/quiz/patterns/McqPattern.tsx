@@ -9,10 +9,12 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
+import SpokenText from '../SpokenText';
 
 interface McqPatternProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
+  lang: string;
   disabled?: boolean;
   isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
@@ -20,7 +22,7 @@ interface McqPatternProps {
 
 const OPTION_LABELS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
-export default function McqPattern({ content, disabled, isSubmitting, onAnswer }: McqPatternProps) {
+export default function McqPattern({ content, lang, disabled, isSubmitting, onAnswer }: McqPatternProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const options = content.options ?? [];
 
@@ -36,7 +38,11 @@ export default function McqPattern({ content, disabled, isSubmitting, onAnswer }
 
   return (
     <div className="space-y-4">
-      <p className="text-lg text-gray-800 whitespace-pre-line">{content.prompt}</p>
+      {content.prompt?.startsWith('audio:') ? (
+        <p className="text-lg text-gray-800 whitespace-pre-line">{content.prompt}</p>
+      ) : (
+        <SpokenText text={content.prompt ?? ''} lang={lang} />
+      )}
 
       <div className="grid gap-2">
         {options.map((option, i) => (

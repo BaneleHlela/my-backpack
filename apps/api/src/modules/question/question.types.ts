@@ -61,6 +61,8 @@ export interface IQuestionHelpers {
   hintDelaySeconds: number;      // 0 = never auto-offer
   retryUntilCorrect: boolean;    // DnD: wrong drops are rejected client-side and must be retried —
                                  // never submitted to the server; no skip is offered while true
+  shuffleDraggables: boolean;    // DnD: randomize the draggable pool's display order once per
+                                 // question load, instead of the authored content.draggables order
 }
 
 export const defaultHelpers: IQuestionHelpers = {
@@ -76,6 +78,7 @@ export const defaultHelpers: IQuestionHelpers = {
   hintsAllowed: 3,
   hintDelaySeconds: 10,
   retryUntilCorrect: false,
+  shuffleDraggables: false,
 };
 
 // ── Unified content type ──────────────────────────────────

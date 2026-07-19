@@ -24,6 +24,7 @@ export interface ISessionSettings {
   questionTypes: string[];
   bucketFilter: BucketFilter;
   feedbackMode: FeedbackMode;
+  shuffleQuestions: boolean;
 }
 
 export interface ISessionResults {
@@ -66,6 +67,7 @@ const sessionSettingsSchema = new Schema<ISessionSettings>(
       enum: ['immediate', 'end'],
       default: 'immediate',
     },
+    shuffleQuestions: { type: Boolean, default: false },
   },
   { _id: false }
 );

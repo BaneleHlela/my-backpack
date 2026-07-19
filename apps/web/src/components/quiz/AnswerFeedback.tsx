@@ -3,9 +3,10 @@
 // vocab skews adult, so that's the default. No backdrop-click-to-dismiss — advancing
 // is the only way out, via the button, so the learner can't skip past the result.
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, XCircle, SkipForward } from 'lucide-react';
+import { CheckCircle2, XCircle, SkipForward, Volume2 } from 'lucide-react';
 import { ASSETS } from '@my-backpack/shared';
 import type { AgeGroup, IQuestionContent } from '@my-backpack/shared';
+import SpokenText from './SpokenText';
 
 interface AnswerFeedbackProps {
   isCorrect: boolean;
@@ -13,9 +14,20 @@ interface AnswerFeedbackProps {
   maxPoints: number;
   content: IQuestionContent;
   ageGroup: AgeGroup;
+  lang: string;
   isLastQuestion: boolean;
   wasSkipped?: boolean;
   onAdvance: () => void;
+}
+
+function resolveAssetUrl(path?: string): string | undefined {
+  if (!path) return undefined;
+  return path.startsWith('http') ? path : `${ASSETS.GCS_BASE}/${path}`;
+}
+
+function playAudio(path?: string) {
+  const url = resolveAssetUrl(path);
+  if (url) void new Audio(url).play();
 }
 
 export default function AnswerFeedback({
@@ -24,6 +36,7 @@ export default function AnswerFeedback({
   maxPoints,
   content,
   ageGroup,
+  lang,
   isLastQuestion,
   wasSkipped,
   onAdvance,
@@ -48,8 +61,6 @@ export default function AnswerFeedback({
       ? ASSETS.AVATARS.image(content.avatar.avatarId, feedback?.avatarEmotion ?? content.avatar.emotion)
       : undefined;
 
-  console.log(avatarUrl)
-
   return (
     <AnimatePresence>
       <motion.div
@@ -66,7 +77,7 @@ export default function AnswerFeedback({
         >
           {avatarUrl && (
             <div className="flex justify-center mb-3">
-              <img src={avatarUrl} alt="" className="w-16 h-16 object-contain" />
+              <img src={avatarUrl} alt="" className={isChild ? 'w-20 h-20 object-contain' : 'w-16 h-16 object-contain'} />
             </div>
           )}
 
@@ -80,7 +91,7 @@ export default function AnswerFeedback({
             )}
             <div className="flex-1">
               <p
-                className={`text-lg font-semibold ${
+                className={`font-semibold ${isChild ? 'text-xl' : 'text-lg'} ${
                   wasSkipped ? 'text-gray-600' : isCorrect ? 'text-emerald-700' : 'text-rose-700'
                 }`}
               >
@@ -90,6 +101,24 @@ export default function AnswerFeedback({
                 {pointsAwarded} / {maxPoints} points
               </p>
 
+              {!wasSkipped && feedback?.text && (
+                feedback.audioUrl ? (
+                  <div className="flex items-center gap-2 mt-3">
+                    <p className="text-sm text-gray-700">{feedback.text}</p>
+                    <button
+                      type="button"
+                      onClick={() => playAudio(feedback.audioUrl)}
+                      aria-label="Play audio"
+                      className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-lg bg-white/40 border border-white/50 hover:bg-white/60 transition-colors"
+                    >
+                      <Volume2 className="w-3.5 h-3.5 text-gray-600" />
+                    </button>
+                  </div>
+                ) : (
+                  <SpokenText text={feedback.text} lang={lang} className="text-sm text-gray-700 mt-3" />
+                )
+              )}
+
               {!isCorrect && content.correctAnswer && (
                 <p className="text-sm text-gray-700 mt-3">
                   Correct answer: <span className="font-semibold">{content.correctAnswer}</span>
@@ -97,7 +126,7 @@ export default function AnswerFeedback({
               )}
 
               {!wasSkipped && content.explanation && (
-                <p className="text-sm text-gray-600 mt-2">{content.explanation}</p>
+                <SpokenText text={content.explanation} lang={lang} className="text-sm text-gray-600 mt-2" />
               )}
             </div>
           </div>
@@ -105,7 +134,9 @@ export default function AnswerFeedback({
           <button
             type="button"
             onClick={onAdvance}
-            className="w-full mt-5 py-3 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 transition-colors"
+            className={`w-full mt-5 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 transition-colors ${
+              isChild ? 'py-4 text-lg' : 'py-3'
+            }`}
           >
             {isLastQuestion ? 'Finish' : 'Next question'}
           </button>

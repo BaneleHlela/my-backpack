@@ -1,6 +1,6 @@
 # What is My Backpack?
 
-My Backpack is a digital learning companion — one app that holds everything a student needs, from IsiZulu vowel sounds to university-level vocabulary, all in one place. It learns how you learn, and moves at your pace.
+My Backpack is a digital learning companion — one app that holds everything a learner needs, from simple apps built for kids to university-level linguistics and professional skills, all in one place. It learns how you learn, and moves at your pace.
 
 ---
 
@@ -12,29 +12,39 @@ This creates two problems. Fast learners get bored and disengage. Slower learner
 
 For South African learners, this is especially painful. Overcrowded classrooms, teacher shortages, and underfunded schools mean that many learners never get the individual attention they need. High failure rates in core subjects like Mathematics, English, and IsiZulu Home Language are the result — not because learners aren't capable, but because the system isn't built around them.
 
+It's not just learners who feel this. Teachers rebuild the same lessons from scratch every year, with little way to reuse what already worked, which leaves less time to help learners with the specific things they're struggling with. Many teachers also have no reliable way to see where a class is falling behind — learners are often too afraid to put their hand up and admit they don't understand, so the gaps stay hidden until they show up in an exam. The system isn't only hard on learners. It's hard on the people trying to teach them too.
+
 ---
 
 ## The Solution
 
 My Backpack puts the learner in charge.
 
-It is a digital backpack — one app that contains all of a student's learning material, organised by subject, taught through interactive mini-apps, and paced entirely by the learner. The app quietly watches how you learn and adjusts to you, not to a fixed schedule.
+It is a digital backpack — one app that contains all of a learner's learning material, organised by subject, taught through interactive mini-apps, and paced entirely by the learner. The app quietly watches how you learn and adjusts to you, not to a fixed schedule.
 
 When you're ready to be tested — truly ready, not just "it's November so it must be exam time" — My Backpack tells you. You can then walk into a testing centre and write a formal assessment on your own terms.
+
+It's built for teachers too. A lesson, roadmap, or set of questions is built once and keeps working for every class after — no rebuilding from zero each year. The app also surfaces exactly where a class is struggling, without anyone having to admit it out loud. And teachers aren't boxed into one format: a course can be as simple as a video lesson or as involved as a fully custom mini-app, with questions ranging from a quick multiple choice to a bespoke drag-and-drop activity.
 
 ---
 
 ## Who It's For
 
-My Backpack is designed for everyone in a South African household who wants to learn:
+My Backpack is designed for everyone in a South African household who wants to learn — not just people in school or varsity, but anyone with time to invest in themselves:
 
 - **Young children (ages 4–6)** learning IsiZulu vowel sounds and basic English words through audio, drag-and-drop games, and colourful visuals
 - **Primary school learners (Grades 1–7)** working through CAPS-aligned content in core subjects
 - **Secondary school learners (Grades 8–12)** preparing for exams at their own pace
 - **University students** supplementing lectures with interactive practice
 - **Adult self-learners** improving vocabulary, picking up new skills, and staying intellectually sharp
+- **Adults out of work or without formal opportunities** — using their time to build real, marketable skills, and earning peanuts along the way, like a small stipend for learning
+- **Adults still building literacy** — the same audio-first, drag-and-drop formats built for young children work just as well for an adult learning to read for the first time, without feeling like content made for a child
+- **People school didn't work out for** — capable, even brilliant, but never given a fair shot the first time around. My Backpack judges what you can demonstrate now, not your track record
+- **Learners with niche interests** no formal course ever covered — a specific skill, language, or subject they couldn't find anywhere else
 
 One account supports up to six profiles — like Netflix. A parent, two teenagers, and three young children can all use My Backpack from a single login, each with their own content, progress, and rewards.
+
+Teaching on My Backpack isn't limited to people with "teacher" in their job title, either. Any expert — a working engineer, a game developer pulling together a small team, a fluent home-language speaker — can build and publish a course. It's a bit like Udemy in that sense: the platform supplies the roadmap engine, the question formats, and the adaptive tracking; the expert supplies the subject knowledge.
 
 ---
 
@@ -50,7 +60,7 @@ Each topic is structured as a roadmap — a series of lessons and checkpoints, l
 Each lesson comes with study material followed by questions. Questions come in many formats: multiple choice, audio listening, fill-in-the-blank, drag-and-drop, and more. The variety is intentional — different formats build different kinds of understanding.
 
 **4. Earn rewards.**
-Every correct answer earns you peanuts — My Backpack's in-app currency. Children can redeem peanuts for toys and games. Adults can redeem for real money or vouchers. Rewards are collected and spent at My Backpack testing centres.
+Every correct answer earns you XP and peanuts — My Backpack's in-app currency. Children can redeem peanuts for toys and games. Adults can redeem for real money or vouchers. Rewards are collected and spent at My Backpack testing centres.
 
 **5. Get alerted when you're ready.**
 The app tracks your mastery across every topic. When you've genuinely mastered enough material to pass a formal assessment, it tells you. You then book a slot at a testing centre and write the exam when you're confident — not when the calendar forces you to.
@@ -61,7 +71,7 @@ The app tracks your mastery across every topic. When you've genuinely mastered e
 
 **Personalised pace.** The app adapts to how fast you learn. If you're sailing through, it moves faster. If you're struggling, it slows down and revisits material until you're solid.
 
-**Tangible rewards.** Points and badges are fine, but a child who earns a toy or an adult who earns money is a different kind of motivated. Peanuts are earned through genuine learning and redeemed for real things.
+**Tangible rewards.** Points and badges are fine, but a child who earns a toy or an adult who earns money is a different kind of motivated. Peanuts are earned through genuine learning and redeemed for real things — for someone out of work, consistent learning can add up to a small but meaningful bit of income, not just a nice-to-have.
 
 **Multi-age household support.** One account, six profiles. A 5-year-old learning IsiZulu sounds and a 27-year-old expanding their vocabulary can both use My Backpack from the same family account, each with completely appropriate content.
 
@@ -100,4 +110,4 @@ The app tracks your mastery across every topic. When you've genuinely mastered e
 
 ---
 
-*Last updated: June 2026*
+*Last updated: July 2026*

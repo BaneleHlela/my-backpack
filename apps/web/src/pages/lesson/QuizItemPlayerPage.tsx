@@ -12,11 +12,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, Loader2, SkipForward } from 'lucide-react';
+import { Loader2, SkipForward } from 'lucide-react';
 import { resolveHelpers } from '@my-backpack/shared';
 import type { AppDispatch, RootState } from '../../app/store';
 import type { ItemCompletionResult } from '@my-backpack/shared';
 import axiosInstance from '../../lib/axios';
+import { subjectSlugToLangCode } from '../../lib/lang';
 import {
   startQuizItemSession,
   submitAnswer,
@@ -25,6 +26,7 @@ import {
   abandonSession,
   resetQuiz,
 } from '../../features/quiz/quizSlice';
+import QuizPageShell from '../../components/quiz/QuizPageShell';
 import QuestionRenderer from '../../components/quiz/QuestionRenderer';
 import QuizProgress from '../../components/quiz/QuizProgress';
 import AnswerFeedback from '../../components/quiz/AnswerFeedback';
@@ -43,6 +45,7 @@ export default function QuizItemPlayerPage() {
   const quiz = useSelector((state: RootState) => state.quiz);
   const { activeProfile } = useSelector((state: RootState) => state.auth);
   const ageGroup = activeProfile?.ageGroup ?? 'adult';
+  const lang = subjectSlugToLangCode(subjectSlug);
 
   const questionStartedAt = useRef<number>(Date.now());
   const itemCompletionRequested = useRef(false);
@@ -176,16 +179,7 @@ export default function QuizItemPlayerPage() {
     : null;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
-      <button
-        type="button"
-        onClick={() => navigate(`/subject/${subjectSlug}`)}
-        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 mb-4 transition-colors"
-      >
-        <ChevronLeft className="w-4 h-4" />
-        Back to roadmap
-      </button>
-
+    <QuizPageShell onBack={() => navigate(`/subject/${subjectSlug}`)}>
       <AnimatePresence mode="wait">
         {(quiz.status === 'idle' || quiz.status === 'starting') && (
           <motion.div key="loading" className="flex justify-center py-16">
@@ -214,13 +208,20 @@ export default function QuizItemPlayerPage() {
         {(quiz.status === 'active' || quiz.status === 'submitting' || quiz.status === 'awaiting_advance') &&
           quiz.currentQuestion &&
           currentHelpers && (
-            <motion.div key="active" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <QuizProgress answered={quiz.progress.answered} total={quiz.progress.total} />
+            <motion.div
+              key="active"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex-1 min-h-0 flex flex-col overflow-hidden"
+            >
+              <QuizProgress answered={quiz.progress.answered} total={quiz.progress.total} ageGroup={ageGroup} />
 
-              <div className="bg-white/40 backdrop-blur rounded-3xl border border-white/50">
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white/40 backdrop-blur rounded-3xl border border-white/50">
                 <QuestionRenderer
                   question={quiz.currentQuestion}
                   helpers={currentHelpers}
+                  ageGroup={ageGroup}
+                  lang={lang}
                   disabled={quiz.status !== 'active'}
                   isSubmitting={quiz.status === 'submitting'}
                   onAnswer={handleAnswer}
@@ -231,7 +232,7 @@ export default function QuizItemPlayerPage() {
                 <button
                   type="button"
                   onClick={handleSkip}
-                  className="flex items-center gap-1.5 mx-auto mt-3 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  className="flex-shrink-0 flex items-center gap-1.5 mx-auto mt-3 text-xs text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   <SkipForward className="w-3.5 h-3.5" />
                   Skip question
@@ -245,6 +246,7 @@ export default function QuizItemPlayerPage() {
                   maxPoints={quiz.lastAnswer.maxPoints}
                   content={quiz.currentQuestion.content}
                   ageGroup={ageGroup}
+                  lang={lang}
                   isLastQuestion={quiz.lastAnswer.sessionComplete}
                   wasSkipped={quiz.lastAnswer.wasSkipped}
                   onAdvance={handleAdvance}
@@ -289,6 +291,6 @@ export default function QuizItemPlayerPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </QuizPageShell>
   );
 }
