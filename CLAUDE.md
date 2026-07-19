@@ -861,8 +861,8 @@ my-backpack/
 - [x] Admin endpoints (question generation, retry, status)
 - [x] Global error handler (AppError, catchAsync)
 - [x] AgeGroup content filter middleware
-- [ ] Email verification flow
-- [ ] Forgot password / reset password email flow
+- [x] Email verification flow (nodemailer SMTP transport, token + 24h expiry, resend endpoint)
+- [x] Forgot password / reset password email flow (token + 1h expiry, silent on unknown email)
 - [ ] XP and peanuts reward system (deferred)
 - [ ] Test readiness scoring (deferred)
 - [ ] Book/PDF upload pipeline (deferred)
