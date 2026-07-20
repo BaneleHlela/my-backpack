@@ -1,0 +1,18 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@my-backpack/shared": [
+        "../../packages/shared/index.ts"
+      ],
+      "@my-backpack/shared/*": [
+        "../../packages/shared/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ]
+}

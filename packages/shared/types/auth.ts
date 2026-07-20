@@ -42,6 +42,7 @@ export interface LoginRequest {
 export interface LoginResponse {
   partialToken: string;
   profiles: ProfileSummary[];
+  refreshToken?: string; // present only when X-Client-Type: mobile was sent
 }
 
 // POST /api/auth/select-profile

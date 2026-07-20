@@ -20,6 +20,11 @@ import { signPartialToken } from '../../utils/jwt';
 import { IAccountDocument } from '../../models/core/account.model';
 
 const REFRESH_COOKIE = 'refreshToken';
+const MOBILE_CLIENT_HEADER = 'x-client-type';
+
+function isMobileClient(req: Request): boolean {
+  return req.headers[MOBILE_CLIENT_HEADER] === 'mobile';
+}
 
 function setRefreshCookie(res: Response, token: string): void {
   res.cookie(REFRESH_COOKIE, token, {
@@ -58,7 +63,11 @@ export const login = catchAsync(async (req: Request, res: Response): Promise<voi
   try {
     const result = await loginLocal(email, password);
     setRefreshCookie(res, result.refreshToken);
-    sendSuccess(res, { partialToken: result.partialToken, profiles: result.profiles });
+    sendSuccess(res, {
+      partialToken: result.partialToken,
+      profiles: result.profiles,
+      ...(isMobileClient(req) && { refreshToken: result.refreshToken }),
+    });
   } catch (err) {
     if (err instanceof EmailNotVerifiedError) {
       // Non-standard shape — kept as-is per API contract
@@ -90,7 +99,8 @@ export async function logout(_req: Request, res: Response): Promise<void> {
 }
 
 export const refresh = catchAsync(async (req: Request, res: Response): Promise<void> => {
-  const token = req.cookies[REFRESH_COOKIE] as string | undefined;
+  const bodyToken = (req.body as { refreshToken?: string } | undefined)?.refreshToken;
+  const token = bodyToken ?? (req.cookies[REFRESH_COOKIE] as string | undefined);
   if (!token) throw new AppError('No refresh token', 401);
 
   try {

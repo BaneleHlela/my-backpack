@@ -13,7 +13,10 @@ at their own speed and are alerted when they are test-ready.
 - **Monorepo**: pnpm workspaces
 - **Backend**: Node.js + Express + TypeScript (`apps/api`)
 - **Web**: React + Vite + TypeScript + Redux Toolkit (`apps/web`)
-- **Mobile**: React Native + Expo + TypeScript + Redux Toolkit (`apps/mobile`)
+- **Mobile**: React Native + Expo + TypeScript + Redux Toolkit (`apps/mobile`) —
+  Expo Router (file-based routing), `expo-secure-store` (refresh token
+  persistence), `expo-audio` (pronunciation playback — not `expo-av`,
+  deprecated), `expo-blur` (glassmorphism cards)
 - **Shared types**: `packages/shared`
 - **Database**: MongoDB Atlas (Mongoose ODM)
 - **Cache**: Redis via Upstash
@@ -787,12 +790,35 @@ my-backpack/
 │   │           ├── SelectProfilePage
 │   │           ├── ProfileSetupPage
 │   │           └── DashboardPage (skeleton)
-│   └── mobile/                 # React Native — auth UI pending
+│   └── mobile/
+│       ├── app/                 # Expo Router file-based routes
+│       │   ├── _layout.tsx      # Redux <Provider>, splash-hold-until-bootstrapped, <Slot />
+│       │   ├── index.tsx        # ProtectedRoute-gated redirect entry point
+│       │   ├── (auth)/          # login, signup — redirects away if already authed
+│       │   ├── select-profile.tsx
+│       │   ├── profile-setup.tsx
+│       │   └── (app)/           # guarded post-auth group (ScreenBackground + ProtectedRoute)
+│       │       ├── home.tsx     # enrolled-subjects list, no roadmap UI
+│       │       └── miniapp/[miniAppId]/  # Dictionary: index, term/[termId], bucket
+│       ├── src/
+│       │   ├── store/store.ts   # Redux store — NEVER rename this dir to src/app/,
+│       │   │                    # Expo Router silently prefers src/app/ as its routes
+│       │   │                    # root over the real app/ dir if that name is used
+│       │   ├── lib/             # api.ts (axios + X-Client-Type: mobile), secureStore.ts, audio.ts
+│       │   ├── features/        # auth, content, vocab slices
+│       │   └── components/      # GlassCard, PrimaryButton, ScreenBackground, TextField,
+│       │                        # ProtectedRoute, dictionary/ (mini-app-specific)
+│       └── metro.config.js      # watchFolders + nodeModulesPaths only — do not add
+│                                # resolver.unstable_enableSymlinks / disableHierarchicalLookup,
+│                                # both break pnpm's nested transitive-dep resolution on this SDK
 ├── packages/
-│   └── shared/
-│       ├── constants/
-│       │   └── assets.ts
-│       └── types/
+│   ├── shared/
+│   │   ├── constants/
+│   │   │   ├── assets.ts
+│   │   │   └── theme.ts        # colour/spacing/radius/typography — canonical design-token
+│   │   │                        # source for both apps/web and apps/mobile; keep in sync
+│   │   │                        # with docs/design/brand-guide.md
+│   │   └── types/
 │           ├── account.ts
 │           ├── profile.ts
 │           ├── auth.ts
@@ -809,6 +835,8 @@ my-backpack/
 │           └── enrollment.ts   # IProfileSubjectEnrollment, IProgressSummary
 │       └── utils/
 │           └── resolveHelpers.ts  # resolveHelpers(questionDefaults, nodeOverrides)
+│   └── ui/                     # empty placeholder — reserved for a future cross-platform
+│                                # component package (web + mobile shared UI); not built yet
 ├── CLAUDE.md                   ← this file
 ├── pnpm-workspace.yaml
 └── .gitignore
@@ -861,8 +889,8 @@ my-backpack/
 - [x] Admin endpoints (question generation, retry, status)
 - [x] Global error handler (AppError, catchAsync)
 - [x] AgeGroup content filter middleware
-- [ ] Email verification flow
-- [ ] Forgot password / reset password email flow
+- [x] Email verification flow (nodemailer SMTP transport, token + 24h expiry, resend endpoint)
+- [x] Forgot password / reset password email flow (token + 1h expiry, silent on unknown email)
 - [ ] XP and peanuts reward system (deferred)
 - [ ] Test readiness scoring (deferred)
 - [ ] Book/PDF upload pipeline (deferred)
@@ -888,7 +916,17 @@ my-backpack/
 - [ ] Profile management screens
 
 ### Frontend Mobile (apps/mobile)
-- [ ] Everything (deferred until web is further along)
+- [x] Expo scaffold (SDK 57, RN 0.86, React 19.2 at time of writing), Expo Router, monorepo/Metro wiring
+- [x] Backend mobile-auth support — refresh token returned in-body for `X-Client-Type: mobile`, stored in `expo-secure-store`
+- [x] Theme tokens (`packages/shared/constants/theme.ts`) + base UI primitives (GlassCard, PrimaryButton, ScreenBackground, TextField)
+- [x] Auth screens (login, signup, select-profile with PIN keypad, profile-setup) + guarded route tree (ProtectedRoute ported from web)
+- [x] Minimal Home screen — enrolled-subjects list + enroll modal, no roadmap visualisation
+- [x] Dictionary mini-app (search, trending, A-Z browse with pagination, recent searches, term detail, add-to-bucket, bucket management)
+- [ ] Roadmap UI (node path, lesson player, progress bars) — deferred
+- [ ] Quiz UI / `dnd_*` question types — deferred
+- [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
+- [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
+- [ ] Profile management screens
 
 ---
 
@@ -917,6 +955,13 @@ my-backpack/
 - Roadmap.nodes[] and RoadmapNode.items[] are the canonical ordering arrays
 - A Roadmap must have at least one of subjectId or miniAppId (enforced by pre-validate hook)
 - Subject enrollment (ProfileSubjectEnrollment) is the entry point for a learner starting a subject
+- Mobile requests send `X-Client-Type: mobile`; `/auth/login` then includes `refreshToken` in the
+  JSON body (alongside the existing httpOnly cookie) and `/auth/refresh` accepts `{ refreshToken }`
+  in the body ahead of the cookie — web's cookie-only flow is unchanged when the header is absent
+- `packages/shared/constants/theme.ts` is the canonical design-token source (colour/spacing/radius/
+  typography) for both apps/web and apps/mobile — keep it in sync with docs/design/brand-guide.md
+- In `apps/mobile`, never name a `src/` subfolder `app` — Expo Router silently prefers `src/app/`
+  over the project's real `app/` directory as its routes root whenever a `src/` folder exists
 
 ---
 
