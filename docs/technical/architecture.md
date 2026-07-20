@@ -63,10 +63,16 @@ apps/api/src/
 
 ### `apps/mobile` — The Mobile App
 
-- **Framework:** React Native + Expo
+- **Framework:** React Native + Expo, with Expo Router for file-based routing
 - **Language:** TypeScript (strict mode)
-- **State management:** Redux Toolkit
-- **Status:** Deferred until the web frontend is further along
+- **State management:** Redux Toolkit — same slice patterns as web where the
+  domain overlaps (auth, vocab), reading from `packages/shared` types
+- **Token storage:** `expo-secure-store` for the refresh token (native has no
+  persistent cookie jar); access/partial tokens stay in Redux memory only,
+  same as web
+- **Status:** Scaffold, auth, a minimal Home screen, and the Dictionary
+  mini-app are built (see `docs/technical/mobile-architecture.md`). Roadmap
+  UI, Quiz UI, and native OAuth are not yet started.
 
 ### `packages/shared` — Shared Types and Utilities
 
@@ -109,6 +115,16 @@ All communication between clients and the API happens over **HTTP with JSON**. T
 3. All protected API routes require the full JWT in the `Authorization: Bearer <token>` header
 4. Access token expires in 15 minutes; refresh token expires in 7 days
 5. Client uses the refresh token (cookie) to obtain a new access token silently
+
+**Mobile variant:** native apps have no persistent cookie jar, so this flow
+is adapted rather than replaced. A request carrying the header
+`X-Client-Type: mobile` gets the refresh token returned in the `/auth/login`
+JSON response body too (in addition to the cookie, which mobile simply
+ignores). The client stores that token in `expo-secure-store` (iOS Keychain
+/ Android Keystore) and reads it back on cold start to silently re-authenticate
+by calling `/auth/refresh` with `{ refreshToken }` in the body — `/auth/refresh`
+prefers a body-supplied token over the cookie when both are present. Web's
+behaviour is unchanged when the header is absent.
 
 ### API URL Structure
 
@@ -192,4 +208,4 @@ The following environment variables are required to run the API. Values are neve
 
 ---
 
-*Last updated: June 2026*
+*Last updated: July 2026*

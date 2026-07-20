@@ -61,7 +61,26 @@ My Backpack's primary visual style is **glassmorphism**: a soft, translucent aes
 - Soft drop shadows — subtle elevation, not harsh
 - Slightly frosted glass effect — cards feel like they're floating over the background
 
-**Colour accent palette:** To be defined. The glassmorphism style naturally pairs well with soft, muted accent colours. Avoid saturated primary colours — they clash with the translucent aesthetic.
+**Colour accent palette:** Defined in code at
+`packages/shared/constants/theme.ts` — that file is the source of truth;
+update both together if either changes. The palette formalises what was
+already in de facto use across `apps/web` (violet/emerald/amber/rose),
+rather than inventing a new one:
+
+| Role | Light | Default | Dark |
+|---|---|---|---|
+| Background | — | `#fcfded` | — |
+| Primary (violet) | `#a78bfa` | `#8b5cf6` | `#7c3aed` |
+| Success (emerald) | `#d1fae5` | `#10b981` | `#047857` |
+| Warning (amber) | `#fef3c7` | `#f59e0b` | `#b45309` |
+| Error (rose) | `#ffe4e6` | `#f43f5e` | `#be123c` |
+
+Text uses a grey scale (`primary` `#1f2937`, `secondary` `#4b5563`, `muted`
+`#9ca3af`, `faint` `#d1d5db`), and glass surfaces use semi-transparent white
+at three opacities (soft/default/strong) plus a shared border tone — see
+`theme.ts` for exact values. The glassmorphism style naturally pairs well
+with soft, muted accent colours; avoid saturated primary colours, they clash
+with the translucent aesthetic.
 
 **Typography:**
 - Clean and readable — legibility is non-negotiable, especially for children
@@ -136,4 +155,4 @@ South African English is the primary written language of the interface. Key conv
 
 ---
 
-*Last updated: June 2026*
+*Last updated: July 2026*

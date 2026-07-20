@@ -274,6 +274,38 @@ alias fallback is added to `apps/mobile/tsconfig.json`:
 
 ---
 
+## Dictionary mini-app
+
+Ported component-for-component from `apps/web/src/pages/DictionaryPage/` —
+same API calls, same behaviour. `src/features/vocab/vocabSlice.ts` is a
+near-verbatim port (plain RTK + axios against `src/lib/api.ts`, nothing web-
+specific to change).
+
+**Pronunciation playback** uses `expo-audio`'s imperative `createAudioPlayer`
+(`src/lib/audio.ts`), not `expo-av` (deprecated) and not the `useAudioPlayer`
+hook (that hook is for a stable, known-ahead-of-time source; here the URL
+changes on every tap — search result, term detail, bucket entry — so each
+tap creates its own short-lived player and releases it via a
+`playbackStatusUpdate` listener once `didJustFinish` fires).
+
+**Gotcha: don't nest a paginating FlatList inside a ScrollView.** Web's
+`DictionaryBrowseList` owns its own scroll area alongside sibling sections
+(search, trending, alphabet picker, recent) stacked in a parent scroll
+container — normal for the web DOM. RN doesn't support that: a `FlatList`
+nested inside a `ScrollView` won't fire `onEndReached` correctly against the
+outer scroll position. The Dictionary home screen
+(`app/(app)/miniapp/[miniAppId]/index.tsx`) is instead built as a single
+top-level `FlatList` whose `data` is the browse results, with search/
+trending/alphabet-picker in `ListHeaderComponent` and recent-searches in
+`ListFooterComponent`. `DictionaryBrowseList.tsx` reflects this: it exports
+a `useDictionaryBrowse` data hook and a `BrowseResultRow` renderer rather
+than a self-contained scrolling component the way web's version is. Keep
+this in mind before adding another paginated list on mobile — reach for the
+same pattern (hook + row renderer plugged into the screen's own `FlatList`)
+rather than a nested scroll container.
+
+---
+
 ## Environment variables
 
 Expo auto-loads `EXPO_PUBLIC_`-prefixed variables from `.env` with no extra
@@ -317,4 +349,4 @@ mobile doesn't need this variable to function — noted here so it isn't
 
 ---
 
-*Last updated: 2026-07-19.*
+*Last updated: 2026-07-20.*
