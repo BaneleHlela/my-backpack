@@ -156,7 +156,7 @@ export default function HomeScreen() {
                         onPress={() =>
                           router.push({
                             pathname: '/(app)/miniapp/[miniAppId]',
-                            params: { miniAppId: app._id, name: app.name },
+                            params: { miniAppId: app._id, name: app.name, type: app.type },
                           })
                         }
                       >
