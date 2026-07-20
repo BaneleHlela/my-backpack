@@ -3,7 +3,7 @@
 // cookie jar — see docs/technical/mobile-architecture.md).
 import axios from 'axios';
 import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import type { AppStore } from '../app/store';
+import type { AppStore } from '../store/store';
 import { logout, setAccessToken } from '../features/auth/authSlice';
 
 interface RetryableRequest extends InternalAxiosRequestConfig {

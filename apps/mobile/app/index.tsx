@@ -1,35 +1,12 @@
-import { StyleSheet, Text, View } from 'react-native';
-import { colors, spacing, typography } from '@my-backpack/shared';
-import { GlassCard } from '../src/components/GlassCard';
-import { ScreenBackground } from '../src/components/ScreenBackground';
+import { Redirect } from 'expo-router';
+import { ProtectedRoute } from '../src/components/ProtectedRoute';
 
-// Phase 1 smoke-test placeholder, proving the scaffold/theme/primitives
-// compose correctly. Replaced by real auth-guard routing in Phase 3.
+// Reuses ProtectedRoute's branching (login / select-profile / profile-setup)
+// and only reaches the redirect below once fully authenticated and set up.
 export default function Index() {
   return (
-    <ScreenBackground style={styles.center}>
-      <GlassCard>
-        <Text style={styles.heading}>My Backpack</Text>
-        <Text style={styles.body}>Everything you need to learn, in one place.</Text>
-      </GlassCard>
-    </ScreenBackground>
+    <ProtectedRoute>
+      <Redirect href="/(app)/home" />
+    </ProtectedRoute>
   );
 }
-
-const styles = StyleSheet.create({
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  heading: {
-    fontSize: typography.headingLg,
-    fontWeight: '700',
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
-  },
-  body: {
-    fontSize: typography.body,
-    color: colors.text.secondary,
-  },
-});

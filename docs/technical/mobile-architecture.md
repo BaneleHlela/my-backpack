@@ -44,6 +44,17 @@ purely to attach different guard logic per layout — same purpose as web's
 `ProtectedRoute` wrapper, just expressed as a layout file instead of a
 component wrapper.
 
+**Gotcha: never name a `src/` subfolder `app`.** Expo Router silently
+prefers `src/app/` over the project-root `app/` as its routes directory
+whenever a `src/` folder exists — this is documented Expo Router behaviour,
+not a bug. The Redux store originally lived at `src/app/store.ts` (mirroring
+web's `apps/web/src/app/store.ts`), which meant `npx expo export` was
+routing against `src/app` instead of the real `app/` tree (visible as
+`Using src/app as the root directory for Expo Router` in the export log,
+and confirmed by a route-count mismatch between exports). Fixed by moving
+the store to `src/store/store.ts` — plain, but the one directory name to
+avoid under `src/` in an Expo Router project is `app`.
+
 ### Guard logic
 
 Ported from `apps/web/src/components/ProtectedRoute.tsx`'s three-state
