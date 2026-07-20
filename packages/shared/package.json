@@ -8,6 +8,7 @@
     "./types/account": "./types/account.ts",
     "./types/profile": "./types/profile.ts",
     "./types/auth": "./types/auth.ts",
-    "./constants/assets": "./constants/assets.ts"
+    "./constants/assets": "./constants/assets.ts",
+    "./constants/theme": "./constants/theme.ts"
   }
 }

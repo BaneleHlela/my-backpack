@@ -203,7 +203,7 @@ either client. No dark palette variant exists in `theme.ts`.
 ## Metro / monorepo wiring
 
 pnpm's hoisting is less aggressive than npm/yarn's, and `packages/shared` is
-a pnpm symlink — both need explicit Metro configuration to resolve inside a
+a pnpm symlink — this needs explicit Metro configuration to resolve inside a
 workspace:
 
 ```js
@@ -221,17 +221,30 @@ config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(monorepoRoot, 'node_modules'),
 ];
-config.resolver.unstable_enableSymlinks = true;
-config.resolver.disableHierarchicalLookup = true;
 
 module.exports = config;
 ```
 
 `watchFolders` includes the monorepo root so a change in `packages/shared`
-triggers a Metro reload, not just changes inside `apps/mobile`. This was
-checked against Expo's monorepo guide at implementation time
-(https://docs.expo.dev/guides/monorepos/) rather than assumed — that guide's
-recommended shape has changed across SDK releases.
+triggers a Metro reload, not just changes inside `apps/mobile`.
+
+**Do not set `resolver.unstable_enableSymlinks` or
+`resolver.disableHierarchicalLookup`.** Expo SDK 57's `expo/metro-config`
+already enables symlink support and hierarchical `node_modules` lookup by
+default — this was the opposite of what an earlier draft of this doc
+assumed, written against older guidance. Forcing
+`disableHierarchicalLookup: true` was tried and it broke resolution of
+transitive dependencies living inside pnpm's nested
+`.pnpm/<pkg>/node_modules` (concretely: `@expo/metro-runtime`'s own
+dependency on `whatwg-fetch` failed to resolve, even though the file existed
+on disk at the expected symlinked path) — `npx expo-doctor` flags both
+overrides for exactly this reason, and `npx expo export` reproduced the
+failure directly. Removing both fixed it; `expo export --platform android`
+now bundles cleanly (1241 modules, includes `packages/shared` resolved
+through its pnpm symlink) and `expo-doctor` reports 20/20 checks passing.
+Re-verify against https://docs.expo.dev/guides/monorepos/ if bumping SDK
+versions later — this guide's recommended shape has changed across
+releases before.
 
 If TypeScript can't resolve `@my-backpack/shared` through the same path
 `apps/web` uses (via `packages/shared/package.json`'s `exports` map), a path
