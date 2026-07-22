@@ -1,5 +1,5 @@
-// Top-level container for a learning path. Belongs to a subject, a miniApp, or both.
-// At least one of subjectId or miniAppId must be present (enforced by pre-validate hook).
+// A pure ordered container of nodes, referenced from Course.roadmapId. Doesn't carry any
+// subject/miniApp context itself — that lives on the Course that wraps it.
 // nodes[] is the canonical ordered list of nodes in this roadmap.
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
 
@@ -10,8 +10,6 @@ export interface IRoadmapNodeRef {
 
 export interface IRoadmapDocument extends Document {
   _id: Types.ObjectId;
-  subjectId?: Types.ObjectId;
-  miniAppId?: Types.ObjectId;
   title: string;
   description?: string;
   nodes: IRoadmapNodeRef[];
@@ -30,8 +28,6 @@ const roadmapNodeRefSchema = new Schema<IRoadmapNodeRef>(
 
 const roadmapSchema = new Schema<IRoadmapDocument>(
   {
-    subjectId: { type: Schema.Types.ObjectId, ref: 'Subject' },
-    miniAppId: { type: Schema.Types.ObjectId, ref: 'MiniApp' },
     title: { type: String, required: true },
     description: { type: String },
     nodes: { type: [roadmapNodeRefSchema], default: [] },
@@ -39,16 +35,6 @@ const roadmapSchema = new Schema<IRoadmapDocument>(
   },
   { timestamps: true }
 );
-
-// Either subjectId or miniAppId must be present.
-roadmapSchema.pre('validate', function () {
-  if (!this.subjectId && !this.miniAppId) {
-    throw new Error('Roadmap must belong to either a subjectId or a miniAppId');
-  }
-});
-
-roadmapSchema.index({ subjectId: 1 }, { sparse: true });
-roadmapSchema.index({ miniAppId: 1 }, { sparse: true });
 
 const Roadmap: Model<IRoadmapDocument> = mongoose.model<IRoadmapDocument>(
   'Roadmap',

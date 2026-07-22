@@ -8,7 +8,8 @@
     "start": "node dist/app.js",
     "seed": "ts-node src/seed/index.ts",
     "generate-questions": "ts-node src/scripts/generateQuestions.ts",
-    "cleanup-questions": "ts-node src/scripts/cleanupQuestions.ts"
+    "cleanup-questions": "ts-node src/scripts/cleanupQuestions.ts",
+    "migrate:course-roadmap-restructure": "ts-node src/seed/migrations/2026-07-course-roadmap-restructure.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",

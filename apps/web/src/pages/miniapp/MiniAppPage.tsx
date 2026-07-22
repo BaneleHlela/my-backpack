@@ -11,16 +11,14 @@ import BucketPage from '../BucketPage/BucketPage';
 import QuizPage from '../QuizPage/QuizPage';
 
 const TYPE_PLACEHOLDERS: Record<string, { emoji: string; label: string }> = {
-  roadmap: { emoji: '🗺️', label: 'Roadmap coming soon' },
   flashcards: { emoji: '🃏', label: 'Flashcards coming soon' },
   practice: { emoji: '✏️', label: 'Practice coming soon' },
 };
 
 export default function MiniAppPage() {
-  const { fieldSlug, subjectSlug, topicSlug, miniAppSlug } = useParams<{
+  const { fieldSlug, subjectSlug, miniAppSlug } = useParams<{
     fieldSlug: string;
     subjectSlug: string;
-    topicSlug: string;
     miniAppSlug: string;
   }>();
   const navigate = useNavigate();
@@ -31,27 +29,24 @@ export default function MiniAppPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!fieldSlug || !subjectSlug || !topicSlug || !miniAppSlug) return;
+    if (!fieldSlug || !subjectSlug || !miniAppSlug) return;
     setIsLoading(true);
     setError(null);
     axiosInstance
-      .get(
-        `/content/fields/${fieldSlug}/subjects/${subjectSlug}/topics/${topicSlug}/miniapps/${miniAppSlug}`
-      )
+      .get(`/content/fields/${fieldSlug}/subjects/${subjectSlug}/miniapps/${miniAppSlug}`)
       .then((res) => setBreadcrumb(res.data.data as MiniAppBreadcrumb))
       .catch((err: unknown) => {
         const e = err as { response?: { data?: { message?: string } } };
         setError(e.response?.data?.message ?? 'Failed to load mini-app');
       })
       .finally(() => setIsLoading(false));
-  }, [fieldSlug, subjectSlug, topicSlug, miniAppSlug]);
+  }, [fieldSlug, subjectSlug, miniAppSlug]);
 
   const miniApp = breadcrumb?.miniApp ?? null;
 
   const breadcrumbs = [
     { label: breadcrumb?.field.name ?? fieldSlug ?? '', href: '/dashboard' },
     { label: breadcrumb?.subject.name ?? subjectSlug ?? '', href: `/subject/${subjectSlug}` },
-    { label: breadcrumb?.topic.name ?? topicSlug ?? '', href: `/subject/${subjectSlug}` },
     { label: miniApp?.name ?? miniAppSlug ?? '', href: '#' },
   ].filter((b) => b.label);
 

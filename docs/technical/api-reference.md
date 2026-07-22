@@ -243,23 +243,31 @@ These endpoints browse the content hierarchy. No learning data — just structur
 
 ---
 
-### `GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/topics`
+### `GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/courses`
 
 **Auth:** requireProfile
 
-**Response:** All Topics within the specified Subject.
+**Response:** All Courses within the specified Subject, each with its Roadmap populated as `{ _id, title, description, nodeCount }` (node count only — not the full node list; fetch `GET /api/roadmap/course/:courseId` for full detail).
 
 ---
 
-### `GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/topics/:topicSlug/miniapps`
+### `GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/courses/:courseSlug`
 
 **Auth:** requireProfile
 
-**Response:** All MiniApps within the specified Topic, filtered by the profile's ageGroup.
+**Response:** A single Course document with `roadmapId` (summary) and `miniAppIds` (full MiniApp documents) populated.
 
 ---
 
-### `GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/topics/:topicSlug/miniapps/:miniAppSlug`
+### `GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/miniapps`
+
+**Auth:** requireProfile
+
+**Response:** All MiniApps within the specified Subject, filtered by the profile's ageGroup.
+
+---
+
+### `GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/miniapps/:miniAppSlug`
 
 **Auth:** requireProfile
 
@@ -456,19 +464,11 @@ A RoadmapNode contains an ordered, heterogeneous `items[]` — each item is eith
 See `docs/technical/data-models.md` for the full RoadmapNode/Lesson/ProfileRoadmapProgress
 field reference.
 
-### `GET /api/roadmap/:miniAppId`
+### `GET /api/roadmap/course/:courseId`
 
 **Auth:** requireProfile
 
-**Response:** The Roadmap for the specified mini-app, with all nodes (each with resolved `items[]`) and the current profile's progress (locked/unlocked/completed, stars, best score).
-
----
-
-### `GET /api/roadmap/subject/:subjectId`
-
-**Auth:** requireProfile
-
-Same response shape as above, looked up by subject instead of mini-app.
+**Response:** The Roadmap wrapped by the specified Course, with all nodes (each with resolved `items[]`) and the current profile's progress (locked/unlocked/completed, stars, best score). Resolved via `Course.findById(courseId)` → `course.roadmapId`.
 
 ---
 
@@ -560,4 +560,4 @@ Retries AI question generation for all terms with `aiGenerationStatus: 'failed'`
 
 ---
 
-*Last updated: June 2026*
+*Last updated: July 2026*

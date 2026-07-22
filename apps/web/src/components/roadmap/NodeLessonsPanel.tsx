@@ -30,6 +30,7 @@ export interface NodeForPanel {
 interface NodeLessonsPanelProps {
   node: NodeForPanel;
   subjectSlug: string;
+  courseSlug: string;
   onClose: () => void;
 }
 
@@ -38,15 +39,15 @@ const ITEM_TYPE_META: Record<NodeItemType, { label: string; classes: string }> =
   quiz: { label: 'Quiz', classes: 'bg-violet-100/80 text-violet-700' },
 };
 
-export default function NodeLessonsPanel({ node, subjectSlug, onClose }: NodeLessonsPanelProps) {
+export default function NodeLessonsPanel({ node, subjectSlug, courseSlug, onClose }: NodeLessonsPanelProps) {
   const navigate = useNavigate();
 
   const handleItemClick = (item: ItemForPanel) => {
     if (!item.isUnlocked) return;
     if (item.itemType === 'lesson') {
-      navigate(`/subject/${subjectSlug}/lesson/${item._id}`);
+      navigate(`/subject/${subjectSlug}/course/${courseSlug}/lesson/${item._id}`);
     } else {
-      navigate(`/subject/${subjectSlug}/node/${node._id}/quiz/${item._id}`);
+      navigate(`/subject/${subjectSlug}/course/${courseSlug}/node/${node._id}/quiz/${item._id}`);
     }
     onClose();
   };

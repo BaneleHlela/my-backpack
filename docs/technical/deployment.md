@@ -224,13 +224,44 @@ Free tier limit: 10,000 commands per day. This is sufficient for development and
 
 ### Production build (EAS Build)
 
-1. Install the EAS CLI: `npm install -g eas-cli`
-2. Log in: `eas login`
-3. Configure: `eas build:configure`
-4. Build for Android: `eas build --platform android`
-5. Build for iOS: `eas build --platform ios` (requires Apple Developer account)
+`apps/mobile/eas.json` is already configured with three build profiles:
 
-The free EAS tier has a monthly build limit. For development, Expo Go is sufficient.
+- **`base`** — not run directly; the other profiles extend it. Carries
+  `EXPO_PUBLIC_API_URL` pointed at the deployed production Render API
+  (`https://my-backpack.onrender.com/api`), baked into the build at build
+  time (EAS builds on Expo's servers, so it can't read the local `.env`).
+- **`preview`** — `android.buildType: "apk"`, `distribution: "internal"`.
+  This is the profile to use for a directly-installable `.apk` (sideload,
+  no Play Store needed).
+- **`production`** — stays the default `.aab` format Google Play requires
+  for store submission. Not usable for direct install until it's
+  store-submission-ready.
+
+To produce an installable APK:
+
+1. Install the EAS CLI: `npm install -g eas-cli`
+2. Log in: `eas login` (interactive — requires an Expo account)
+3. From `apps/mobile`: `eas build --platform android --profile preview`
+4. On the first build, EAS prompts interactively for an Android package
+   identifier (e.g. `com.yourcompany.mybackpack`) since `app.json` has no
+   `android.package` set yet — this is a real, effectively-permanent
+   product decision (relevant if this ever reaches the Play Store), so it
+   deliberately hasn't been defaulted in config. Answer it deliberately
+   when prompted.
+5. When the build finishes, EAS gives a download link (and a QR code) for
+   the `.apk` — install it directly on an Android device.
+
+If the deployed API URL ever changes, update it in `apps/mobile/.env`
+(local, untracked) and by hand in `apps/mobile/eas.json`'s `build.base.env`
+block — the two aren't linked automatically, since EAS Build runs on
+Expo's servers and never reads the local `.env` file.
+
+Build for iOS: `eas build --platform ios --profile preview` (requires an
+Apple Developer account).
+
+The free EAS tier includes 15 Android + 15 iOS builds per month. For
+day-to-day development, Expo Go remains sufficient and doesn't consume
+build quota.
 
 ---
 

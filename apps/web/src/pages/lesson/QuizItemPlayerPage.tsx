@@ -35,8 +35,9 @@ import QuizResults from '../../components/quiz/QuizResults';
 const AUTO_ADVANCE_DELAY_MS = 1800;
 
 export default function QuizItemPlayerPage() {
-  const { subjectSlug, nodeId, itemId } = useParams<{
+  const { subjectSlug, courseSlug, nodeId, itemId } = useParams<{
     subjectSlug: string;
+    courseSlug: string;
     nodeId: string;
     itemId: string;
   }>();
@@ -122,11 +123,13 @@ export default function QuizItemPlayerPage() {
     if (!itemCompletion?.itemCompleted) return;
     const timer = setTimeout(() => {
       if (itemCompletion.nextItemId && itemCompletion.nextItemType === 'lesson') {
-        navigate(`/subject/${subjectSlug}/lesson/${itemCompletion.nextItemId}`);
+        navigate(`/subject/${subjectSlug}/course/${courseSlug}/lesson/${itemCompletion.nextItemId}`);
       } else if (itemCompletion.nextItemId && itemCompletion.nextItemType === 'quiz') {
-        navigate(`/subject/${subjectSlug}/node/${nodeId}/quiz/${itemCompletion.nextItemId}`);
+        navigate(
+          `/subject/${subjectSlug}/course/${courseSlug}/node/${nodeId}/quiz/${itemCompletion.nextItemId}`
+        );
       } else {
-        navigate(`/subject/${subjectSlug}`);
+        navigate(`/subject/${subjectSlug}/course/${courseSlug}`);
       }
     }, AUTO_ADVANCE_DELAY_MS);
     return () => clearTimeout(timer);
@@ -179,7 +182,7 @@ export default function QuizItemPlayerPage() {
     : null;
 
   return (
-    <QuizPageShell onBack={() => navigate(`/subject/${subjectSlug}`)}>
+    <QuizPageShell onBack={() => navigate(`/subject/${subjectSlug}/course/${courseSlug}`)}>
       <AnimatePresence mode="wait">
         {(quiz.status === 'idle' || quiz.status === 'starting') && (
           <motion.div key="loading" className="flex justify-center py-16">
@@ -267,7 +270,7 @@ export default function QuizItemPlayerPage() {
               results={quiz.results}
               answeredQuestions={quiz.feedbackMode === 'end' ? quiz.answeredQuestions : undefined}
               onQuizAgain={handleQuizAgain}
-              onReturnToDictionary={() => navigate(`/subject/${subjectSlug}`)}
+              onReturnToDictionary={() => navigate(`/subject/${subjectSlug}/course/${courseSlug}`)}
               returnLabel="Back to roadmap"
             />
             {itemCompletion?.nodeCompleted && (

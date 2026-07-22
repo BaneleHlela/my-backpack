@@ -117,7 +117,7 @@ The vision is a system where:
 
 - **Learning is self-paced** — no one is held back by a class, and no one is pushed forward before they're ready
 - **Formal qualifications are earned by demonstrated mastery**, not by showing up on the right day
-- **Teachers are rewarded** for creating quality content that other schools and learners benefit from — a content marketplace where great teaching earns income
+- **Teachers are rewarded** for creating quality content that other schools and learners benefit from — a content marketplace where great teaching earns income (see `course-marketplace-vision.md` for how this plugs into the Course/Roadmap model)
 - **Languages like IsiZulu are respected** as full academic languages, not afterthoughts
 - **Children grow up expecting to learn at their own pace** — and never know anything different
 

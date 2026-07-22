@@ -4,8 +4,7 @@
 import { Types } from 'mongoose';
 import Question from '../../../models/apps/language/vocabulary/question.model';
 import Subject from '../../../models/core/subject.model';
-import Topic from '../../../models/core/topic.model';
-import MiniApp from '../../../models/core/miniApp.model';
+import Course from '../../../models/core/course.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Quiz from '../../../models/learning/quiz.model';
 import { IDraggable, IQuestionContent } from '../../../modules/question/question.types';
@@ -54,7 +53,7 @@ const assessmentTargets = [2, 4, 6, 8, 10];
 
 async function upsertCountingQuestion(
   data: CountingQuestionData,
-  mathMiniAppId: string,
+  mathCourseId: string,
   countingNodeId: string
 ): Promise<string> {
   const draggables: IDraggable[] = [
@@ -88,7 +87,7 @@ async function upsertCountingQuestion(
     { nodeId: countingNodeId, type: 'dnd_count', 'content.dropZones.0.requiredCount': data.target },
     {
       nodeId: countingNodeId,
-      miniAppId: mathMiniAppId,
+      miniAppId: mathCourseId,
       type: 'dnd_count',
       maxPoints: 4,
       pointsCanBePartial: false,
@@ -108,27 +107,26 @@ export async function seedCountingQuestions(nodeId: string, introLessonId: strin
   const subject = await Subject.findOne({ slug: 'foundation-phase-mathematics' });
   if (!subject) throw new Error('Foundation Phase Mathematics subject not found — run content seed first');
 
-  const topic = await Topic.findOne({ subjectId: subject._id, slug: 'number-sense' });
-  if (!topic) throw new Error('Number Sense topic not found — run content seed first');
+  // Term/Question/Quiz.miniAppId is scoped to the Number Sense Course's _id for roadmap-linked
+  // content (no MiniApp represents roadmaps anymore).
+  const numberSenseCourse = await Course.findOne({ subjectId: subject._id, slug: 'number-sense' });
+  if (!numberSenseCourse) throw new Error('Number Sense course not found — run the roadmap seeder first');
 
-  const mathMiniApp = await MiniApp.findOne({ topicId: topic._id, slug: 'roadmap' });
-  if (!mathMiniApp) throw new Error('Number Sense roadmap miniApp not found — run content seed first');
-
-  const mathMiniAppId = mathMiniApp._id.toString();
+  const mathCourseId = numberSenseCourse._id.toString();
   const countingNodeId = nodeId;
 
   const questionIdByTarget = new Map<number, string>();
   for (const data of countingData) {
-    questionIdByTarget.set(data.target, await upsertCountingQuestion(data, mathMiniAppId, countingNodeId));
+    questionIdByTarget.set(data.target, await upsertCountingQuestion(data, mathCourseId, countingNodeId));
   }
 
   const practiceQuestionIds = countingData.map((d) => questionIdByTarget.get(d.target)!);
 
   const practiceQuiz = await Quiz.findOneAndUpdate(
-    { miniAppId: mathMiniAppId, mode: 'fixed', title: 'Counting 1 to 10 Practice' },
+    { miniAppId: mathCourseId, mode: 'fixed', title: 'Counting 1 to 10 Practice' },
     {
-      miniAppId: mathMiniAppId,
-      sourceMiniAppIds: [mathMiniAppId],
+      miniAppId: mathCourseId,
+      sourceMiniAppIds: [mathCourseId],
       title: 'Counting 1 to 10 Practice',
       mode: 'fixed',
       questionIds: practiceQuestionIds,
@@ -145,10 +143,10 @@ export async function seedCountingQuestions(nodeId: string, introLessonId: strin
   const assessmentQuestionIds = assessmentTargets.map((t) => questionIdByTarget.get(t)!);
 
   const assessmentQuiz = await Quiz.findOneAndUpdate(
-    { miniAppId: mathMiniAppId, mode: 'fixed', title: 'Counting 1 to 10 Assessment' },
+    { miniAppId: mathCourseId, mode: 'fixed', title: 'Counting 1 to 10 Assessment' },
     {
-      miniAppId: mathMiniAppId,
-      sourceMiniAppIds: [mathMiniAppId],
+      miniAppId: mathCourseId,
+      sourceMiniAppIds: [mathCourseId],
       title: 'Counting 1 to 10 Assessment',
       mode: 'fixed',
       questionIds: assessmentQuestionIds,

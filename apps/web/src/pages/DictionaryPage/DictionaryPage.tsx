@@ -25,14 +25,13 @@ export default function DictionaryPage({ miniApp, subjectSlug }: DictionaryPageP
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
   const { browseLetter } = useSelector((state: RootState) => state.vocab);
-  const { fieldSlug, topicSlug, miniAppSlug, termId } = useParams<{
+  const { fieldSlug, miniAppSlug, termId } = useParams<{
     fieldSlug: string;
-    topicSlug: string;
     miniAppSlug: string;
     termId?: string;
   }>();
 
-  const miniAppBasePath = `/field/${fieldSlug}/subject/${subjectSlug}/topic/${topicSlug}/miniapp/${miniAppSlug}`;
+  const miniAppBasePath = `/field/${fieldSlug}/subject/${subjectSlug}/miniapp/${miniAppSlug}`;
   const goToTerm = (id: string) => navigate(`${miniAppBasePath}/term/${id}`);
 
   return (

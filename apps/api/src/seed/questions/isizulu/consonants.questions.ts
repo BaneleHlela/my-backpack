@@ -12,8 +12,7 @@ import Term from '../../../models/apps/language/vocabulary/term.model';
 import Definition from '../../../models/apps/language/vocabulary/definition.model';
 import Question from '../../../models/apps/language/vocabulary/question.model';
 import Subject from '../../../models/core/subject.model';
-import Topic from '../../../models/core/topic.model';
-import MiniApp from '../../../models/core/miniApp.model';
+import Course from '../../../models/core/course.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Quiz from '../../../models/learning/quiz.model';
 import { IBlank, IDraggable, IQuestionContent } from '../../../modules/question/question.types';
@@ -50,15 +49,15 @@ async function upsertSyllableQuestions(
   consonant: string,
   vowel: string,
   allSyllables: string[],
-  soundsMiniAppId: string
+  soundsCourseId: string
 ): Promise<{ mcqId: string; dndId: string }> {
   const syllable = `${consonant}${vowel}`;
 
   const term = await Term.findOneAndUpdate(
-    { miniAppId: soundsMiniAppId, word: syllable },
+    { miniAppId: soundsCourseId, word: syllable },
     {
       word: syllable,
-      miniAppId: soundsMiniAppId,
+      miniAppId: soundsCourseId,
       audioUrl: `sounds/isizulu/consonants/${syllable}.mp3`,
       source: 'manual',
       aiGenerationStatus: 'not_needed',
@@ -98,7 +97,7 @@ async function upsertSyllableQuestions(
     {
       termId: term._id,
       definitionId: definition._id,
-      miniAppId: soundsMiniAppId,
+      miniAppId: soundsCourseId,
       type: 'mcq_audio',
       maxPoints: 4,
       pointsCanBePartial: false,
@@ -140,7 +139,7 @@ async function upsertSyllableQuestions(
     {
       termId: term._id,
       definitionId: definition._id,
-      miniAppId: soundsMiniAppId,
+      miniAppId: soundsCourseId,
       type: 'dnd_build',
       maxPoints: 5,
       pointsCanBePartial: false,
@@ -160,13 +159,12 @@ export async function seedConsonantQuestions(nodeId: string, introLessonId: stri
   const subject = await Subject.findOne({ slug: 'isizulu-hl' });
   if (!subject) throw new Error('IsiZulu HL subject not found — run content seed first');
 
-  const topic = await Topic.findOne({ subjectId: subject._id, slug: 'sounds' });
-  if (!topic) throw new Error('Sounds topic not found — run content seed first');
+  // Term/Question/Quiz.miniAppId is scoped to the Sounds Course's _id for roadmap-linked
+  // content (no MiniApp represents roadmaps anymore).
+  const soundsCourse = await Course.findOne({ subjectId: subject._id, slug: 'sounds' });
+  if (!soundsCourse) throw new Error('Sounds course not found — run the roadmap seeder first');
 
-  const soundsMiniApp = await MiniApp.findOne({ topicId: topic._id, slug: 'roadmap' });
-  if (!soundsMiniApp) throw new Error('Sounds roadmap miniApp not found — run content seed first');
-
-  const soundsMiniAppId = soundsMiniApp._id.toString();
+  const soundsCourseId = soundsCourse._id.toString();
 
   const idsBySyllable = new Map<string, { mcqId: string; dndId: string }>();
   const practiceQuestionIds: string[] = [];
@@ -176,17 +174,17 @@ export async function seedConsonantQuestions(nodeId: string, introLessonId: stri
     const syllablesForConsonant = vowelsForConsonant.map((v) => `${c.letter}${v}`);
 
     for (const v of vowelsForConsonant) {
-      const ids = await upsertSyllableQuestions(c.letter, v, syllablesForConsonant, soundsMiniAppId);
+      const ids = await upsertSyllableQuestions(c.letter, v, syllablesForConsonant, soundsCourseId);
       idsBySyllable.set(`${c.letter}${v}`, ids);
       practiceQuestionIds.push(ids.mcqId, ids.dndId);
     }
   }
 
   const practiceQuiz = await Quiz.findOneAndUpdate(
-    { miniAppId: soundsMiniAppId, mode: 'fixed', title: 'IsiZulu Consonants Practice' },
+    { miniAppId: soundsCourseId, mode: 'fixed', title: 'IsiZulu Consonants Practice' },
     {
-      miniAppId: soundsMiniAppId,
-      sourceMiniAppIds: [soundsMiniAppId],
+      miniAppId: soundsCourseId,
+      sourceMiniAppIds: [soundsCourseId],
       title: 'IsiZulu Consonants Practice',
       mode: 'fixed',
       questionIds: practiceQuestionIds,
@@ -204,10 +202,10 @@ export async function seedConsonantQuestions(nodeId: string, introLessonId: stri
   });
 
   const assessmentQuiz = await Quiz.findOneAndUpdate(
-    { miniAppId: soundsMiniAppId, mode: 'fixed', title: 'IsiZulu Consonants Assessment' },
+    { miniAppId: soundsCourseId, mode: 'fixed', title: 'IsiZulu Consonants Assessment' },
     {
-      miniAppId: soundsMiniAppId,
-      sourceMiniAppIds: [soundsMiniAppId],
+      miniAppId: soundsCourseId,
+      sourceMiniAppIds: [soundsCourseId],
       title: 'IsiZulu Consonants Assessment',
       mode: 'fixed',
       questionIds: assessmentQuestionIds,

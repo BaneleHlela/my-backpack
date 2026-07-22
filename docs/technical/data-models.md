@@ -5,7 +5,7 @@ This document describes every Mongoose model in the My Backpack API. Models are 
 **Rule of thumb:**
 - Lives before learning starts → `models/core/`
 - Tracks learning but subject-agnostic → `models/learning/`
-- Specific to one mini-app's content → `models/apps/<field>/<subject>/<topic>/`
+- Specific to one mini-app's content → `models/apps/<field>/<subject>/<topic>/` (directory naming only — `Topic` is not a model)
 
 ---
 
@@ -104,44 +104,51 @@ These models represent the permanent structure of the platform: who the users ar
 
 ---
 
-### Topic
+### Course
 
-**Purpose:** A topic within a Subject. Groups related mini-apps.
+**Purpose:** A course within a Subject — the umbrella for a roadmap-based learning path (e.g. "Phonics", "Sounds", "Number Sense"). Replaces the old `Topic` + `MiniApp(type:'roadmap')` combination. Wraps exactly one Roadmap and can additionally surface existing MiniApps (e.g. Dictionary) as convenience links.
 
 **Key fields:**
 
 | Field | Type | Description |
 |---|---|---|
 | `subjectId` | ObjectId | Parent Subject |
-| `name` | String | Display name (e.g. "Vocabulary", "Sounds") |
-| `slug` | String | URL-safe identifier |
+| `name` | String | Display name (e.g. "Phonics") |
+| `slug` | String | URL-safe identifier, unique per subject |
 | `description` | String | Brief description |
+| `iconUrl` | String | Icon image URL |
+| `roadmapId` | ObjectId | The one Roadmap this course wraps |
+| `miniAppIds` | ObjectId[] | Optional convenience links to Subject-level MiniApps (e.g. Dictionary) |
+| `curriculumTags` | Array | `[{ curriculum: 'CAPS'\|'IEB'\|'Cambridge'\|'University'\|'Other', gradeLevel: string }]` |
+| `team` | Mixed (optional) | Reserved for the deferred multi-instructor/marketplace feature — no shape or behavior yet, see [docs/product/course-marketplace-vision.md](../product/course-marketplace-vision.md) |
+| `isActive` | Boolean | Whether this course is live |
 
-**Example:** Vocabulary, Sounds, Grammar, Number Sense
+**Business rules:**
+- A Subject can now have multiple Courses (e.g. a future subject could offer two competing courses for the same content) — this replaces the old `Roadmap.findOne({ subjectId })` "one roadmap per subject" assumption
+- `Term`/`Question`/`Quiz.miniAppId` for roadmap-linked content (vowels, consonants, CVC words, counting, drag-intro) is scoped to the owning **Course's `_id`**, not a MiniApp — there is no MiniApp document for roadmap content anymore. This is a deliberate reuse of the existing miniAppId-scoping mechanism, not a new field.
+- The one-time migration (`apps/api/src/seed/migrations/2026-07-course-roadmap-restructure.ts`) reused each legacy roadmap-type MiniApp's `_id` as the new Course's `_id`, so all pre-existing Term/Question/Quiz/QuizSession documents referencing that id keep resolving without a mass data migration
 
 ---
 
 ### MiniApp
 
-**Purpose:** A specific interactive application within a Topic. The leaf node of the content hierarchy.
+**Purpose:** A specific interactive application within a Subject. The leaf node of the content hierarchy (`Field → Subject → MiniApp`). Roadmap-based learning paths are no longer MiniApps — see Course above.
 
 **Key fields:**
 
 | Field | Type | Description |
 |---|---|---|
-| `topicId` | ObjectId | Parent Topic |
-| `name` | String | Display name (e.g. "Dictionary", "IsiZulu Sounds Roadmap") |
+| `subjectId` | ObjectId | Parent Subject |
+| `name` | String | Display name (e.g. "Dictionary") |
 | `slug` | String | URL-safe identifier |
-| `type` | Enum | `quiz` \| `roadmap` \| `dictionary` \| `flashcards` \| `practice` |
+| `type` | Enum | `quiz` \| `dictionary` \| `flashcards` \| `practice` |
 | `description` | String | Brief description |
 | `isActive` | Boolean | Whether this mini-app is live |
 
-**Business rules:** The `type` field tells the frontend which UI component to render. A `roadmap` mini-app renders the visual level-map UI. A `quiz` mini-app renders the session-based quiz UI.
+**Business rules:** The `type` field tells the frontend which UI component to render.
 
 **Seeded content:**
-- Language → English → Vocabulary → Dictionary (type: dictionary)
-- Language → English → Vocabulary → Quiz (type: quiz)
-- Language → IsiZulu Home Language → Sounds → Sounds Roadmap (type: roadmap)
+- Language → English → Dictionary (type: dictionary)
 
 ---
 
@@ -250,22 +257,22 @@ These models track what learners have done. They are subject-agnostic — the sa
 
 ### Roadmap
 
-**Purpose:** One per MiniApp of type `roadmap`. The container for the lesson path.
+**Purpose:** A pure ordered container of nodes, referenced from `Course.roadmapId`. Carries no subject/miniApp context of its own — that context lives on the Course that wraps it (a Roadmap no longer knows which subject it belongs to).
 
 **Key fields:**
 
 | Field | Type | Description |
 |---|---|---|
-| `miniAppId` | ObjectId | The MiniApp this roadmap belongs to |
 | `title` | String | Display title |
 | `description` | String | Brief description |
+| `nodes` | Array | `[{ nodeId, position }]` — canonical ordered list of nodes |
 | `isActive` | Boolean | Whether this roadmap is live |
 
 ---
 
 ### RoadmapNode
 
-**Purpose:** A single step on a roadmap path, containing an ordered list of heterogeneous items.
+**Purpose:** A single step on a roadmap path ("Topic" in the UI/dashboard vocabulary), containing an ordered list of heterogeneous items.
 
 **Key fields:**
 
@@ -273,12 +280,14 @@ These models track what learners have done. They are subject-agnostic — the sa
 |---|---|---|
 | `roadmapId` | ObjectId | The parent Roadmap |
 | `title` | String | Node title |
+| `slug` | String | URL-safe identifier, unique per roadmap |
 | `description` | String | Brief description |
 | `position` | Number | Display order in the roadmap |
 | `type` | Enum | `lesson` \| `checkpoint` \| `practice` |
 | `curriculumTags` | Array | `[{ curriculum: 'CAPS'\|'IEB'\|'Cambridge'\|'University'\|'Other', gradeLevel: string }]` |
 | `items` | Array | `[{ itemType, itemId, position, passingScore? }]` — canonical ordered list, replaces the old `lessons[]` |
 | `unlockRequires` | ObjectId[] | Node IDs that must be completed before this unlocks |
+| `linkedCourseIds` | ObjectId[] | Reserved for the deferred multi-provider-course feature — always empty today, no matching/selection logic built yet, see [docs/product/course-marketplace-vision.md](../product/course-marketplace-vision.md) |
 | `rewards` | Object | `{ xp, peanuts, badge? }` |
 | `isActive` | Boolean | Whether this node is live |
 
@@ -337,7 +346,7 @@ A `'quiz'` item references a `Quiz` document **directly** — there is no wrappe
 |---|---|---|
 | `profileId` | ObjectId | The learner |
 | `roadmapId` | ObjectId | The roadmap being tracked |
-| `miniAppId` | ObjectId | Denormalised for fast queries |
+| `miniAppId` | ObjectId (optional) | Vestigial — no longer set for new progress documents now that Roadmap has no miniAppId of its own; kept on the schema only for backwards compatibility |
 | `nodeProgress` | Map | `nodeId → { status, stars, attempts, bestScore, lastAttemptAt, completedAt, itemProgress }` |
 | `currentNodeId` | ObjectId | The node currently in progress |
 | `totalStars` | Number | Accumulated stars across all completed nodes |
@@ -385,6 +394,7 @@ These models are specific to the vocabulary mini-app and live in `models/apps/la
 - Sound "terms" (vowels, syllables) are also Term documents — they plug into the same adaptive learning system
 - `aiGenerationStatus: 'not_needed'` is set when a term has no definitions that require AI questions
 - `word` is unique **per `miniAppId`** (compound index), not globally — the same word (e.g. a vowel letter) can exist as a Term under multiple mini-apps independently (isiZulu Sounds and English Phonics both seed Terms for 'a'-'u'). Always include `miniAppId` in the query filter when upserting a Term.
+- For roadmap-linked content (vowels, consonants, CVC words, counting, drag-intro), `miniAppId` holds the owning **Course's `_id`**, not a MiniApp document's — see Course above.
 
 ---
 
@@ -490,4 +500,4 @@ All question data lives inside `content`. Always cast to `IQuestionContent` imme
 
 ---
 
-*Last updated: June 2026*
+*Last updated: July 2026*

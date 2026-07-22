@@ -9,7 +9,7 @@ import { PrimaryButton } from '../../src/components/PrimaryButton';
 import {
   fetchEnrolledSubjects,
   fetchAvailableSubjects,
-  fetchStandaloneMiniApps,
+  fetchSubjectMiniApps,
   enrollInSubject,
 } from '../../src/features/content/contentSlice';
 import type { AppDispatch, RootState } from '../../src/store/store';
@@ -19,7 +19,6 @@ const MINI_APP_EMOJI: Record<IMiniApp['type'], string> = {
   quiz: '🧠',
   flashcards: '🃏',
   practice: '▶',
-  roadmap: '🗺️',
 };
 
 function AddSubjectsModal({ onClose }: { onClose: () => void }) {
@@ -93,7 +92,7 @@ function AddSubjectsModal({ onClose }: { onClose: () => void }) {
 export default function HomeScreen() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
-  const { enrolledSubjects, standaloneTopicsBySubject, isLoading } = useSelector(
+  const { enrolledSubjects, miniAppsBySubject, isLoading } = useSelector(
     (state: RootState) => state.content
   );
   const [showAddSubjects, setShowAddSubjects] = useState(false);
@@ -106,7 +105,7 @@ export default function HomeScreen() {
     if (!enrolledSubjects) return;
     enrolledSubjects.fields.forEach(({ field, subjects }) => {
       subjects.forEach(({ subject }) => {
-        dispatch(fetchStandaloneMiniApps({ fieldSlug: field.slug, subjectSlug: subject.slug, subjectId: subject._id }));
+        dispatch(fetchSubjectMiniApps({ fieldSlug: field.slug, subjectSlug: subject.slug, subjectId: subject._id }));
       });
     });
   }, [enrolledSubjects, dispatch]);
@@ -137,36 +136,31 @@ export default function HomeScreen() {
     <ScrollView contentContainerStyle={styles.listContent}>
       {enrolledSubjects?.fields.map(({ subjects }) =>
         subjects.map(({ subject }) => {
-          const topics = standaloneTopicsBySubject[subject._id];
+          const miniApps = miniAppsBySubject[subject._id];
           return (
             <View key={subject._id} style={styles.subjectSection}>
               <Text style={styles.subjectHeading}>{subject.name}</Text>
 
-              {topics === undefined ? (
+              {miniApps === undefined ? (
                 <ActivityIndicator color={colors.primary.DEFAULT} style={styles.subjectLoading} />
-              ) : topics.length === 0 ? (
+              ) : miniApps.length === 0 ? (
                 <Text style={styles.comingSoon}>More coming soon.</Text>
               ) : (
-                topics.map(({ topic, miniApps }) => (
-                  <View key={topic._id} style={styles.topicGroup}>
-                    <Text style={styles.topicLabel}>{topic.name}</Text>
-                    {miniApps.map((app) => (
-                      <Pressable
-                        key={app._id}
-                        onPress={() =>
-                          router.push({
-                            pathname: '/(app)/miniapp/[miniAppId]',
-                            params: { miniAppId: app._id, name: app.name, type: app.type },
-                          })
-                        }
-                      >
-                        <GlassCard style={styles.miniAppCard}>
-                          <Text style={styles.miniAppEmoji}>{MINI_APP_EMOJI[app.type]}</Text>
-                          <Text style={styles.miniAppName}>{app.name}</Text>
-                        </GlassCard>
-                      </Pressable>
-                    ))}
-                  </View>
+                miniApps.map((app) => (
+                  <Pressable
+                    key={app._id}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/(app)/miniapp/[miniAppId]',
+                        params: { miniAppId: app._id, name: app.name, type: app.type },
+                      })
+                    }
+                  >
+                    <GlassCard style={styles.miniAppCard}>
+                      <Text style={styles.miniAppEmoji}>{MINI_APP_EMOJI[app.type]}</Text>
+                      <Text style={styles.miniAppName}>{app.name}</Text>
+                    </GlassCard>
+                  </Pressable>
                 ))
               )}
             </View>
@@ -229,16 +223,6 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.text.muted,
     fontStyle: 'italic',
-  },
-  topicGroup: {
-    gap: spacing.xs,
-  },
-  topicLabel: {
-    fontSize: typography.small,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    color: colors.text.muted,
   },
   miniAppCard: {
     flexDirection: 'row',

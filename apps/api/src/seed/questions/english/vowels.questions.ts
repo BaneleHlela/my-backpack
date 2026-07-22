@@ -18,8 +18,7 @@ import Term from '../../../models/apps/language/vocabulary/term.model';
 import Definition from '../../../models/apps/language/vocabulary/definition.model';
 import Question from '../../../models/apps/language/vocabulary/question.model';
 import Subject from '../../../models/core/subject.model';
-import Topic from '../../../models/core/topic.model';
-import MiniApp from '../../../models/core/miniApp.model';
+import Course from '../../../models/core/course.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Quiz from '../../../models/learning/quiz.model';
 import { IDraggable, IQuestionContent } from '../../../modules/question/question.types';
@@ -135,26 +134,23 @@ function pickVowelIndices(targetIndex: number, count: 1 | 2 | 5, occurrence: 1 |
 export async function seedEnglishVowelQuestions(nodeId: string, introLessonId: string): Promise<void> {
   console.log('Seeding English vowel questions...');
 
-  // Resolve via the content hierarchy rather than MiniApp.findOne({ slug: 'roadmap' }) alone —
-  // 'roadmap' is not globally unique, other subjects (e.g. isiZulu, math) also have a 'roadmap' miniApp.
+  // Resolve via the Phonics Course — Term/Question/Quiz.miniAppId is scoped to the Course's
+  // _id for roadmap-linked content (no MiniApp represents roadmaps anymore).
   const subject = await Subject.findOne({ slug: 'english' });
   if (!subject) throw new Error('English subject not found — run content seed first');
 
-  const topic = await Topic.findOne({ subjectId: subject._id, slug: 'phonics' });
-  if (!topic) throw new Error('Phonics topic not found — run content seed first');
-
-  const phonicsMiniApp = await MiniApp.findOne({ topicId: topic._id, slug: 'roadmap' });
-  if (!phonicsMiniApp) throw new Error('Phonics roadmap miniApp not found — run content seed first');
+  const phonicsCourse = await Course.findOne({ subjectId: subject._id, slug: 'phonics' });
+  if (!phonicsCourse) throw new Error('Phonics course not found — run the roadmap seeder first');
 
   // Superseded by the 6 quiz-variant dnd_single questions below (not extended) — the old
   // single dnd_single-per-vowel question (no seedKey, one per Term) and its Quiz are deleted
   // rather than left orphaned, matching the seed system's idempotent-upsert philosophy.
   await Question.deleteMany({
-    miniAppId: phonicsMiniApp._id,
+    miniAppId: phonicsCourse._id,
     type: 'dnd_single',
     seedKey: { $exists: false },
   });
-  await Quiz.deleteMany({ miniAppId: phonicsMiniApp._id, title: 'English Vowels Practice' });
+  await Quiz.deleteMany({ miniAppId: phonicsCourse._id, title: 'English Vowels Practice' });
 
   const allOptions = vowelData.map((v) => v.word);
 
@@ -163,10 +159,10 @@ export async function seedEnglishVowelQuestions(nodeId: string, introLessonId: s
 
   for (const v of vowelData) {
     const term = await Term.findOneAndUpdate(
-      { miniAppId: phonicsMiniApp._id, word: v.word },
+      { miniAppId: phonicsCourse._id, word: v.word },
       {
         word: v.word,
-        miniAppId: phonicsMiniApp._id,
+        miniAppId: phonicsCourse._id,
         phonetic: v.phonetic,
         audioUrl: v.audioUrl,
         source: 'manual',
@@ -213,7 +209,7 @@ export async function seedEnglishVowelQuestions(nodeId: string, introLessonId: s
       {
         termId: term._id,
         definitionId: definition._id,
-        miniAppId: phonicsMiniApp._id,
+        miniAppId: phonicsCourse._id,
         type: 'mcq_audio',
         maxPoints: 4,
         pointsCanBePartial: false,
@@ -286,7 +282,7 @@ export async function seedEnglishVowelQuestions(nodeId: string, introLessonId: s
           seedKey,
           termId,
           definitionId,
-          miniAppId: phonicsMiniApp._id,
+          miniAppId: phonicsCourse._id,
           type: 'dnd_single',
           maxPoints: 4,
           pointsCanBePartial: false,
@@ -301,10 +297,10 @@ export async function seedEnglishVowelQuestions(nodeId: string, introLessonId: s
 
     const quizTitle = `English Vowels — ${variant.quizTitle}`;
     const quiz = await Quiz.findOneAndUpdate(
-      { miniAppId: phonicsMiniApp._id, mode: 'fixed', title: quizTitle },
+      { miniAppId: phonicsCourse._id, mode: 'fixed', title: quizTitle },
       {
-        miniAppId: phonicsMiniApp._id,
-        sourceMiniAppIds: [phonicsMiniApp._id],
+        miniAppId: phonicsCourse._id,
+        sourceMiniAppIds: [phonicsCourse._id],
         title: quizTitle,
         mode: 'fixed',
         questionIds,

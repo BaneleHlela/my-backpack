@@ -3,8 +3,7 @@
 import { Router, IRouter } from 'express';
 import { requireProfile } from '../auth/auth.middleware';
 import {
-  getRoadmapByMiniAppHandler,
-  getRoadmapBySubjectHandler,
+  getRoadmapByCourseHandler,
   getNodeHandler,
   getLessonHandler,
   markLessonStudyViewedHandler,
@@ -14,11 +13,8 @@ import {
 
 const router: IRouter = Router();
 
-// GET /api/roadmap/:miniAppId — roadmap by miniApp with nodes, items, and profile progress
-router.get('/:miniAppId', requireProfile, getRoadmapByMiniAppHandler);
-
-// GET /api/roadmap/subject/:subjectId — roadmap by subject with nodes, items, and progress
-router.get('/subject/:subjectId', requireProfile, getRoadmapBySubjectHandler);
+// GET /api/roadmap/course/:courseId — roadmap by course with nodes, items, and profile progress
+router.get('/course/:courseId', requireProfile, getRoadmapByCourseHandler);
 
 // GET /api/roadmap/node/:nodeId — node details with ordered items and progress
 router.get('/node/:nodeId', requireProfile, getNodeHandler);

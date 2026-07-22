@@ -96,13 +96,12 @@ export default function BucketPage({ miniApp, subjectSlug }: BucketPageProps) {
   );
   const [sortBy, setSortBy] = useState<SortOption>('recent');
 
-  const { fieldSlug, topicSlug, miniAppSlug } = useParams<{
+  const { fieldSlug, miniAppSlug } = useParams<{
     fieldSlug: string;
-    topicSlug: string;
     miniAppSlug: string;
   }>();
 
-  const miniAppBasePath = `/field/${fieldSlug}/subject/${subjectSlug}/topic/${topicSlug}/miniapp/${miniAppSlug}`;
+  const miniAppBasePath = `/field/${fieldSlug}/subject/${subjectSlug}/miniapp/${miniAppSlug}`;
   const goToTerm = (termId: string) => navigate(`${miniAppBasePath}/term/${termId}`);
 
   useEffect(() => {

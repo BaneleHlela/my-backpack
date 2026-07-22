@@ -1,23 +1,22 @@
-// Seeds the "General Dictionary Quiz" — the default, user-adjustable, dynamic Quiz for the
-// English Vocabulary Quiz mini-app. Its content pool (sourceMiniAppIds) points at the
-// Dictionary mini-app, since that's where Terms/BucketEntries/Questions actually get created
-// when a profile searches and adds a word. Idempotent — re-running updates the existing record.
+// Seeds the "General Dictionary Quiz" — the default, user-adjustable, dynamic Quiz for
+// English vocabulary. Its content pool (sourceMiniAppIds) points at the Dictionary mini-app,
+// since that's where Terms/BucketEntries/Questions actually get created when a profile
+// searches and adds a word. The standalone Vocabulary "Quiz" mini-app was removed — quiz
+// access now folds into the Dictionary UI, so miniAppId also points directly at Dictionary.
+// Idempotent — re-running updates the existing record.
 import Quiz from '../../models/learning/quiz.model';
 
 export interface QuizzesSeedResult {
   generalQuizId: string;
 }
 
-export async function seedGeneralDictionaryQuiz(
-  quizMiniAppId: string,
-  dictionaryMiniAppId: string
-): Promise<QuizzesSeedResult> {
+export async function seedGeneralDictionaryQuiz(dictionaryMiniAppId: string): Promise<QuizzesSeedResult> {
   console.log('Seeding quizzes...');
 
   const quiz = await Quiz.findOneAndUpdate(
-    { miniAppId: quizMiniAppId, isDefault: true },
+    { miniAppId: dictionaryMiniAppId, isDefault: true },
     {
-      miniAppId: quizMiniAppId,
+      miniAppId: dictionaryMiniAppId,
       sourceMiniAppIds: [dictionaryMiniAppId],
       title: 'General Dictionary Quiz',
       mode: 'dynamic',

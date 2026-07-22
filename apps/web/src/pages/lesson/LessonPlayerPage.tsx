@@ -18,7 +18,11 @@ import SteppedNotesViewer from '../../components/lesson/SteppedNotesViewer';
 const AUTO_ADVANCE_DELAY_MS = 1500;
 
 export default function LessonPlayerPage() {
-  const { subjectSlug, lessonId } = useParams<{ subjectSlug: string; lessonId: string }>();
+  const { subjectSlug, courseSlug, lessonId } = useParams<{
+    subjectSlug: string;
+    courseSlug: string;
+    lessonId: string;
+  }>();
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { currentLesson, isLoading } = useSelector((state: RootState) => state.roadmap);
@@ -40,11 +44,13 @@ export default function LessonPlayerPage() {
       setNextItem(result);
       setTimeout(() => {
         if (result.nextItemId && result.nextItemType === 'lesson') {
-          navigate(`/subject/${subjectSlug}/lesson/${result.nextItemId}`);
+          navigate(`/subject/${subjectSlug}/course/${courseSlug}/lesson/${result.nextItemId}`);
         } else if (result.nextItemId && result.nextItemType === 'quiz') {
-          navigate(`/subject/${subjectSlug}/node/${currentLesson.nodeId}/quiz/${result.nextItemId}`);
+          navigate(
+            `/subject/${subjectSlug}/course/${courseSlug}/node/${currentLesson.nodeId}/quiz/${result.nextItemId}`
+          );
         } else {
-          navigate(`/subject/${subjectSlug}`);
+          navigate(`/subject/${subjectSlug}/course/${courseSlug}`);
         }
       }, AUTO_ADVANCE_DELAY_MS);
     } catch {
@@ -69,7 +75,7 @@ export default function LessonPlayerPage() {
       {/* Back */}
       <button
         type="button"
-        onClick={() => navigate(`/subject/${subjectSlug}`)}
+        onClick={() => navigate(`/subject/${subjectSlug}/course/${courseSlug}`)}
         className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 mb-4 transition-colors"
       >
         <ChevronLeft className="w-4 h-4" />

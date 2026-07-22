@@ -9,6 +9,7 @@ interface RoadmapPathProps {
   roadmap: RoadmapWithProgress;
   ageGroup: AgeGroup;
   subjectSlug: string;
+  courseSlug: string;
 }
 
 const NODE_SPACING = 140;
@@ -63,7 +64,7 @@ function toNodeForPanel(node: RoadmapWithProgress['nodes'][number]): NodeForPane
   };
 }
 
-export default function RoadmapPath({ roadmap, ageGroup, subjectSlug }: RoadmapPathProps) {
+export default function RoadmapPath({ roadmap, ageGroup, subjectSlug, courseSlug }: RoadmapPathProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [selectedNode, setSelectedNode] = useState<NodeForPanel | null>(null);
@@ -143,6 +144,7 @@ export default function RoadmapPath({ roadmap, ageGroup, subjectSlug }: RoadmapP
           <NodeLessonsPanel
             node={selectedNode}
             subjectSlug={subjectSlug}
+            courseSlug={courseSlug}
             onClose={() => setSelectedNode(null)}
           />
         )}
@@ -182,6 +184,7 @@ export default function RoadmapPath({ roadmap, ageGroup, subjectSlug }: RoadmapP
         <NodeLessonsPanel
           node={selectedNode}
           subjectSlug={subjectSlug}
+          courseSlug={courseSlug}
           onClose={() => setSelectedNode(null)}
         />
       )}

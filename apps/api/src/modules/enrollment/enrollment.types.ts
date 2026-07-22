@@ -2,7 +2,7 @@
 import { Document } from 'mongoose';
 import { IProfileSubjectEnrollmentDocument } from '../../models/learning/profileSubjectEnrollment.model';
 import { ISubjectDocument } from '../../models/core/subject.model';
-import { ITopicDocument } from '../../models/core/topic.model';
+import { ICourseDocument } from '../../models/core/course.model';
 import { IMiniAppDocument } from '../../models/core/miniApp.model';
 
 // Mongoose find() returns Document & IProfileSubjectEnrollmentDocument — use a loose type here.
@@ -23,13 +23,8 @@ export interface EnrolledSubjectsByField {
   }[];
 }
 
-export interface StandaloneTopic {
-  topic: ITopicDocument;
-  miniApps: IMiniAppDocument[];
-}
-
 export interface SubjectProgressResult {
   enrollment: IProfileSubjectEnrollmentDocument;
-  roadmapId: string | null;
-  standaloneTopics: StandaloneTopic[];
+  courses: { course: ICourseDocument; roadmapId: string }[];
+  miniApps: IMiniAppDocument[];
 }

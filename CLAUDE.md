@@ -76,7 +76,8 @@ Never push directly to main. Always merge develop → main via PR.
 | MongoDB Atlas | Database (512MB free) |
 | Upstash | Redis cache (10,000 commands/day free) |
 | Google Cloud Storage | Asset storage (5GB free) |
-| Expo Go | Mobile testing |
+| Expo Go | Mobile dev testing (scan QR, no build needed) |
+| EAS Build | Installable Android/iOS builds (free tier: 15 Android + 15 iOS builds/month) |
 
 ---
 
@@ -132,35 +133,47 @@ adult:
 ```
 Field           (e.g. Language, Mathematics, Engineering)
   Subject       (e.g. English, IsiZulu Home Language, Calculus)
-    Topic       (e.g. Vocabulary, Sounds, Grammar, Differentiation)
-      MiniApp   (e.g. Dictionary, Quiz, Roadmap, Flashcards)
+    Course[]    (e.g. Phonics, Sounds, Number Sense) — wraps exactly one Roadmap
+      Roadmap → nodes[] → RoadmapNode ("Topic" in the UI/dashboard vocabulary)
+                             → items[] (Lesson | Quiz)
+    MiniApp[]   (e.g. Dictionary, Flashcards) — reparented directly under Subject
 ```
+
+`Topic` was removed entirely (superseded July 2026 — see
+[docs/content/course-roadmap-restructure-design.md](docs/content/course-roadmap-restructure-design.md)).
+Its two jobs split cleanly: grouping MiniApps under a Subject is now just
+`MiniApp.subjectId`, and the "individual step" meaning kept the name, applied to what was
+already `RoadmapNode` (now with its own `slug`). A Subject can have multiple Courses — each
+wraps one Roadmap and can optionally surface existing MiniApps (e.g. Dictionary) as
+convenience links via `Course.miniAppIds`. `Course.team` and `RoadmapNode.linkedCourseIds`
+are reserved fields for a deferred multi-provider-course/marketplace feature — see
+[docs/product/course-marketplace-vision.md](docs/product/course-marketplace-vision.md); both
+are unused (always empty) today.
 
 ### Rule of thumb for placing models
 - Exists before any learning starts → `models/core/`
 - Tracks learning but subject-agnostic → `models/learning/`
-- Specific to one mini-app's content → `models/apps/field/subject/topic/`
+- Specific to one mini-app's content → `models/apps/field/subject/topic/` (directory naming
+  only — `Topic` is not a model)
 
 ### MiniApp types
-`'quiz' | 'roadmap' | 'dictionary' | 'flashcards' | 'practice'`
-Used by frontend to know which UI to render.
+`'quiz' | 'dictionary' | 'flashcards' | 'practice'`
+Used by frontend to know which UI to render. (`'roadmap'` was removed — Course now owns that job.)
 
 ### Seeded hierarchy
 ```
 Language (field)
   ├── English (subject)
-  │     ├── Vocabulary (topic)
-  │     │     ├── Dictionary (miniApp, type: dictionary)
-  │     │     └── Quiz (miniApp, type: quiz)
-  │     └── Phonics (topic)
-  │           └── Phonics Roadmap (miniApp, type: roadmap)
+  │     ├── Dictionary (miniApp, type: dictionary)
+  │     └── Phonics (course, slug: phonics)
+  │           └── Roadmap: "English Phonics"
   │                 ├── Node 1: Vowel Sounds — 7 items: 1 lesson (video intro) + 6 quiz
   │                 │     items escalating distractor count (1→2→5) and audio-on-tap
   │                 │     (60 dnd_single questions + 5 mcq_audio kept for reuse)
   │                 └── Node 2: Three-Letter Words — 3 items: 1 lesson + 2 quiz items (22 questions: mcq_audio + dnd_build × 11 CVC words)
   └── IsiZulu Home Language (subject)
-        └── Sounds (topic)
-              └── Sounds Roadmap (miniApp, type: roadmap)
+        └── Sounds (course, slug: sounds)
+              └── Roadmap: "IsiZulu Sounds"
                     ├── Node 1: Izinhlamvu Zokuvuma — Vowels — 7 items: 1 lesson (video
                     │     intro) + 6 quiz items escalating distractor count (1→2→5) and
                     │     audio-on-tap (60 dnd_single questions + 5 mcq_audio kept for reuse)
@@ -168,11 +181,17 @@ Language (field)
 
 Foundation Phase Mathematics (field)  [note: actual field slug — verify via DB if querying]
   └── Foundation Phase Mathematics (subject)
-        └── Number Sense (topic)
-              └── Number Sense Roadmap (miniApp, type: roadmap)
+        └── Number Sense (course, slug: number-sense)
+              └── Roadmap: "Number Sense Roadmap"
                     ├── Node 1: Let's Learn to Drag! — 3 items: 1 lesson + 2 quiz items (8 practice + 5 assessment dnd_single questions)
                     └── Node 2: Counting 1 to 10 — 3 items: 1 lesson + 2 quiz items (10 dnd_count questions)
 ```
+
+**Note on `miniAppId` for roadmap-linked content:** `Term`/`Question`/`Quiz.miniAppId` for the
+vowels/consonants/CVC/counting/drag-intro content above is scoped to the owning **Course's
+`_id`**, not a MiniApp document — there's no MiniApp for roadmap content anymore. The one-time
+migration reused each legacy roadmap-type MiniApp's `_id` as the new Course's `_id` so existing
+Term/Question/Quiz/QuizSession documents keep resolving without a mass data migration.
 
 ---
 
@@ -185,7 +204,7 @@ apps/api/src/models/
 │   ├── profile.model.ts
 │   ├── field.model.ts
 │   ├── subject.model.ts
-│   ├── topic.model.ts
+│   ├── course.model.ts
 │   └── miniApp.model.ts
 ├── learning/
 │   ├── learningRecord.model.ts
@@ -224,6 +243,17 @@ Education levels (SA system):
 `grade-r | grade-1 ... grade-12 | certificate | diploma | bachelors | 
 honours | masters | phd | professional | other`
 
+### Course
+A course within a Subject — the umbrella for a roadmap-based learning path (e.g. "Phonics",
+"Sounds", "Number Sense"). Wraps exactly one Roadmap. Fields: subjectId, name, slug
+(unique per subjectId), description, iconUrl, roadmapId, miniAppIds[] (optional convenience
+links, e.g. Dictionary), curriculumTags[], team (reserved, no shape yet — see
+[docs/product/course-marketplace-vision.md](docs/product/course-marketplace-vision.md)),
+isActive.
+
+A Subject can have multiple Courses — replaces the old `Roadmap.findOne({ subjectId })`
+"one roadmap per subject" assumption; fetching a subject's courses is `Course.find({ subjectId })`.
+
 ### Term
 Shared across all users. Fields: word, miniAppId, phonetic, origin, 
 audioUrl, source ('dictionary_api' | 'manual'), aiGenerationStatus 
@@ -234,7 +264,9 @@ Note: Sound/phonics "terms" (vowels, consonant syllables, CVC words) are
 Term documents within their respective MiniApps — they plug into the 
 existing adaptive learning system. Term.word is unique **per miniAppId** 
 (compound index), not globally — the same letter 'a' can exist as a Term 
-for isiZulu Sounds and for English Phonics independently.
+for isiZulu Sounds and for English Phonics independently. For this
+roadmap-linked content, `miniAppId` holds the owning **Course's `_id`**, not a MiniApp
+document's — see Course above.
 
 ### Definition
 One term can have multiple definitions. Fields: termId, partOfSpeech, 
@@ -412,19 +444,20 @@ steps? [{ title?, content }] (steps — a read-only stepped/sliding-notes
 viewer, not a quiz) }.
 
 ### Roadmap
-Belongs to a subject, a miniApp, or both. At least one of subjectId or 
-miniAppId must be present (enforced by pre-validate hook).
-Fields: subjectId (optional), miniAppId (optional), title, description,
-nodes [{ nodeId, position }] — canonical ordered list of nodes, isActive.
+A pure ordered container of nodes, referenced from `Course.roadmapId`. Carries no
+subject/miniApp context of its own — that lives on the Course that wraps it.
+Fields: title, description, nodes [{ nodeId, position }] — canonical ordered list of nodes,
+isActive.
 
-`nodes[]` is the source of truth for node ordering. Sparse indexes on 
-both subjectId and miniAppId.
+`nodes[]` is the source of truth for node ordering.
 
 ### RoadmapNode
-Fields: roadmapId, title, description, position, type 
+A single step on a roadmap path — "Topic" in the UI/dashboard vocabulary. Fields: roadmapId,
+title, slug (unique per roadmapId), description, position, type
 ('lesson' | 'checkpoint' | 'practice'), curriculumTags 
 [{ curriculum, gradeLevel }], items [{ itemType: 'lesson' | 'quiz', itemId,
-position, passingScore? }], unlockRequires[], rewards { xp, peanuts, badge? },
+position, passingScore? }], unlockRequires[], linkedCourseIds[] (reserved for the deferred
+multi-provider-course feature — always empty today), rewards { xp, peanuts, badge? },
 isActive.
 
 `items[]` is heterogeneous and is the canonical ordering array — replaces
@@ -438,7 +471,8 @@ Mongoose `ref` (polymorphic) — resolved manually in roadmap.service.ts by
 splitting on itemType and querying Lesson/Quiz separately.
 
 ### ProfileRoadmapProgress
-Fields: profileId, roadmapId, miniAppId (optional), nodeProgress 
+Fields: profileId, roadmapId, miniAppId (optional, vestigial — no longer set for new
+progress documents now that Roadmap has no miniAppId of its own), nodeProgress 
 (Map of nodeId → { status, stars 0–3, attempts, bestScore, lastAttemptAt, 
 completedAt, itemProgress (Map of itemId → { status, completedAt, 
 attempts, bestScore, studyMaterialViewedAt, lastAttemptAt }) }), 
@@ -460,6 +494,11 @@ completedNodes, totalItems, completedItems, overallProgressPercent,
 lastActivityAt }.
 Unique index: profileId + subjectId.
 Indexes: profileId + fieldId, profileId + status.
+
+`progressSummary` is a rollup across **every Course** under the subject (a subject can have
+more than one), not a single roadmap — `enrollment.service.ts`'s `enrollInSubject` and
+`updateProgressSummary` both iterate `Course.find({ subjectId })` and sum totals/completions
+across each course's Roadmap/ProfileRoadmapProgress.
 
 ---
 
@@ -577,9 +616,10 @@ GET    /api/profiles/me/stats
 ```
 GET /api/content/fields
 GET /api/content/fields/:fieldSlug/subjects
-GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/topics
-GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/topics/:topicSlug/miniapps
-GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/topics/:topicSlug/miniapps/:miniAppSlug
+GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/courses
+GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/courses/:courseSlug
+GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/miniapps
+GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/miniapps/:miniAppSlug
 ```
 
 ### Vocabulary
@@ -607,8 +647,7 @@ GET   /api/quiz/session/:sessionId/results
 
 ### Roadmap
 ```
-GET  /api/roadmap/:miniAppId
-GET  /api/roadmap/subject/:subjectId
+GET  /api/roadmap/course/:courseId
 GET  /api/roadmap/node/:nodeId
 GET  /api/roadmap/lesson/:lessonId
 POST /api/roadmap/lesson/:lessonId/study
@@ -696,10 +735,16 @@ rather than creating duplicates, using `findOneAndUpdate` with
 Structure:
 - `data/` — raw constant data, no DB calls
 - `seeders/` — functions that write core content to DB
-- `seeders/roadmaps/` — one file per subject's roadmap
+- `seeders/roadmaps/` — one file per subject's course + roadmap (Course-first pattern — see
+  Conventions below)
 - `questions/` — one file per subject, contains the actual question
   content. This is where you add or edit individual questions
   (e.g. vowels, basic vocab terms).
+- `migrations/` — one-off, non-idempotent-seeder scripts for schema-restructure changes
+  against real data. NOT wired into `pnpm seed` — run manually and once, via a dedicated
+  `pnpm --filter api migrate:<name>` script. See
+  `migrations/2026-07-course-roadmap-restructure.ts` for the canonical pattern (check-before-write
+  so it's still safe to re-run if interrupted, back up affected collections first).
 
 To add a new isiZulu vowel: edit `questions/isizulu/vowels.questions.ts`
 To add a new isiZulu consonant: edit `questions/isizulu/consonants.questions.ts` (consonantData array)
@@ -708,7 +753,7 @@ To add a new CVC word: edit `questions/english/cvc-words.questions.ts` (wordData
 To add a new English term: edit `questions/english/vocab-basics.questions.ts`
 To add a new math counting question: edit `questions/math/counting.questions.ts`
 To add a new drag-intro object: edit `questions/math/drag-intro.questions.ts`
-To add a new subject's roadmap: create a new file in `seeders/roadmaps/`
+To add a new subject's course + roadmap: create a new file in `seeders/roadmaps/`
 
 You do not need to drop the database before re-running seed — the upsert
 pattern handles updates safely. Dropping the DB is still useful after
@@ -759,13 +804,15 @@ my-backpack/
 │   │       │   └── cleanupQuestions.ts
 │   │       ├── seed/
 │   │       │   ├── index.ts            # master runner
-│   │       │   ├── data/               # raw constant data, no DB calls
+│   │       │   ├── data/               # raw constant data, no DB calls (fields, subjects, miniapps)
 │   │       │   ├── seeders/            # accounts, content hierarchy, roadmaps
-│   │       │   │   └── roadmaps/
-│   │       │   └── questions/          # per-subject question content
-│   │       │       ├── english/        # vocab-basics, vowels, cvc-words
-│   │       │       ├── isizulu/        # vowels, consonants
-│   │       │       └── math/           # drag-intro, counting
+│   │       │   │   └── roadmaps/       # Course-first: one file per subject's course + roadmap
+│   │       │   ├── questions/          # per-subject question content
+│   │       │   │   ├── english/        # vocab-basics, vowels, cvc-words
+│   │       │   │   ├── isizulu/        # vowels, consonants
+│   │       │   │   └── math/           # drag-intro, counting
+│   │       │   └── migrations/         # one-off, non-idempotent-seeder scripts — not
+│   │       │                           # wired into `pnpm seed`, run manually and once
 │   │       └── app.ts
 │   ├── web/
 │   │   └── src/
@@ -789,7 +836,12 @@ my-backpack/
 │   │           ├── VerifyEmailPage
 │   │           ├── SelectProfilePage
 │   │           ├── ProfileSetupPage
-│   │           └── DashboardPage (skeleton)
+│   │           ├── dashboard/DashboardPage
+│   │           ├── subject/SubjectHomePage    # Course grid (main) + Mini-Apps panel (side) —
+│   │           │                              # a Subject can have multiple Courses now
+│   │           ├── course/CoursePage          # roadmap for one Course (progress header + RoadmapPath)
+│   │           ├── lesson/LessonPlayerPage, QuizItemPlayerPage
+│   │           └── miniapp/MiniAppPage
 │   └── mobile/
 │       ├── app/                 # Expo Router file-based routes
 │       │   ├── _layout.tsx      # Redux <Provider>, splash-hold-until-bootstrapped, <Slot />
@@ -822,7 +874,7 @@ my-backpack/
 │           ├── account.ts
 │           ├── profile.ts
 │           ├── auth.ts
-│           ├── content.ts      # IField, ISubject, ITopic, IMiniApp
+│           ├── content.ts      # IField, ISubject, IMiniApp, ICourseSummary (no Topic anymore)
 │           ├── term.ts         # ITerm, IDefinition
 │           ├── question.ts     # IQuestion, IQuestionContent, IDraggable,
 │           │                   # IDropZone, IBlank, IFeedback, IAvatarConfig,
@@ -830,8 +882,8 @@ my-backpack/
 │           │                   # INodeQuestionAssignment, QuestionType
 │           ├── quiz.ts         # IQuizSession, IAnswerRecord
 │           ├── learning.ts     # ILearningRecord, IAdaptiveProfile
-│           ├── roadmap.ts      # IRoadmap, IRoadmapNode, INodeItemRef, ILesson,
-│           │                   # IResource, IProgress
+│           ├── roadmap.ts      # IRoadmap (no subjectId/miniAppId), IRoadmapNode (slug,
+│           │                   # linkedCourseIds), INodeItemRef, ILesson, IResource, IProgress
 │           └── enrollment.ts   # IProfileSubjectEnrollment, IProgressSummary
 │       └── utils/
 │           └── resolveHelpers.ts  # resolveHelpers(questionDefaults, nodeOverrides)
@@ -851,7 +903,8 @@ my-backpack/
 - [x] Folder structure and model structure established
 - [x] Auth system (Account + Profile models, JWT, Passport, OAuth2)
 - [x] Profile module (CRUD, PIN, setup flow)
-- [x] Content hierarchy (Field → Subject → Topic → MiniApp)
+- [x] Content hierarchy (Field → Subject → MiniApp, with Course[] wrapping roadmap-based
+      learning paths under Subject — restructured July 2026, `Topic` removed entirely)
 - [x] Vocabulary module (search, bucket management, dictionary, trending)
 - [x] Question models and all 13 question types defined
 - [x] Question model unified content field (prompt/options/correctAnswer/explanation inside content)
@@ -878,7 +931,7 @@ my-backpack/
 - [x] Item-complete/lesson-study responses return nextItemId/nextItemType — frontend auto-advances to the next item on pass/complete instead of requiring a manual "back to roadmap" click
 - [x] IQuestionHelpers.retryUntilCorrect — DnD wrong drops rejected client-side, never submitted, no skip while active; enabled on all 6 vowels dnd_single quiz variants
 - [x] Term.word unique index fixed — now compound (miniAppId + word) not global
-- [x] English Phonics content hierarchy (Topic + MiniApp + Roadmap seeded)
+- [x] English Phonics content hierarchy (Course + Roadmap seeded)
 - [x] Question.seedKey field added — idempotent upsert key for hand-authored seed variants that termId+type can't distinguish (e.g. the 6 vowels dnd_single quiz variants)
 - [x] All roadmaps (isiZulu vowels/consonants, English vowels/CVC, math drag-intro/counting) migrated to the items[] model — vowels nodes: 1 lesson item + 6 quiz items; other nodes: 1 lesson item + 2 quiz items (was practice + assessment)
 - [x] English Phonics node 2: Three-Letter Words (22 questions: mcq_audio + dnd_build × 11 CVC words)
@@ -891,6 +944,20 @@ my-backpack/
 - [x] AgeGroup content filter middleware
 - [x] Email verification flow (nodemailer SMTP transport, token + 24h expiry, resend endpoint)
 - [x] Forgot password / reset password email flow (token + 1h expiry, silent on unknown email)
+- [x] Course/Roadmap restructure (July 2026) — `Course` model added (wraps one Roadmap, optional
+      `miniAppIds[]` convenience links, reserved `team`/curriculumTags); `Topic` model removed
+      entirely; `Roadmap` no longer carries subjectId/miniAppId (pure node container); `MiniApp`
+      reparented topicId→subjectId, `'roadmap'` dropped from its type enum; `RoadmapNode` gained
+      `slug` and reserved `linkedCourseIds[]`; content/roadmap API routes updated
+      (`/content/.../courses`, `/content/.../courses/:courseSlug`, `/content/.../miniapps` dropped
+      `:topicSlug`, `/roadmap/course/:courseId` replaces `/roadmap/:miniAppId` +
+      `/roadmap/subject/:subjectId`); enrollment module reworked to roll up progress across every
+      Course under a subject (a subject can now have more than one); one-time migration script
+      (`seed/migrations/2026-07-course-roadmap-restructure.ts`) adopts existing Roadmap `_id`s and
+      reuses each legacy roadmap-type MiniApp's `_id` as the new Course's `_id` so pre-existing
+      Term/Question/Quiz/QuizSession `miniAppId` references keep resolving without a mass data
+      migration; established `seed/migrations/` as the convention for future one-off restructure
+      scripts. Frontend (web/mobile) not yet updated to match — tracked separately.
 - [ ] XP and peanuts reward system (deferred)
 - [ ] Test readiness scoring (deferred)
 - [ ] Book/PDF upload pipeline (deferred)
@@ -910,6 +977,19 @@ my-backpack/
 - [x] Bucket UI (My Bucket page — status filter tabs, client-side sort, confidence/accuracy/review info, remove)
 - [x] Quiz UI (12 text-based question types + dnd_single implemented via DndSinglePattern; remaining 7 dnd_* types and mcq_audio show a "not yet supported" placeholder)
 - [x] Roadmap UI (roadmap screen with node panel, lesson resource-hub page with video/pdf/image/notes/audio/steps rendering, direct quiz-item player reusing the Quiz mini-app's components)
+- [x] Course/Roadmap frontend restructure (July 2026) — `SubjectHomePage` now lists Courses (grid,
+      main content) + Subject-level MiniApps (flat side panel, renamed from "Topics" to
+      "Mini-Apps"); new `CoursePage` (`/subject/:subjectSlug/course/:courseSlug`) owns the
+      per-Course roadmap (progress header + `RoadmapPath`, moved from the old `SubjectHomePage`)
+      plus a quick-links row for the Course's linked MiniApps (`Course.miniAppIds`, when
+      populated); lesson/quiz-item routes gained a `:courseSlug` segment
+      (`/subject/:subjectSlug/course/:courseSlug/lesson/:lessonId` and
+      `.../node/:nodeId/quiz/:itemId`); `/field/:fieldSlug/subject/:subjectSlug/miniapp/...`
+      routes dropped their `:topicSlug` segment; `roadmapSlice` replaced
+      `fetchRoadmapBySubject`/`fetchRoadmapByMiniApp`/`fetchSubjectTopics` with
+      `fetchCoursesBySubject`/`fetchMiniAppsBySubject`/`fetchCourseBySlug`/`fetchRoadmapByCourse`;
+      removed unused flat `pages/DashboardPage.tsx` and `pages/HomePage.tsx` leftovers (the real
+      ones live at `pages/dashboard/DashboardPage.tsx`, routed from `main.tsx`)
 - [x] Age-group-aware DnD/quiz-chrome styling — `DndSinglePattern`, `QuizProgress`, `AnswerFeedback` take an `ageGroup` prop and render a distinct child-mode glassmorphism treatment (large glass prompt bubble + stacked replay/hint buttons, clamp-sized draggable tiles, flex-1 drop zone) alongside the unchanged adult/teen default; see [docs/design/child-dnd-quiz-style.md](docs/design/child-dnd-quiz-style.md)
 - [x] No-scroll viewport contract for the active-question view — shared `QuizPageShell` (`apps/web/src/components/quiz/QuizPageShell.tsx`) locks `QuizPage`/`QuizItemPlayerPage` to `h-[calc(100dvh-60px)]` (accounts for AppLayout's 60px TopNav) with `overflow-hidden`; the active question region is `flex-1 min-h-0 overflow-hidden` so a 5-draggable `dnd_single` question never forces scrolling, while start/results/error/loading states keep their natural scrollable-if-needed treatment
 - [x] Live TTS with word highlighting (interim) — `SpokenText` component (browser Web Speech API via `react-text-to-speech`) reads question prompts, avatar dialogue, and answer feedback aloud with manual playback; always defers to prerecorded audio where it exists; see [docs/content/live-tts-word-highlighting.md](docs/content/live-tts-word-highlighting.md)
@@ -920,8 +1000,11 @@ my-backpack/
 - [x] Backend mobile-auth support — refresh token returned in-body for `X-Client-Type: mobile`, stored in `expo-secure-store`
 - [x] Theme tokens (`packages/shared/constants/theme.ts`) + base UI primitives (GlassCard, PrimaryButton, ScreenBackground, TextField)
 - [x] Auth screens (login, signup, select-profile with PIN keypad, profile-setup) + guarded route tree (ProtectedRoute ported from web)
-- [x] Minimal Home screen — enrolled-subjects list + enroll modal, no roadmap visualisation
+- [x] Minimal Home screen — enrolled-subjects list + enroll modal + flat per-subject MiniApps
+      browsing (`fetchSubjectMiniApps`, no Topic grouping — matches the web restructure), no
+      Course/roadmap visualisation yet
 - [x] Dictionary mini-app (search, trending, A-Z browse with pagination, recent searches, term detail, add-to-bucket, bucket management)
+- [x] EAS Build configured (eas.json — preview profile produces installable APK with production API URL baked in; production profile produces Play Store AAB)
 - [ ] Roadmap UI (node path, lesson player, progress bars) — deferred
 - [ ] Quiz UI / `dnd_*` question types — deferred
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
@@ -952,9 +1035,11 @@ my-backpack/
 - Quiz items reference a Quiz directly via `RoadmapNode.items[].itemId` (itemType 'quiz') — no wrapper Lesson; `Quiz.questionIds[]` holds the ordered questions
 - When seeding a node's quiz items: create the `Quiz` documents (mode:'fixed'), then the question-seed file is the sole writer of that node's `items[]` (full-array overwrite each run — see `isizulu/vowels.questions.ts` for the canonical pattern)
 - Term.word is unique per miniAppId (compound index) — when upserting Terms, always include `miniAppId` in the query filter
+- For roadmap-linked Term/Question/Quiz content, `miniAppId` holds the owning **Course's `_id`**, not a MiniApp's — there's no MiniApp document for roadmap content
 - Roadmap.nodes[] and RoadmapNode.items[] are the canonical ordering arrays
-- A Roadmap must have at least one of subjectId or miniAppId (enforced by pre-validate hook)
-- Subject enrollment (ProfileSubjectEnrollment) is the entry point for a learner starting a subject
+- A Roadmap carries no subject/miniApp context of its own — it's referenced from `Course.roadmapId`; a Subject can have multiple Courses (and therefore multiple Roadmaps)
+- Roadmap seeders are Course-first: upsert the `Course` by (subjectId, slug), then resolve the Roadmap via `course.roadmapId` if it exists or create a new one — see `seeders/roadmaps/*.roadmap.seed.ts`
+- Subject enrollment (ProfileSubjectEnrollment) is the entry point for a learner starting a subject; `progressSummary` rolls up across every Course under that subject
 - Mobile requests send `X-Client-Type: mobile`; `/auth/login` then includes `refreshToken` in the
   JSON body (alongside the existing httpOnly cookie) and `/auth/refresh` accepts `{ refreshToken }`
   in the body ahead of the cookie — web's cookie-only flow is unchanged when the header is absent
@@ -993,6 +1078,12 @@ my-backpack/
   query filter — Term.word is unique per miniAppId, not globally
 - isiZulu has no /r/ phoneme as a native consonant — never generate 
   ra/re/ri/ro/ru syllables in consonant drills
+- One-off, non-idempotent-seeder scripts for schema-restructure changes against real data go
+  in `apps/api/src/seed/migrations/` (one file per migration, named `YYYY-MM-description.ts`),
+  with a dedicated `pnpm --filter api migrate:<name>` script — never wire these into the
+  regular `pnpm seed` run
+- `Topic` was removed as a model (July 2026) — don't reintroduce it; grouping MiniApps under a
+  Subject is `MiniApp.subjectId`, and the "step in a roadmap" meaning belongs to `RoadmapNode`
 ```
 
 ---

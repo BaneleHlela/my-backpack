@@ -1,8 +1,10 @@
-// A single step on a roadmap path. Contains an ordered array of heterogeneous items —
-// currently 'lesson' (a pure study-material Lesson document) or 'quiz' (references a Quiz
-// document directly, no wrapper Lesson). Extensible later to 'resource' | 'notes' | 'chatbot'
-// etc — not built yet. Nodes are ordered via roadmap.nodes[]. unlockRequires lists
-// prerequisite nodeIds.
+// A single step on a roadmap path — "Topic" in the UI/dashboard vocabulary. Contains an
+// ordered array of heterogeneous items — currently 'lesson' (a pure study-material Lesson
+// document) or 'quiz' (references a Quiz document directly, no wrapper Lesson). Extensible
+// later to 'resource' | 'notes' | 'chatbot' etc — not built yet. Nodes are ordered via
+// roadmap.nodes[]. unlockRequires lists prerequisite nodeIds. slug is unique per roadmapId.
+// linkedCourseIds is reserved for the deferred multi-provider-course feature (always empty
+// today — see docs/product/course-marketplace-vision.md).
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
 
 export type NodeType = 'lesson' | 'checkpoint' | 'practice';
@@ -31,12 +33,17 @@ export interface IRoadmapNodeDocument extends Document {
   _id: Types.ObjectId;
   roadmapId: Types.ObjectId;
   title: string;
+  slug: string;
   description?: string;
   position: number;
   type: NodeType;
   curriculumTags: ICurriculumTag[];
   items: INodeItemRef[];
   unlockRequires: Types.ObjectId[];
+  // Reserved for the deferred multi-provider-course feature (see
+  // docs/product/course-marketplace-vision.md) — always empty for now, no matching/selection
+  // logic built around it yet.
+  linkedCourseIds: Types.ObjectId[];
   rewards: INodeRewards;
   isActive: boolean;
   createdAt: Date;
@@ -80,6 +87,7 @@ const roadmapNodeSchema = new Schema<IRoadmapNodeDocument>(
   {
     roadmapId: { type: Schema.Types.ObjectId, ref: 'Roadmap', required: true },
     title: { type: String, required: true },
+    slug: { type: String, required: true, trim: true, lowercase: true },
     description: { type: String },
     position: { type: Number, required: true },
     type: {
@@ -90,6 +98,7 @@ const roadmapNodeSchema = new Schema<IRoadmapNodeDocument>(
     curriculumTags: { type: [curriculumTagSchema], default: [] },
     items: { type: [nodeItemRefSchema], default: [] },
     unlockRequires: { type: [Schema.Types.ObjectId], ref: 'RoadmapNode', default: [] },
+    linkedCourseIds: { type: [Schema.Types.ObjectId], ref: 'Course', default: [] },
     rewards: { type: rewardsSchema, default: () => ({}) },
     isActive: { type: Boolean, default: true },
   },
@@ -98,6 +107,7 @@ const roadmapNodeSchema = new Schema<IRoadmapNodeDocument>(
 
 roadmapNodeSchema.index({ roadmapId: 1, position: 1 });
 roadmapNodeSchema.index({ roadmapId: 1, isActive: 1 });
+roadmapNodeSchema.index({ roadmapId: 1, slug: 1 }, { unique: true });
 
 const RoadmapNode: Model<IRoadmapNodeDocument> = mongoose.model<IRoadmapNodeDocument>(
   'RoadmapNode',

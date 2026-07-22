@@ -12,8 +12,7 @@ import Term from '../../../models/apps/language/vocabulary/term.model';
 import Definition from '../../../models/apps/language/vocabulary/definition.model';
 import Question from '../../../models/apps/language/vocabulary/question.model';
 import Subject from '../../../models/core/subject.model';
-import Topic from '../../../models/core/topic.model';
-import MiniApp from '../../../models/core/miniApp.model';
+import Course from '../../../models/core/course.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Quiz from '../../../models/learning/quiz.model';
 import { IBlank, IDraggable, IQuestionContent } from '../../../modules/question/question.types';
@@ -55,13 +54,13 @@ const assessmentWords = ['sit', 'dog', 'hot'];
 
 async function upsertWordQuestions(
   data: CvcWordData,
-  phonicsMiniAppId: string
+  phonicsCourseId: string
 ): Promise<{ mcqId: string; dndId: string }> {
   const term = await Term.findOneAndUpdate(
-    { miniAppId: phonicsMiniAppId, word: data.word },
+    { miniAppId: phonicsCourseId, word: data.word },
     {
       word: data.word,
-      miniAppId: phonicsMiniAppId,
+      miniAppId: phonicsCourseId,
       audioUrl: `sounds/english/cvc/${data.word}.mp3`,
       source: 'manual',
       aiGenerationStatus: 'not_needed',
@@ -101,7 +100,7 @@ async function upsertWordQuestions(
     {
       termId: term._id,
       definitionId: definition._id,
-      miniAppId: phonicsMiniAppId,
+      miniAppId: phonicsCourseId,
       type: 'mcq_audio',
       maxPoints: 4,
       pointsCanBePartial: false,
@@ -140,7 +139,7 @@ async function upsertWordQuestions(
     {
       termId: term._id,
       definitionId: definition._id,
-      miniAppId: phonicsMiniAppId,
+      miniAppId: phonicsCourseId,
       type: 'dnd_build',
       maxPoints: 5,
       pointsCanBePartial: false,
@@ -160,27 +159,26 @@ export async function seedCvcWordsQuestions(nodeId: string, introLessonId: strin
   const subject = await Subject.findOne({ slug: 'english' });
   if (!subject) throw new Error('English subject not found — run content seed first');
 
-  const topic = await Topic.findOne({ subjectId: subject._id, slug: 'phonics' });
-  if (!topic) throw new Error('Phonics topic not found — run content seed first');
+  // Term/Question/Quiz.miniAppId is scoped to the Phonics Course's _id for roadmap-linked
+  // content (no MiniApp represents roadmaps anymore).
+  const phonicsCourse = await Course.findOne({ subjectId: subject._id, slug: 'phonics' });
+  if (!phonicsCourse) throw new Error('Phonics course not found — run the roadmap seeder first');
 
-  const phonicsMiniApp = await MiniApp.findOne({ topicId: topic._id, slug: 'roadmap' });
-  if (!phonicsMiniApp) throw new Error('Phonics roadmap miniApp not found — run content seed first');
-
-  const phonicsMiniAppId = phonicsMiniApp._id.toString();
+  const phonicsCourseId = phonicsCourse._id.toString();
 
   const idsByWord = new Map<string, { mcqId: string; dndId: string }>();
   const practiceQuestionIds: string[] = [];
   for (const data of wordData) {
-    const ids = await upsertWordQuestions(data, phonicsMiniAppId);
+    const ids = await upsertWordQuestions(data, phonicsCourseId);
     idsByWord.set(data.word, ids);
     practiceQuestionIds.push(ids.mcqId, ids.dndId);
   }
 
   const practiceQuiz = await Quiz.findOneAndUpdate(
-    { miniAppId: phonicsMiniAppId, mode: 'fixed', title: 'Three-Letter Words Practice' },
+    { miniAppId: phonicsCourseId, mode: 'fixed', title: 'Three-Letter Words Practice' },
     {
-      miniAppId: phonicsMiniAppId,
-      sourceMiniAppIds: [phonicsMiniAppId],
+      miniAppId: phonicsCourseId,
+      sourceMiniAppIds: [phonicsCourseId],
       title: 'Three-Letter Words Practice',
       mode: 'fixed',
       questionIds: practiceQuestionIds,
@@ -198,10 +196,10 @@ export async function seedCvcWordsQuestions(nodeId: string, introLessonId: strin
   });
 
   const assessmentQuiz = await Quiz.findOneAndUpdate(
-    { miniAppId: phonicsMiniAppId, mode: 'fixed', title: 'Three-Letter Words Assessment' },
+    { miniAppId: phonicsCourseId, mode: 'fixed', title: 'Three-Letter Words Assessment' },
     {
-      miniAppId: phonicsMiniAppId,
-      sourceMiniAppIds: [phonicsMiniAppId],
+      miniAppId: phonicsCourseId,
+      sourceMiniAppIds: [phonicsCourseId],
       title: 'Three-Letter Words Assessment',
       mode: 'fixed',
       questionIds: assessmentQuestionIds,

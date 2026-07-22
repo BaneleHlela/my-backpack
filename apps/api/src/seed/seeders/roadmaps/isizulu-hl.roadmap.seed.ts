@@ -1,11 +1,16 @@
-// Seeds the IsiZulu HL "IsiZulu Sounds" roadmap: the vowels node (1 lesson item + 6 quiz
+// Seeds the IsiZulu HL "Sounds" course + roadmap: the vowels node (1 lesson item + 6 quiz
 // items, per docs/content/vowels-dnd-quiz-design.md) and the consonants node (1 lesson item +
 // 2 quiz items — was practice + assessment). Idempotent — re-running updates existing
 // records. Requires content.seed.ts to have run first (needs the subject).
 //
+// Course-first: upserts the Course by (subjectId, slug), then resolves the Roadmap via
+// course.roadmapId if it already exists (e.g. adopted from the one-time migration — see
+// seed/migrations/2026-07-course-roadmap-restructure.ts) or creates a new one otherwise.
+//
 // Both nodes' `items[]` (the quiz items specifically) are written by their respective
 // question-seed files (isizulu/vowels.questions.ts, isizulu/consonants.questions.ts), which
 // know the Quiz ids — this seeder only creates the intro Lesson + node scaffolding.
+import Course from '../../../models/core/course.model';
 import Roadmap from '../../../models/learning/roadmap.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Lesson from '../../../models/learning/lesson.model';
@@ -21,26 +26,49 @@ export interface IsiZuluRoadmapSeedResult {
 }
 
 export async function seedIsiZuluRoadmap(): Promise<IsiZuluRoadmapSeedResult> {
-  console.log('Seeding IsiZulu HL roadmap...');
+  console.log('Seeding IsiZulu Sounds course...');
 
   const subject = await Subject.findOne({ slug: 'isizulu-hl' });
   if (!subject) throw new Error('IsiZulu HL subject not found — run content seed first');
 
-  const roadmap = await Roadmap.findOneAndUpdate(
-    { subjectId: subject._id },
+  const course = await Course.findOneAndUpdate(
+    { subjectId: subject._id, slug: 'sounds' },
     {
       subjectId: subject._id,
-      title: 'IsiZulu Sounds',
+      name: 'Sounds',
+      slug: 'sounds',
       description: 'Learn IsiZulu sounds step by step, from vowels to syllables',
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
+
+  let roadmap;
+  if (course.roadmapId) {
+    roadmap = await Roadmap.findByIdAndUpdate(
+      course.roadmapId,
+      {
+        title: 'IsiZulu Sounds',
+        description: 'Learn IsiZulu sounds step by step, from vowels to syllables',
+      },
+      { new: true }
+    );
+  } else {
+    roadmap = await Roadmap.create({
+      title: 'IsiZulu Sounds',
+      description: 'Learn IsiZulu sounds step by step, from vowels to syllables',
+      nodes: [],
+    });
+    course.roadmapId = roadmap._id;
+    await course.save();
+  }
+  if (!roadmap) throw new Error('Failed to resolve IsiZulu Sounds roadmap');
 
   const vowelsNode = await RoadmapNode.findOneAndUpdate(
     { roadmapId: roadmap._id, title: 'Izinhlamvu Zokuvuma' },
     {
       roadmapId: roadmap._id,
       title: 'Izinhlamvu Zokuvuma',
+      slug: 'izinhlamvu-zokuvuma',
       description: 'Learn the five IsiZulu vowel sounds: a, e, i, o, u',
       position: 1,
       type: 'lesson',
@@ -72,6 +100,7 @@ export async function seedIsiZuluRoadmap(): Promise<IsiZuluRoadmapSeedResult> {
     {
       roadmapId: roadmap._id,
       title: 'Izinhlamvu Zongwaqa',
+      slug: 'izinhlamvu-zongwaqa',
       description: 'Learn IsiZulu consonants paired with each vowel sound',
       position: 2,
       type: 'lesson',
@@ -115,7 +144,7 @@ export async function seedIsiZuluRoadmap(): Promise<IsiZuluRoadmapSeedResult> {
     ],
   });
 
-  console.log('  Seeded IsiZulu Sounds roadmap: 2 nodes, 2 intro lessons (quiz items added separately)');
+  console.log('  Seeded IsiZulu Sounds course: 2 nodes, 2 intro lessons (quiz items added separately)');
 
   return {
     roadmapId: roadmap._id.toString(),

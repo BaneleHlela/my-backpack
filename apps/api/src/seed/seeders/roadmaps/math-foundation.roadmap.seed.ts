@@ -1,11 +1,16 @@
-// Seeds the Foundation Phase Mathematics "Number Sense Roadmap": two nodes —
+// Seeds the Foundation Phase Mathematics "Number Sense" course + roadmap: two nodes —
 // "Let's Learn to Drag!" (DnD mechanic intro, 1 lesson item + 2 quiz items) then
 // "Counting 1 to 10" (1 lesson item + 2 quiz items). Same pattern as
 // isizulu-hl.roadmap.seed.ts. Idempotent — re-running updates existing records.
 //
+// Course-first: upserts the Course by (subjectId, slug), then resolves the Roadmap via
+// course.roadmapId if it already exists (e.g. adopted from the one-time migration — see
+// seed/migrations/2026-07-course-roadmap-restructure.ts) or creates a new one otherwise.
+//
 // Both nodes' `items[]` (the quiz items specifically) are written by their respective
 // question-seed files (drag-intro.questions.ts, counting.questions.ts), which know the Quiz
 // ids — this seeder only creates the intro Lesson + node scaffolding.
+import Course from '../../../models/core/course.model';
 import Roadmap from '../../../models/learning/roadmap.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Lesson from '../../../models/learning/lesson.model';
@@ -20,22 +25,44 @@ export interface MathFoundationRoadmapSeedResult {
 }
 
 export async function seedMathFoundationRoadmap(): Promise<MathFoundationRoadmapSeedResult> {
-  console.log('Seeding Foundation Phase Mathematics roadmap...');
+  console.log('Seeding Foundation Phase Mathematics course...');
 
   const subject = await Subject.findOne({ slug: 'foundation-phase-mathematics' });
   if (!subject) {
     throw new Error('Foundation Phase Mathematics subject not found — run content seed first');
   }
 
-  const roadmap = await Roadmap.findOneAndUpdate(
-    { subjectId: subject._id },
+  const course = await Course.findOneAndUpdate(
+    { subjectId: subject._id, slug: 'number-sense' },
     {
       subjectId: subject._id,
-      title: 'Number Sense Roadmap',
+      name: 'Number Sense',
+      slug: 'number-sense',
       description: 'Learn to interact, then count, step by step',
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
+
+  let roadmap;
+  if (course.roadmapId) {
+    roadmap = await Roadmap.findByIdAndUpdate(
+      course.roadmapId,
+      {
+        title: 'Number Sense Roadmap',
+        description: 'Learn to interact, then count, step by step',
+      },
+      { new: true }
+    );
+  } else {
+    roadmap = await Roadmap.create({
+      title: 'Number Sense Roadmap',
+      description: 'Learn to interact, then count, step by step',
+      nodes: [],
+    });
+    course.roadmapId = roadmap._id;
+    await course.save();
+  }
+  if (!roadmap) throw new Error('Failed to resolve Number Sense roadmap');
 
   // ── Node 1: Let's Learn to Drag! ──────────────────────────
 
@@ -44,6 +71,7 @@ export async function seedMathFoundationRoadmap(): Promise<MathFoundationRoadmap
     {
       roadmapId: roadmap._id,
       title: "Let's Learn to Drag!",
+      slug: 'lets-learn-to-drag',
       description: 'Learn the drag-and-drop mechanic with everyday objects',
       position: 1,
       type: 'lesson',
@@ -83,6 +111,7 @@ export async function seedMathFoundationRoadmap(): Promise<MathFoundationRoadmap
     {
       roadmapId: roadmap._id,
       title: 'Counting 1 to 10',
+      slug: 'counting-1-to-10',
       description: 'Learn to recognise and count numbers from 1 to 10',
       position: 2,
       type: 'lesson',
@@ -123,7 +152,7 @@ export async function seedMathFoundationRoadmap(): Promise<MathFoundationRoadmap
     ],
   });
 
-  console.log('  Seeded Number Sense Roadmap: 2 nodes, 2 intro lessons (quiz items added separately)');
+  console.log('  Seeded Number Sense course: 2 nodes, 2 intro lessons (quiz items added separately)');
 
   return {
     roadmapId: roadmap._id.toString(),

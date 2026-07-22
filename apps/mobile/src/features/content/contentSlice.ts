@@ -1,28 +1,23 @@
 // Combines apps/web's enrollmentSlice.ts (fetchEnrolledSubjects,
-// fetchAvailableSubjects, enrollInSubject) and roadmapSlice.ts's
-// fetchSubjectTopics thunk into one slice, since this mobile build only
-// needs enough content navigation to reach a standalone mini-app — no
-// roadmap rendering (see docs/technical/mobile-architecture.md).
+// fetchAvailableSubjects, enrollInSubject) and a flat mini-apps-per-subject
+// fetch into one slice, since this mobile build only needs enough content
+// navigation to reach a standalone mini-app — no roadmap/Course rendering
+// (see docs/technical/mobile-architecture.md). MiniApps are flat under a
+// Subject now (Topic was removed) — no grouping layer to reproduce.
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import type { AxiosError } from 'axios';
 import type {
   ApiResponse,
   EnrolledSubjectsResponse,
   AvailableSubject,
-  ITopic,
   IMiniApp,
 } from '@my-backpack/shared';
 import api from '../../lib/api';
 
-export interface StandaloneTopicEntry {
-  topic: ITopic;
-  miniApps: IMiniApp[];
-}
-
 interface ContentState {
   enrolledSubjects: EnrolledSubjectsResponse | null;
   availableSubjects: AvailableSubject[];
-  standaloneTopicsBySubject: Record<string, StandaloneTopicEntry[]>;
+  miniAppsBySubject: Record<string, IMiniApp[]>;
   isLoading: boolean;
   isLoadingAvailable: boolean;
   isEnrolling: boolean;
@@ -32,7 +27,7 @@ interface ContentState {
 const initialState: ContentState = {
   enrolledSubjects: null,
   availableSubjects: [],
-  standaloneTopicsBySubject: {},
+  miniAppsBySubject: {},
   isLoading: false,
   isLoadingAvailable: false,
   isEnrolling: false,
@@ -83,33 +78,21 @@ export const enrollInSubject = createAsyncThunk(
   }
 );
 
-// Mirrors apps/web's roadmapSlice.fetchSubjectTopics: fetch a subject's
-// topics, then each topic's mini-apps, keeping only topics with at least
-// one non-roadmap mini-app (roadmap UI is out of scope for this build).
-export const fetchStandaloneMiniApps = createAsyncThunk(
-  'content/fetchStandaloneMiniApps',
+// Fetch a subject's mini-apps (flat — no Topic grouping layer anymore).
+// Roadmap/Course content is out of scope for this build; only MiniApps render on Home.
+export const fetchSubjectMiniApps = createAsyncThunk(
+  'content/fetchSubjectMiniApps',
   async (
     { fieldSlug, subjectSlug, subjectId }: { fieldSlug: string; subjectSlug: string; subjectId: string },
     { rejectWithValue }
   ) => {
     try {
-      const topicsRes = await api.get<ApiResponse<ITopic[]>>(
-        `/content/fields/${fieldSlug}/subjects/${subjectSlug}/topics`
+      const res = await api.get<ApiResponse<IMiniApp[]>>(
+        `/content/fields/${fieldSlug}/subjects/${subjectSlug}/miniapps`
       );
-
-      const entries: StandaloneTopicEntry[] = await Promise.all(
-        topicsRes.data.data.map(async (topic) => {
-          const miniAppsRes = await api.get<ApiResponse<IMiniApp[]>>(
-            `/content/fields/${fieldSlug}/subjects/${subjectSlug}/topics/${topic.slug}/miniapps`
-          );
-          return { topic, miniApps: miniAppsRes.data.data };
-        })
-      );
-
-      const standaloneOnly = entries.filter((e) => e.miniApps.some((m) => m.type !== 'roadmap'));
-      return { subjectId, entries: standaloneOnly };
+      return { subjectId, miniApps: res.data.data };
     } catch (error) {
-      return rejectWithValue(extractErrorMessage(error, 'Failed to fetch subject topics'));
+      return rejectWithValue(extractErrorMessage(error, 'Failed to fetch subject mini-apps'));
     }
   }
 );
@@ -157,8 +140,8 @@ const contentSlice = createSlice({
         state.isEnrolling = false;
         state.error = action.payload as string;
       })
-      .addCase(fetchStandaloneMiniApps.fulfilled, (state, action) => {
-        state.standaloneTopicsBySubject[action.payload.subjectId] = action.payload.entries;
+      .addCase(fetchSubjectMiniApps.fulfilled, (state, action) => {
+        state.miniAppsBySubject[action.payload.subjectId] = action.payload.miniApps;
       });
   },
 });

@@ -10,23 +10,11 @@ import {
   completeQuizItem,
 } from './roadmap.service';
 
-export async function getRoadmapByMiniAppHandler(req: Request, res: Response): Promise<void> {
+export async function getRoadmapByCourseHandler(req: Request, res: Response): Promise<void> {
   try {
     const profileId = req.profile!._id.toString();
-    const miniAppId = req.params['miniAppId'] as string;
-    const result = await getRoadmapWithProgress(profileId, miniAppId, undefined);
-    sendSuccess(res, result);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to load roadmap';
-    sendError(res, message, 404);
-  }
-}
-
-export async function getRoadmapBySubjectHandler(req: Request, res: Response): Promise<void> {
-  try {
-    const profileId = req.profile!._id.toString();
-    const subjectId = req.params['subjectId'] as string;
-    const result = await getRoadmapWithProgress(profileId, undefined, subjectId);
+    const courseId = req.params['courseId'] as string;
+    const result = await getRoadmapWithProgress(profileId, courseId);
     sendSuccess(res, result);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to load roadmap';

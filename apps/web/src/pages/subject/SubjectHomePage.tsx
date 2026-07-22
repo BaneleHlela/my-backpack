@@ -1,17 +1,22 @@
-// Subject home: progress header + standalone topics panel + roadmap.
+// Subject home: course grid (main content) + subject-level mini-apps panel (side).
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, ChevronLeft, Loader2 } from 'lucide-react';
+import { Blocks, ChevronLeft, Loader2, Map } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../../app/store';
 import {
-  fetchRoadmapBySubject,
-  fetchSubjectTopics,
+  fetchCoursesBySubject,
+  fetchMiniAppsBySubject,
 } from '../../features/roadmap/roadmapSlice';
 import { markSubjectAccessed } from '../../features/enrollment/enrollmentSlice';
-import RoadmapPath from '../../components/roadmap/RoadmapPath';
-import type { AgeGroup } from '@my-backpack/shared';
+
+const MINI_APP_EMOJI: Record<string, string> = {
+  dictionary: '📖',
+  quiz: '🧠',
+  flashcards: '🃏',
+  practice: '▶',
+};
 
 export default function SubjectHomePage() {
   const { subjectSlug } = useParams<{ subjectSlug: string }>();
@@ -20,10 +25,9 @@ export default function SubjectHomePage() {
   const [panelOpen, setPanelOpen] = useState(false);
 
   const { enrolledSubjects } = useSelector((state: RootState) => state.enrollment);
-  const { currentRoadmap, standaloneTopics, isLoading, error } = useSelector(
+  const { courses, subjectMiniApps, isLoading, error } = useSelector(
     (state: RootState) => state.roadmap
   );
-  const { activeProfile } = useSelector((state: RootState) => state.auth);
 
   // Find the enrolled subject entry by slug
   let subjectId = '';
@@ -46,18 +50,12 @@ export default function SubjectHomePage() {
 
   useEffect(() => {
     if (!subjectId) return;
-    void dispatch(fetchRoadmapBySubject(subjectId));
     void dispatch(markSubjectAccessed(subjectId));
     if (fieldSlug && subjectSlug) {
-      void dispatch(fetchSubjectTopics({ fieldSlug, subjectSlug }));
+      void dispatch(fetchCoursesBySubject({ fieldSlug, subjectSlug }));
+      void dispatch(fetchMiniAppsBySubject({ fieldSlug, subjectSlug }));
     }
   }, [dispatch, subjectId, fieldSlug, subjectSlug]);
-
-  const ageGroup: AgeGroup = activeProfile?.ageGroup ?? 'adult';
-
-  const pct = currentRoadmap
-    ? Math.round((currentRoadmap.completedItems / (currentRoadmap.totalItems || 1)) * 100)
-    : 0;
 
   if (!subjectId && enrolledSubjects) {
     return (
@@ -87,32 +85,15 @@ export default function SubjectHomePage() {
           {fieldName || 'Dashboard'}
         </button>
         <h1 className="text-2xl font-bold text-gray-800">{subjectName}</h1>
-        {currentRoadmap && (
-          <div className="mt-2">
-            <p className="text-sm text-gray-600 mb-1.5">
-              {currentRoadmap.completedItems} of {currentRoadmap.totalItems} items complete
-              {' · '}
-              <span className="font-semibold">{pct}% done</span>
-            </p>
-            <div className="h-1.5 bg-white/40 rounded-full overflow-hidden max-w-md">
-              <motion.div
-                className="h-full bg-gradient-to-r from-violet-400 to-teal-400 rounded-full"
-                initial={{ width: 0 }}
-                animate={{ width: `${pct}%` }}
-                transition={{ duration: 0.8, ease: 'easeOut' }}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Body */}
       <div className="relative flex flex-1">
-        {/* Standalone topics panel */}
+        {/* Mini-apps panel */}
         <div className="relative flex-shrink-0">
           {/* Collapsed pill */}
           <AnimatePresence>
-            {!panelOpen && standaloneTopics.length > 0 && (
+            {!panelOpen && subjectMiniApps.length > 0 && (
               <motion.button
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -121,12 +102,12 @@ export default function SubjectHomePage() {
                 onClick={() => setPanelOpen(true)}
                 className="fixed left-0 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1 py-4 px-2 bg-white/40 backdrop-blur border border-white/50 rounded-r-2xl shadow-md hover:bg-white/60 transition-colors"
               >
-                <BookOpen className="w-4 h-4 text-gray-600" />
+                <Blocks className="w-4 h-4 text-gray-600" />
                 <span
                   className="text-xs text-gray-600 font-medium"
                   style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
                 >
-                  Topics
+                  Mini-Apps
                 </span>
               </motion.button>
             )}
@@ -151,7 +132,7 @@ export default function SubjectHomePage() {
                   className="fixed left-0 top-[60px] bottom-0 w-60 z-30 bg-white/80 backdrop-blur-xl border-r border-white/50 shadow-xl overflow-y-auto p-4"
                 >
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-gray-800 text-sm">Topics</h3>
+                    <h3 className="font-bold text-gray-800 text-sm">Mini-Apps</h3>
                     <button
                       type="button"
                       onClick={() => setPanelOpen(false)}
@@ -160,33 +141,20 @@ export default function SubjectHomePage() {
                       ✕
                     </button>
                   </div>
-                  <div className="space-y-4">
-                    {standaloneTopics.map(({ topic, miniApps }) => (
-                      <div key={topic._id}>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                          {topic.name}
-                        </p>
-                        <div className="space-y-1">
-                          {miniApps.map((app) => (
-                            <button
-                              key={app._id}
-                              type="button"
-                              onClick={() => {
-                                setPanelOpen(false);
-                                navigate(
-                                  `/field/${fieldSlug}/subject/${subjectSlug}/topic/${topic.slug}/miniapp/${app.slug}`
-                                );
-                              }}
-                              className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/60 transition-colors"
-                            >
-                              <span className="text-base">
-                                {app.type === 'dictionary' ? '📖' : app.type === 'quiz' ? '🧠' : app.type === 'flashcards' ? '🃏' : '▶'}
-                              </span>
-                              <span className="text-sm text-gray-700">{app.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                  <div className="space-y-1">
+                    {subjectMiniApps.map((app) => (
+                      <button
+                        key={app._id}
+                        type="button"
+                        onClick={() => {
+                          setPanelOpen(false);
+                          navigate(`/field/${fieldSlug}/subject/${subjectSlug}/miniapp/${app.slug}`);
+                        }}
+                        className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/60 transition-colors"
+                      >
+                        <span className="text-base">{MINI_APP_EMOJI[app.type] ?? '📦'}</span>
+                        <span className="text-sm text-gray-700">{app.name}</span>
+                      </button>
                     ))}
                   </div>
                 </motion.div>
@@ -195,9 +163,9 @@ export default function SubjectHomePage() {
           </AnimatePresence>
         </div>
 
-        {/* Roadmap main content */}
-        <div className="flex-1 px-4 py-6 max-w-2xl mx-auto w-full">
-          {isLoading && !currentRoadmap && (
+        {/* Course grid */}
+        <div className="flex-1 px-4 py-6 max-w-4xl mx-auto w-full">
+          {isLoading && courses.length === 0 && (
             <div className="flex justify-center py-16">
               <Loader2 className="w-8 h-8 animate-spin text-violet-400" />
             </div>
@@ -205,21 +173,54 @@ export default function SubjectHomePage() {
 
           {error && (
             <div className="text-center py-16 text-gray-500">
-              <p>Could not load roadmap.</p>
+              <p>Could not load courses.</p>
               <p className="text-sm mt-1">{error}</p>
             </div>
           )}
 
-          {!isLoading && !error && currentRoadmap && currentRoadmap.nodes.length === 0 && (
-            <p className="text-center text-gray-500 py-16">No lessons available yet.</p>
+          {!isLoading && !error && courses.length === 0 && (
+            <p className="text-center text-gray-500 py-16">No courses available yet.</p>
           )}
 
-          {currentRoadmap && currentRoadmap.nodes.length > 0 && (
-            <RoadmapPath
-              roadmap={currentRoadmap}
-              ageGroup={ageGroup}
-              subjectSlug={subjectSlug ?? ''}
-            />
+          {courses.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {courses.map((course, i) => (
+                <motion.button
+                  key={course._id}
+                  type="button"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: i * 0.06 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => navigate(`/subject/${subjectSlug}/course/${course.slug}`)}
+                  className="w-full text-left bg-white/30 backdrop-blur-sm rounded-3xl border border-white/40 p-6 flex flex-col gap-2 shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="text-3xl flex-shrink-0">
+                      {course.iconUrl ? (
+                        <img src={course.iconUrl} alt="" className="w-10 h-10 object-contain" />
+                      ) : (
+                        <Map className="w-8 h-8 text-violet-400" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base font-bold text-gray-800 leading-tight truncate">
+                        {course.name}
+                      </h3>
+                      {course.description && (
+                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                          {course.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <span className="inline-block w-fit text-xs font-medium px-2 py-0.5 rounded-full bg-violet-100/80 text-violet-700">
+                    {course.roadmap.nodeCount} topic{course.roadmap.nodeCount === 1 ? '' : 's'}
+                  </span>
+                </motion.button>
+              ))}
+            </div>
           )}
         </div>
       </div>

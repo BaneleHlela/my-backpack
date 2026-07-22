@@ -8,8 +8,7 @@ import Term from '../../../models/apps/language/vocabulary/term.model';
 import Definition from '../../../models/apps/language/vocabulary/definition.model';
 import Question from '../../../models/apps/language/vocabulary/question.model';
 import Subject from '../../../models/core/subject.model';
-import Topic from '../../../models/core/topic.model';
-import MiniApp from '../../../models/core/miniApp.model';
+import Course from '../../../models/core/course.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Quiz from '../../../models/learning/quiz.model';
 import { IQuestionContent, IQuestionHelpers } from '../../../modules/question/question.types';
@@ -141,13 +140,13 @@ const assessmentObjects: ObjectData[] = [
 
 async function upsertObjectQuestion(
   obj: ObjectData,
-  mathMiniAppId: string
+  mathCourseId: string
 ): Promise<string> {
   const term = await Term.findOneAndUpdate(
-    { miniAppId: mathMiniAppId, word: obj.word },
+    { miniAppId: mathCourseId, word: obj.word },
     {
       word: obj.word,
-      miniAppId: mathMiniAppId,
+      miniAppId: mathCourseId,
       source: 'manual',
       aiGenerationStatus: 'not_needed',
     },
@@ -207,7 +206,7 @@ async function upsertObjectQuestion(
     {
       termId: term._id,
       definitionId: definition._id,
-      miniAppId: mathMiniAppId,
+      miniAppId: mathCourseId,
       type: 'dnd_single',
       maxPoints: 4,
       pointsCanBePartial: false,
@@ -227,29 +226,28 @@ export async function seedDragIntroQuestions(nodeId: string, introLessonId: stri
   const subject = await Subject.findOne({ slug: 'foundation-phase-mathematics' });
   if (!subject) throw new Error('Foundation Phase Mathematics subject not found — run content seed first');
 
-  const topic = await Topic.findOne({ subjectId: subject._id, slug: 'number-sense' });
-  if (!topic) throw new Error('Number Sense topic not found — run content seed first');
+  // Term/Question/Quiz.miniAppId is scoped to the Number Sense Course's _id for roadmap-linked
+  // content (no MiniApp represents roadmaps anymore).
+  const numberSenseCourse = await Course.findOne({ subjectId: subject._id, slug: 'number-sense' });
+  if (!numberSenseCourse) throw new Error('Number Sense course not found — run the roadmap seeder first');
 
-  const mathMiniApp = await MiniApp.findOne({ topicId: topic._id, slug: 'roadmap' });
-  if (!mathMiniApp) throw new Error('Number Sense roadmap miniApp not found — run content seed first');
-
-  const mathMiniAppId = mathMiniApp._id.toString();
+  const mathCourseId = numberSenseCourse._id.toString();
 
   const practiceQuestionIds: string[] = [];
   for (const obj of practiceObjects) {
-    practiceQuestionIds.push(await upsertObjectQuestion(obj, mathMiniAppId));
+    practiceQuestionIds.push(await upsertObjectQuestion(obj, mathCourseId));
   }
 
   const assessmentQuestionIds: string[] = [];
   for (const obj of assessmentObjects) {
-    assessmentQuestionIds.push(await upsertObjectQuestion(obj, mathMiniAppId));
+    assessmentQuestionIds.push(await upsertObjectQuestion(obj, mathCourseId));
   }
 
   const practiceQuiz = await Quiz.findOneAndUpdate(
-    { miniAppId: mathMiniAppId, mode: 'fixed', title: "Let's Learn to Drag! Practice" },
+    { miniAppId: mathCourseId, mode: 'fixed', title: "Let's Learn to Drag! Practice" },
     {
-      miniAppId: mathMiniAppId,
-      sourceMiniAppIds: [mathMiniAppId],
+      miniAppId: mathCourseId,
+      sourceMiniAppIds: [mathCourseId],
       title: "Let's Learn to Drag! Practice",
       mode: 'fixed',
       questionIds: practiceQuestionIds,
@@ -262,10 +260,10 @@ export async function seedDragIntroQuestions(nodeId: string, introLessonId: stri
   );
 
   const assessmentQuiz = await Quiz.findOneAndUpdate(
-    { miniAppId: mathMiniAppId, mode: 'fixed', title: "Let's Learn to Drag! Assessment" },
+    { miniAppId: mathCourseId, mode: 'fixed', title: "Let's Learn to Drag! Assessment" },
     {
-      miniAppId: mathMiniAppId,
-      sourceMiniAppIds: [mathMiniAppId],
+      miniAppId: mathCourseId,
+      sourceMiniAppIds: [mathCourseId],
       title: "Let's Learn to Drag! Assessment",
       mode: 'fixed',
       questionIds: assessmentQuestionIds,

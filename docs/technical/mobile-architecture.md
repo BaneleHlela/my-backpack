@@ -309,7 +309,7 @@ rather than a nested scroll container.
 ## Environment variables
 
 Expo auto-loads `EXPO_PUBLIC_`-prefixed variables from `.env` with no extra
-config. `apps/mobile/.env.example`:
+config. `apps/mobile/.env.example` (now committed, matching this exactly):
 
 ```
 EXPO_PUBLIC_API_URL=http://localhost:5000/api

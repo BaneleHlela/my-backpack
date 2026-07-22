@@ -17,8 +17,7 @@ import Term from '../../../models/apps/language/vocabulary/term.model';
 import Definition from '../../../models/apps/language/vocabulary/definition.model';
 import Question from '../../../models/apps/language/vocabulary/question.model';
 import Subject from '../../../models/core/subject.model';
-import Topic from '../../../models/core/topic.model';
-import MiniApp from '../../../models/core/miniApp.model';
+import Course from '../../../models/core/course.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Quiz from '../../../models/learning/quiz.model';
 import { IDraggable, IQuestionContent } from '../../../modules/question/question.types';
@@ -128,26 +127,23 @@ function pickVowelIndices(targetIndex: number, count: 1 | 2 | 5, occurrence: 1 |
 export async function seedVowelQuestions(nodeId: string, introLessonId: string): Promise<void> {
   console.log('Seeding IsiZulu vowel questions...');
 
-  // Resolve via the content hierarchy rather than MiniApp.findOne({ slug: 'roadmap' }) alone —
-  // 'roadmap' is not globally unique, other subjects (e.g. math) also have a 'roadmap' miniApp.
+  // Resolve via the Sounds Course — Term/Question/Quiz.miniAppId is scoped to the Course's
+  // _id for roadmap-linked content (no MiniApp represents roadmaps anymore).
   const subject = await Subject.findOne({ slug: 'isizulu-hl' });
   if (!subject) throw new Error('IsiZulu HL subject not found — run content seed first');
 
-  const topic = await Topic.findOne({ subjectId: subject._id, slug: 'sounds' });
-  if (!topic) throw new Error('Sounds topic not found — run content seed first');
-
-  const soundsMiniApp = await MiniApp.findOne({ topicId: topic._id, slug: 'roadmap' });
-  if (!soundsMiniApp) throw new Error('Sounds roadmap miniApp not found — run content seed first');
+  const soundsCourse = await Course.findOne({ subjectId: subject._id, slug: 'sounds' });
+  if (!soundsCourse) throw new Error('Sounds course not found — run the roadmap seeder first');
 
   // Superseded by the 6 quiz-variant dnd_single questions below (not extended) — the old
   // single dnd_single-per-vowel question (no seedKey, one per Term) and its Quiz are deleted
   // rather than left orphaned, matching the seed system's idempotent-upsert philosophy.
   await Question.deleteMany({
-    miniAppId: soundsMiniApp._id,
+    miniAppId: soundsCourse._id,
     type: 'dnd_single',
     seedKey: { $exists: false },
   });
-  await Quiz.deleteMany({ miniAppId: soundsMiniApp._id, title: 'IsiZulu Vowels Practice' });
+  await Quiz.deleteMany({ miniAppId: soundsCourse._id, title: 'IsiZulu Vowels Practice' });
 
   const allOptions = vowelData.map((v) => v.word);
 
@@ -158,10 +154,10 @@ export async function seedVowelQuestions(nodeId: string, introLessonId: string):
     // Term.word is unique per miniAppId, not globally — English Phonics also seeds 'a'-'u'
     // Terms against its own miniApp, so the query must be scoped here too.
     const term = await Term.findOneAndUpdate(
-      { miniAppId: soundsMiniApp._id, word: v.word },
+      { miniAppId: soundsCourse._id, word: v.word },
       {
         word: v.word,
-        miniAppId: soundsMiniApp._id,
+        miniAppId: soundsCourse._id,
         phonetic: v.phonetic,
         audioUrl: v.audioUrl,
         source: 'manual',
@@ -208,7 +204,7 @@ export async function seedVowelQuestions(nodeId: string, introLessonId: string):
       {
         termId: term._id,
         definitionId: definition._id,
-        miniAppId: soundsMiniApp._id,
+        miniAppId: soundsCourse._id,
         type: 'mcq_audio',
         maxPoints: 4,
         pointsCanBePartial: false,
@@ -279,7 +275,7 @@ export async function seedVowelQuestions(nodeId: string, introLessonId: string):
           seedKey,
           termId,
           definitionId,
-          miniAppId: soundsMiniApp._id,
+          miniAppId: soundsCourse._id,
           type: 'dnd_single',
           maxPoints: 4,
           pointsCanBePartial: false,
@@ -294,10 +290,10 @@ export async function seedVowelQuestions(nodeId: string, introLessonId: string):
 
     const quizTitle = `IsiZulu Vowels — ${variant.quizTitle}`;
     const quiz = await Quiz.findOneAndUpdate(
-      { miniAppId: soundsMiniApp._id, mode: 'fixed', title: quizTitle },
+      { miniAppId: soundsCourse._id, mode: 'fixed', title: quizTitle },
       {
-        miniAppId: soundsMiniApp._id,
-        sourceMiniAppIds: [soundsMiniApp._id],
+        miniAppId: soundsCourse._id,
+        sourceMiniAppIds: [soundsCourse._id],
         title: quizTitle,
         mode: 'fixed',
         questionIds,

@@ -28,12 +28,10 @@ async function runSeed(): Promise<void> {
     const { miniAppMap } = await seedContentHierarchy();
     console.log('');
 
-    const dictionaryMiniAppId = miniAppMap.get('english/vocabulary/dictionary');
+    const dictionaryMiniAppId = miniAppMap.get('english/dictionary');
     if (!dictionaryMiniAppId) throw new Error('Dictionary miniApp not found in map');
-    const quizMiniAppId = miniAppMap.get('english/vocabulary/quiz');
-    if (!quizMiniAppId) throw new Error('Quiz miniApp not found in map');
 
-    await seedGeneralDictionaryQuiz(quizMiniAppId, dictionaryMiniAppId);
+    await seedGeneralDictionaryQuiz(dictionaryMiniAppId);
     console.log('');
 
     const isizuluRoadmapResult = await seedIsiZuluRoadmap();

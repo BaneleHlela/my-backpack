@@ -1,12 +1,17 @@
-// Seeds the English "English Phonics" roadmap: two nodes — "Vowel Sounds" (1 lesson item +
+// Seeds the English "Phonics" course + roadmap: two nodes — "Vowel Sounds" (1 lesson item +
 // 6 quiz items, per docs/content/vowels-dnd-quiz-design.md) then "Three-Letter Words" (1
 // lesson item + 2 quiz items — was practice + assessment). Same pattern as
 // isizulu-hl.roadmap.seed.ts and math-foundation.roadmap.seed.ts. Idempotent — re-running
 // updates existing records.
 //
+// Course-first: upserts the Course by (subjectId, slug), then resolves the Roadmap via
+// course.roadmapId if it already exists (e.g. adopted from the one-time migration — see
+// seed/migrations/2026-07-course-roadmap-restructure.ts) or creates a new one otherwise.
+//
 // Both nodes' `items[]` (the quiz items specifically) are written by their respective
 // question-seed files (english/vowels.questions.ts, english/cvc-words.questions.ts), which
 // know the Quiz ids — this seeder only creates the intro Lesson + node scaffolding.
+import Course from '../../../models/core/course.model';
 import Roadmap from '../../../models/learning/roadmap.model';
 import RoadmapNode from '../../../models/learning/roadmapNode.model';
 import Lesson from '../../../models/learning/lesson.model';
@@ -22,20 +27,42 @@ export interface EnglishPhonicsRoadmapSeedResult {
 }
 
 export async function seedEnglishPhonicsRoadmap(): Promise<EnglishPhonicsRoadmapSeedResult> {
-  console.log('Seeding English Phonics roadmap...');
+  console.log('Seeding English Phonics course...');
 
   const subject = await Subject.findOne({ slug: 'english' });
   if (!subject) throw new Error('English subject not found — run content seed first');
 
-  const roadmap = await Roadmap.findOneAndUpdate(
-    { subjectId: subject._id, title: 'English Phonics' },
+  const course = await Course.findOneAndUpdate(
+    { subjectId: subject._id, slug: 'phonics' },
     {
       subjectId: subject._id,
-      title: 'English Phonics',
+      name: 'Phonics',
+      slug: 'phonics',
       description: 'Learn English letter sounds and words step by step',
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
+
+  let roadmap;
+  if (course.roadmapId) {
+    roadmap = await Roadmap.findByIdAndUpdate(
+      course.roadmapId,
+      {
+        title: 'English Phonics',
+        description: 'Learn English letter sounds and words step by step',
+      },
+      { new: true }
+    );
+  } else {
+    roadmap = await Roadmap.create({
+      title: 'English Phonics',
+      description: 'Learn English letter sounds and words step by step',
+      nodes: [],
+    });
+    course.roadmapId = roadmap._id;
+    await course.save();
+  }
+  if (!roadmap) throw new Error('Failed to resolve English Phonics roadmap');
 
   // ── Node 1: Vowel Sounds ───────────────────────────────────
 
@@ -44,6 +71,7 @@ export async function seedEnglishPhonicsRoadmap(): Promise<EnglishPhonicsRoadmap
     {
       roadmapId: roadmap._id,
       title: 'Vowel Sounds',
+      slug: 'vowel-sounds',
       description: 'Learn the five short vowel sounds: a, e, i, o, u',
       position: 1,
       type: 'lesson',
@@ -72,6 +100,7 @@ export async function seedEnglishPhonicsRoadmap(): Promise<EnglishPhonicsRoadmap
     {
       roadmapId: roadmap._id,
       title: 'Three-Letter Words',
+      slug: 'three-letter-words',
       description: 'Build and recognise simple consonant-vowel-consonant (CVC) words',
       position: 2,
       type: 'lesson',
@@ -111,7 +140,7 @@ export async function seedEnglishPhonicsRoadmap(): Promise<EnglishPhonicsRoadmap
     ],
   });
 
-  console.log('  Seeded English Phonics roadmap: 2 nodes, 2 intro lessons (quiz items added separately)');
+  console.log('  Seeded English Phonics course: 2 nodes, 2 intro lessons (quiz items added separately)');
 
   return {
     roadmapId: roadmap._id.toString(),

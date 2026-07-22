@@ -1,5 +1,8 @@
-// Shared types for the content hierarchy: Field → Subject → Topic → MiniApp.
-// Mirrors field.model.ts, subject.model.ts, topic.model.ts, and miniApp.model.ts.
+// Shared types for the content hierarchy: Field → Subject → Course[] / MiniApp[].
+// Mirrors field.model.ts, subject.model.ts, course.model.ts, and miniApp.model.ts.
+// `Topic` was removed entirely (July 2026) — grouping MiniApps under a Subject is now just
+// MiniApp.subjectId, and the "individual roadmap step" meaning belongs to RoadmapNode.
+import type { ICurriculumTag } from './roadmap';
 
 export interface IField {
   _id: string;
@@ -24,34 +27,46 @@ export interface ISubject {
   updatedAt: string;
 }
 
-export interface ITopic {
+export interface IMiniApp {
   _id: string;
   subjectId: string;
   name: string;
   slug: string;
   description?: string;
   iconUrl?: string;
+  type: 'quiz' | 'dictionary' | 'flashcards' | 'practice';
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface IMiniApp {
+// Minimal roadmap info embedded in a course summary — not the full IRoadmap.
+export interface ICourseRoadmapSummary {
   _id: string;
-  topicId: string;
+  title: string;
+  description?: string;
+  nodeCount: number;
+}
+
+// Shape returned by both GET .../courses (list) and .../courses/:courseSlug (detail).
+// miniAppIds is populated (partial IMiniApp objects) on the detail fetch only — on the list
+// fetch it's plain id strings. Callers that need populated mini-app info should use the
+// detail endpoint.
+export interface ICourseSummary {
+  _id: string;
+  subjectId: string;
   name: string;
   slug: string;
   description?: string;
   iconUrl?: string;
-  type: 'quiz' | 'roadmap' | 'dictionary' | 'flashcards' | 'practice';
+  miniAppIds: string[] | Pick<IMiniApp, '_id' | 'name' | 'slug' | 'type' | 'description'>[];
+  curriculumTags: ICurriculumTag[];
   isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
+  roadmap: ICourseRoadmapSummary;
 }
 
 export interface MiniAppBreadcrumb {
   miniApp: IMiniApp;
-  topic: Pick<ITopic, '_id' | 'name' | 'slug'>;
   subject: Pick<ISubject, '_id' | 'name' | 'slug'>;
   field: Pick<IField, '_id' | 'name' | 'slug'>;
 }

@@ -189,14 +189,18 @@ export async function getProfileStats(profileId: string): Promise<ProfileStats> 
 
   const globalStats = adaptiveProfile?.globalStats;
 
-  const recentSessions: RecentSession[] = recentSessionDocs.map((s) => ({
-    _id: s._id as Types.ObjectId,
-    miniAppId: s.miniAppId._id,
-    miniAppName: s.miniAppId.name,
-    percentageScore: s.results?.percentageScore ?? 0,
-    completedAt: s.completedAt!,
-    totalQuestions: s.results?.totalQuestions ?? 0,
-  }));
+  // Roadmap-linked quiz sessions carry a Course _id in miniAppId (not a MiniApp document), so
+  // populate resolves to null for those — filter them out rather than surface a broken name.
+  const recentSessions: RecentSession[] = recentSessionDocs
+    .filter((s) => s.miniAppId != null)
+    .map((s) => ({
+      _id: s._id as Types.ObjectId,
+      miniAppId: s.miniAppId._id,
+      miniAppName: s.miniAppId.name,
+      percentageScore: s.results?.percentageScore ?? 0,
+      completedAt: s.completedAt!,
+      totalQuestions: s.results?.totalQuestions ?? 0,
+    }));
 
   return {
     totalTermsInBucket,

@@ -21,6 +21,7 @@ import SelectProfilePage from './pages/SelectProfilePage';
 import ProfileSetupPage from './pages/ProfileSetupPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import SubjectHomePage from './pages/subject/SubjectHomePage';
+import CoursePage from './pages/course/CoursePage';
 import LessonPlayerPage from './pages/lesson/LessonPlayerPage';
 import QuizItemPlayerPage from './pages/lesson/QuizItemPlayerPage';
 import MiniAppPage from './pages/miniapp/MiniAppPage';
@@ -85,24 +86,25 @@ function AppRoutes() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/" element={<DashboardPage />} />
           <Route path="/subject/:subjectSlug" element={<SubjectHomePage />} />
+          <Route path="/subject/:subjectSlug/course/:courseSlug" element={<CoursePage />} />
           <Route
-            path="/subject/:subjectSlug/lesson/:lessonId"
+            path="/subject/:subjectSlug/course/:courseSlug/lesson/:lessonId"
             element={<LessonPlayerPage />}
           />
           <Route
-            path="/subject/:subjectSlug/node/:nodeId/quiz/:itemId"
+            path="/subject/:subjectSlug/course/:courseSlug/node/:nodeId/quiz/:itemId"
             element={<QuizItemPlayerPage />}
           />
           <Route
-            path="/field/:fieldSlug/subject/:subjectSlug/topic/:topicSlug/miniapp/:miniAppSlug"
+            path="/field/:fieldSlug/subject/:subjectSlug/miniapp/:miniAppSlug"
             element={<MiniAppPage />}
           />
           <Route
-            path="/field/:fieldSlug/subject/:subjectSlug/topic/:topicSlug/miniapp/:miniAppSlug/term/:termId"
+            path="/field/:fieldSlug/subject/:subjectSlug/miniapp/:miniAppSlug/term/:termId"
             element={<MiniAppPage />}
           />
           <Route
-            path="/field/:fieldSlug/subject/:subjectSlug/topic/:topicSlug/miniapp/:miniAppSlug/bucket"
+            path="/field/:fieldSlug/subject/:subjectSlug/miniapp/:miniAppSlug/bucket"
             element={<MiniAppPage />}
           />
         </Route>

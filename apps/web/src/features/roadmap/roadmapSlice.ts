@@ -5,51 +5,97 @@ import type {
   RoadmapWithProgress,
   IRoadmapNode,
   ILesson,
-  ITopic,
+  ICourseSummary,
   IMiniApp,
 } from '@my-backpack/shared';
 
-export interface StandaloneTopicEntry {
-  topic: ITopic;
-  miniApps: IMiniApp[];
-}
-
 interface RoadmapState {
+  courses: ICourseSummary[];
+  subjectMiniApps: IMiniApp[];
+  currentCourse: ICourseSummary | null;
   currentRoadmap: RoadmapWithProgress | null;
   currentNode: IRoadmapNode | null;
   currentLesson: ILesson | null;
-  standaloneTopics: StandaloneTopicEntry[];
   isLoading: boolean;
   error: string | null;
 }
 
 const initialState: RoadmapState = {
+  courses: [],
+  subjectMiniApps: [],
+  currentCourse: null,
   currentRoadmap: null,
   currentNode: null,
   currentLesson: null,
-  standaloneTopics: [],
   isLoading: false,
   error: null,
 };
 
-export const fetchRoadmapBySubject = createAsyncThunk(
-  'roadmap/fetchBySubject',
-  async (subjectId: string, { rejectWithValue }) => {
+export const fetchCoursesBySubject = createAsyncThunk(
+  'roadmap/fetchCoursesBySubject',
+  async (
+    { fieldSlug, subjectSlug }: { fieldSlug: string; subjectSlug: string },
+    { rejectWithValue }
+  ) => {
     try {
-      const res = await axiosInstance.get(`/roadmap/subject/${subjectId}`);
-      return res.data.data as RoadmapWithProgress;
+      const res = await axiosInstance.get(
+        `/content/fields/${fieldSlug}/subjects/${subjectSlug}/courses`
+      );
+      return res.data.data as ICourseSummary[];
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      return rejectWithValue(e.response?.data?.message ?? 'Failed to fetch roadmap');
+      return rejectWithValue(e.response?.data?.message ?? 'Failed to fetch courses');
     }
   }
 );
 
-export const fetchRoadmapByMiniApp = createAsyncThunk(
-  'roadmap/fetchByMiniApp',
-  async (miniAppId: string, { rejectWithValue }) => {
+export const fetchMiniAppsBySubject = createAsyncThunk(
+  'roadmap/fetchMiniAppsBySubject',
+  async (
+    { fieldSlug, subjectSlug }: { fieldSlug: string; subjectSlug: string },
+    { rejectWithValue }
+  ) => {
     try {
-      const res = await axiosInstance.get(`/roadmap/${miniAppId}`);
+      const res = await axiosInstance.get(
+        `/content/fields/${fieldSlug}/subjects/${subjectSlug}/miniapps`
+      );
+      return res.data.data as IMiniApp[];
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      return rejectWithValue(e.response?.data?.message ?? 'Failed to fetch mini-apps');
+    }
+  }
+);
+
+// Fallback for a direct link/refresh on the course page, where the courses list isn't in
+// state yet — fetches a single course by slug instead of the whole subject's course list.
+export const fetchCourseBySlug = createAsyncThunk(
+  'roadmap/fetchCourseBySlug',
+  async (
+    {
+      fieldSlug,
+      subjectSlug,
+      courseSlug,
+    }: { fieldSlug: string; subjectSlug: string; courseSlug: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      const res = await axiosInstance.get(
+        `/content/fields/${fieldSlug}/subjects/${subjectSlug}/courses/${courseSlug}`
+      );
+      return res.data.data as ICourseSummary;
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      return rejectWithValue(e.response?.data?.message ?? 'Failed to fetch course');
+    }
+  }
+);
+
+export const fetchRoadmapByCourse = createAsyncThunk(
+  'roadmap/fetchRoadmapByCourse',
+  async (courseId: string, { rejectWithValue }) => {
+    try {
+      const res = await axiosInstance.get(`/roadmap/course/${courseId}`);
       return res.data.data as RoadmapWithProgress;
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
@@ -72,36 +118,6 @@ export const fetchLesson = createAsyncThunk(
   }
 );
 
-export const fetchSubjectTopics = createAsyncThunk(
-  'roadmap/fetchSubjectTopics',
-  async (
-    { fieldSlug, subjectSlug }: { fieldSlug: string; subjectSlug: string },
-    { rejectWithValue }
-  ) => {
-    try {
-      const topicsRes = await axiosInstance.get(
-        `/content/fields/${fieldSlug}/subjects/${subjectSlug}/topics`
-      );
-      const topics = topicsRes.data.data as ITopic[];
-
-      const entries: StandaloneTopicEntry[] = await Promise.all(
-        topics.map(async (topic) => {
-          const miniAppsRes = await axiosInstance.get(
-            `/content/fields/${fieldSlug}/subjects/${subjectSlug}/topics/${topic.slug}/miniapps`
-          );
-          return { topic, miniApps: miniAppsRes.data.data as IMiniApp[] };
-        })
-      );
-
-      // Return topics that have at least one non-roadmap mini app
-      return entries.filter((e) => e.miniApps.some((m) => m.type !== 'roadmap'));
-    } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } };
-      return rejectWithValue(e.response?.data?.message ?? 'Failed to fetch topics');
-    }
-  }
-);
-
 const roadmapSlice = createSlice({
   name: 'roadmap',
   initialState,
@@ -110,35 +126,43 @@ const roadmapSlice = createSlice({
       state.currentNode = action.payload;
     },
     clearRoadmap(state) {
+      state.courses = [];
+      state.subjectMiniApps = [];
+      state.currentCourse = null;
       state.currentRoadmap = null;
       state.currentNode = null;
       state.currentLesson = null;
-      state.standaloneTopics = [];
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchRoadmapBySubject.pending, (state) => {
+      .addCase(fetchCoursesBySubject.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(fetchRoadmapBySubject.fulfilled, (state, action) => {
+      .addCase(fetchCoursesBySubject.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.currentRoadmap = action.payload;
+        state.courses = action.payload;
       })
-      .addCase(fetchRoadmapBySubject.rejected, (state, action) => {
+      .addCase(fetchCoursesBySubject.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       })
-      .addCase(fetchRoadmapByMiniApp.pending, (state) => {
+      .addCase(fetchMiniAppsBySubject.fulfilled, (state, action) => {
+        state.subjectMiniApps = action.payload;
+      })
+      .addCase(fetchCourseBySlug.fulfilled, (state, action) => {
+        state.currentCourse = action.payload;
+      })
+      .addCase(fetchRoadmapByCourse.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(fetchRoadmapByMiniApp.fulfilled, (state, action) => {
+      .addCase(fetchRoadmapByCourse.fulfilled, (state, action) => {
         state.isLoading = false;
         state.currentRoadmap = action.payload;
       })
-      .addCase(fetchRoadmapByMiniApp.rejected, (state, action) => {
+      .addCase(fetchRoadmapByCourse.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       })
@@ -153,9 +177,6 @@ const roadmapSlice = createSlice({
       .addCase(fetchLesson.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
-      })
-      .addCase(fetchSubjectTopics.fulfilled, (state, action) => {
-        state.standaloneTopics = action.payload;
       });
   },
 });

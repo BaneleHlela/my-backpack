@@ -24,7 +24,7 @@ import {
   ResolvedNodeItem,
 } from './roadmap.types';
 import { updateProgressSummary } from '../enrollment/enrollment.service';
-import Subject from '../../models/core/subject.model';
+import Course from '../../models/core/course.model';
 
 // Default status for a node that has no progress entry yet.
 function defaultNodeStatus(node: IRoadmapNodeDocument): NodeStatus {
@@ -100,19 +100,15 @@ async function resolveNodeItems(
     .filter((i): i is ResolvedNodeItem => i !== null);
 }
 
-// Returns roadmap with ordered nodes+items and per-item progress.
-// Accepts either miniAppId or subjectId to locate the roadmap.
+// Returns roadmap with ordered nodes+items and per-item progress, for a given Course.
 export async function getRoadmapWithProgress(
   profileId: string,
-  miniAppId?: string,
-  subjectId?: string
+  courseId: string
 ): Promise<RoadmapWithProgressResult> {
-  const query: Record<string, unknown> = { isActive: true };
-  if (miniAppId) query['miniAppId'] = miniAppId;
-  else if (subjectId) query['subjectId'] = subjectId;
-  else throw new Error('miniAppId or subjectId required');
+  const course = await Course.findOne({ _id: courseId, isActive: true });
+  if (!course) throw new Error('Course not found');
 
-  const roadmap = await Roadmap.findOne(query);
+  const roadmap = await Roadmap.findOne({ _id: course.roadmapId, isActive: true });
   if (!roadmap) throw new Error('Roadmap not found');
 
   // Use roadmap.nodes[] as canonical order.
@@ -127,7 +123,6 @@ export async function getRoadmapWithProgress(
     progress = await ProfileRoadmapProgress.create({
       profileId,
       roadmapId: roadmap._id,
-      miniAppId: roadmap.miniAppId,
     });
   }
 
@@ -433,13 +428,10 @@ async function cascadeAfterItemComplete(
     });
     progress.totalStars = totalStars;
 
-    // Update subject enrollment progress summary if applicable.
-    const roadmap = await Roadmap.findById(node.roadmapId);
-    if (roadmap?.subjectId) {
-      const subject = await Subject.findById(roadmap.subjectId);
-      if (subject) {
-        await updateProgressSummary(profileId, subject._id.toString());
-      }
+    // Update subject enrollment progress summary if this roadmap is wrapped by a Course.
+    const course = await Course.findOne({ roadmapId: node.roadmapId });
+    if (course) {
+      await updateProgressSummary(profileId, course.subjectId.toString());
     }
 
     console.log(`Node completed: ${node.title} — xp=${node.rewards.xp}, peanuts=${node.rewards.peanuts}`);

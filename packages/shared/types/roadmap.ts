@@ -51,10 +51,10 @@ export interface ILesson {
   updatedAt: string;
 }
 
+// A pure ordered container of nodes, referenced from Course.roadmapId — carries no
+// subject/miniApp context of its own.
 export interface IRoadmap {
   _id: string;
-  subjectId?: string;
-  miniAppId?: string;
   title: string;
   description?: string;
   nodes: { nodeId: string; position: number }[];
@@ -74,12 +74,15 @@ export interface IRoadmapNode {
   _id: string;
   roadmapId: string;
   title: string;
+  slug: string;
   description?: string;
   position: number;
   type: NodeType;
   curriculumTags: ICurriculumTag[];
   items: INodeItemRef[];
   unlockRequires: string[];
+  // Reserved for the deferred multi-provider-course feature — always empty today.
+  linkedCourseIds: string[];
   rewards: INodeRewards;
   isActive: boolean;
   createdAt: string;

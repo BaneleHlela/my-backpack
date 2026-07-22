@@ -1,4 +1,6 @@
 // Business logic for subject enrollment: enroll, unenroll, progress queries.
+// A subject can now have multiple Courses (each wrapping its own Roadmap) — progressSummary
+// on ProfileSubjectEnrollment is a rollup across all of the subject's courses.
 import { Types } from 'mongoose';
 import ProfileSubjectEnrollment, {
   IProfileSubjectEnrollmentDocument,
@@ -9,9 +11,9 @@ import ProfileRoadmapProgress, {
 } from '../../models/learning/profileRoadmapProgress.model';
 import Roadmap from '../../models/learning/roadmap.model';
 import RoadmapNode from '../../models/learning/roadmapNode.model';
+import Course from '../../models/core/course.model';
 import Subject, { ISubjectDocument } from '../../models/core/subject.model';
 import Field, { IFieldDocument } from '../../models/core/field.model';
-import Topic from '../../models/core/topic.model';
 import MiniApp from '../../models/core/miniApp.model';
 import { AppError } from '../../utils/AppError';
 import {
@@ -20,7 +22,7 @@ import {
   EnrolledSubjectEntry,
 } from './enrollment.types';
 
-// Enroll a profile in a subject. Creates roadmap progress if a subject roadmap exists.
+// Enroll a profile in a subject. Bootstraps roadmap progress for every Course under the subject.
 export async function enrollInSubject(
   profileId: string,
   subjectId: string
@@ -37,11 +39,23 @@ export async function enrollInSubject(
     fieldId: subject.fieldId,
   });
 
-  // Find the subject-level roadmap and bootstrap progress.
-  const roadmap = await Roadmap.findOne({ subjectId, isActive: true });
-  if (roadmap) {
-    let totalNodes = 0;
-    let totalItems = 0;
+  const courses = await Course.find({ subjectId, isActive: true });
+
+  let totalNodes = 0;
+  let totalItems = 0;
+
+  for (const course of courses) {
+    const roadmap = await Roadmap.findById(course.roadmapId);
+    if (!roadmap) continue;
+
+    totalNodes += roadmap.nodes.length;
+
+    const allNodes = await RoadmapNode.find({ roadmapId: roadmap._id, isActive: true });
+    totalItems += allNodes.reduce((sum, n) => sum + n.items.length, 0);
+
+    // Already bootstrapped (e.g. re-enrolling after a pause) — don't reset progress.
+    const existingProgress = await ProfileRoadmapProgress.findOne({ profileId, roadmapId: roadmap._id });
+    if (existingProgress) continue;
 
     const sortedNodeRefs = roadmap.nodes.slice().sort((a, b) => a.position - b.position);
     const firstNodeRef = sortedNodeRefs[0];
@@ -50,10 +64,6 @@ export async function enrollInSubject(
     if (firstNodeRef) {
       const firstNode = await RoadmapNode.findById(firstNodeRef.nodeId);
       if (firstNode) {
-        totalNodes = roadmap.nodes.length;
-        const allNodes = await RoadmapNode.find({ roadmapId: roadmap._id, isActive: true });
-        totalItems = allNodes.reduce((sum, n) => sum + n.items.length, 0);
-
         const sortedItems = firstNode.items.slice().sort((a, b) => a.position - b.position);
         const itemProgress = new Map<string, IItemProgressEntry>();
         sortedItems.forEach((ir, idx) => {
@@ -77,15 +87,14 @@ export async function enrollInSubject(
     await ProfileRoadmapProgress.create({
       profileId: new Types.ObjectId(profileId),
       roadmapId: roadmap._id,
-      miniAppId: roadmap.miniAppId,
       nodeProgress,
     });
-
-    enrollment.progressSummary.totalNodes = totalNodes;
-    enrollment.progressSummary.totalItems = totalItems;
-    enrollment.markModified('progressSummary');
-    await enrollment.save();
   }
+
+  enrollment.progressSummary.totalNodes = totalNodes;
+  enrollment.progressSummary.totalItems = totalItems;
+  enrollment.markModified('progressSummary');
+  await enrollment.save();
 
   return enrollment;
 }
@@ -158,7 +167,8 @@ export async function getEnrolledSubjectsByField(
   };
 }
 
-// Returns full progress for one enrolled subject, including roadmap id and standalone topics.
+// Returns full progress for one enrolled subject: every Course under it (with its roadmapId)
+// plus the subject-level MiniApps (e.g. Dictionary).
 export async function getSubjectProgress(
   profileId: string,
   subjectId: string
@@ -166,21 +176,12 @@ export async function getSubjectProgress(
   const enrollment = await ProfileSubjectEnrollment.findOne({ profileId, subjectId });
   if (!enrollment) throw new AppError('Not enrolled in this subject', 404);
 
-  const roadmap = await Roadmap.findOne({ subjectId, isActive: true });
-  const roadmapId = roadmap ? roadmap._id.toString() : null;
+  const courseDocs = await Course.find({ subjectId, isActive: true }).sort({ name: 1 });
+  const courses = courseDocs.map((course) => ({ course, roadmapId: course.roadmapId.toString() }));
 
-  const topics = await Topic.find({ subjectId, isActive: true });
-  const standaloneTopics = [];
-  for (const topic of topics) {
-    const miniApps = await MiniApp.find({
-      topicId: topic._id,
-      type: { $in: ['dictionary', 'quiz', 'flashcards', 'practice'] },
-      isActive: true,
-    });
-    if (miniApps.length > 0) standaloneTopics.push({ topic, miniApps });
-  }
+  const miniApps = await MiniApp.find({ subjectId, isActive: true }).sort({ name: 1 });
 
-  return { enrollment, roadmapId, standaloneTopics };
+  return { enrollment, courses, miniApps };
 }
 
 // Pauses enrollment — preserves all learning progress.
@@ -242,27 +243,42 @@ export async function touchSubjectAccess(profileId: string, subjectId: string): 
   );
 }
 
-// Recalculates progressSummary from ProfileRoadmapProgress. Called after lesson/node completions.
+// Recalculates progressSummary from ProfileRoadmapProgress, rolled up across every Course
+// under the subject. Called after lesson/node completions.
 export async function updateProgressSummary(profileId: string, subjectId: string): Promise<void> {
-  const roadmap = await Roadmap.findOne({ subjectId, isActive: true });
-  if (!roadmap) return;
+  const courses = await Course.find({ subjectId, isActive: true });
+  if (courses.length === 0) return;
 
-  const progress = await ProfileRoadmapProgress.findOne({ profileId, roadmapId: roadmap._id });
-  if (!progress) return;
-
-  const totalNodes = roadmap.nodes.length;
+  let totalNodes = 0;
   let completedNodes = 0;
+  let totalItems = 0;
   let completedItems = 0;
+  let lastActivityAt: Date | undefined;
 
-  progress.nodeProgress.forEach((entry) => {
-    if (entry.status === 'completed') completedNodes++;
-    entry.itemProgress.forEach((ip) => {
-      if (ip.status === 'completed') completedItems++;
+  for (const course of courses) {
+    const roadmap = await Roadmap.findById(course.roadmapId);
+    if (!roadmap) continue;
+
+    totalNodes += roadmap.nodes.length;
+
+    const allNodes = await RoadmapNode.find({ roadmapId: roadmap._id, isActive: true });
+    totalItems += allNodes.reduce((sum, n) => sum + n.items.length, 0);
+
+    const progress = await ProfileRoadmapProgress.findOne({ profileId, roadmapId: roadmap._id });
+    if (!progress) continue;
+
+    progress.nodeProgress.forEach((entry) => {
+      if (entry.status === 'completed') completedNodes++;
+      entry.itemProgress.forEach((ip) => {
+        if (ip.status === 'completed') completedItems++;
+      });
     });
-  });
 
-  const allNodes = await RoadmapNode.find({ roadmapId: roadmap._id, isActive: true });
-  const totalItems = allNodes.reduce((sum, n) => sum + n.items.length, 0);
+    if (progress.lastActivityAt && (!lastActivityAt || progress.lastActivityAt > lastActivityAt)) {
+      lastActivityAt = progress.lastActivityAt;
+    }
+  }
+
   const overallProgressPercent =
     totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
@@ -274,7 +290,7 @@ export async function updateProgressSummary(profileId: string, subjectId: string
       'progressSummary.totalItems': totalItems,
       'progressSummary.completedItems': completedItems,
       'progressSummary.overallProgressPercent': overallProgressPercent,
-      'progressSummary.lastActivityAt': new Date(),
+      'progressSummary.lastActivityAt': lastActivityAt ?? new Date(),
     }
   );
 }
