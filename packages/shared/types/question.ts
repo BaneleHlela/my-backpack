@@ -105,7 +105,10 @@ export const defaultHelpers: IQuestionHelpers = {
 
 export interface IQuestionContent {
   // Text question fields (used by all non-DnD types)
-  prompt?: string;           // for mcq_audio: starts with "audio:" prefix
+  prompt?: string;           // for mcq_audio: starts with "audio:" prefix (legacy convention,
+                              // kept as-is for old seeded content — audio-only, no simultaneous text)
+  promptAudioUrl?: string;   // GCS path — optional audio to play alongside plain display text in
+                              // `prompt`, additive to the legacy `audio:` prefix convention above
   options?: string[];        // for MCQ and true_false types
   correctAnswer?: string;
   explanation?: string;

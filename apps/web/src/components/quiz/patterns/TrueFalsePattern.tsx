@@ -6,7 +6,8 @@
 // with the dedicated Submit button, regardless of helpers.autoSubmit (that flag
 // is reserved for DnD interaction patterns, not click-to-select ones).
 import { useState } from 'react';
-import { Check, X, Loader2 } from 'lucide-react';
+import { Check, X, Loader2, Volume2 } from 'lucide-react';
+import { ASSETS } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 import SpokenText from '../SpokenText';
 
@@ -17,6 +18,16 @@ interface TrueFalsePatternProps {
   disabled?: boolean;
   isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
+}
+
+function resolveAssetUrl(path?: string): string | undefined {
+  if (!path) return undefined;
+  return path.startsWith('http') ? path : `${ASSETS.GCS_BASE}/${path}`;
+}
+
+function playAudio(path?: string) {
+  const url = resolveAssetUrl(path);
+  if (url) void new Audio(url).play();
 }
 
 export default function TrueFalsePattern({ content, lang, disabled, isSubmitting, onAnswer }: TrueFalsePatternProps) {
@@ -34,11 +45,25 @@ export default function TrueFalsePattern({ content, lang, disabled, isSubmitting
 
   return (
     <div className="space-y-4">
-      {content.prompt?.startsWith('audio:') ? (
-        <p className="text-lg text-gray-800 whitespace-pre-line">{content.prompt}</p>
-      ) : (
-        <SpokenText text={content.prompt ?? ''} lang={lang} />
-      )}
+      <div className="flex items-start gap-2">
+        <div className="flex-1">
+          {content.prompt?.startsWith('audio:') ? (
+            <p className="text-lg text-gray-800 whitespace-pre-line">{content.prompt}</p>
+          ) : (
+            <SpokenText text={content.prompt ?? ''} lang={lang} />
+          )}
+        </div>
+        {content.promptAudioUrl && (
+          <button
+            type="button"
+            onClick={() => playAudio(content.promptAudioUrl)}
+            aria-label="Play audio"
+            className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-xl bg-white/40 border border-white/50 hover:bg-white/60 transition-colors"
+          >
+            <Volume2 className="w-3.5 h-3.5 text-gray-600" />
+          </button>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <button

@@ -8,7 +8,10 @@
 //   - node list for a course: GET /roadmap/course/:courseId (nodes[] with resolved item summaries)
 //   - node detail: GET /roadmap/node/:nodeId (items[] resolved to lesson docs / quiz summaries)
 //   - lesson detail: GET /roadmap/lesson/:lessonId
-//   - quiz detail: GET /quiz/quizzes?miniAppId=<courseId> (full Quiz docs), found by id client-side
+//   - quiz detail: GET /dashboard/quizzes/:quizId (added alongside Part 2's course-flow CRUD —
+//     the original plan relied on GET /quiz/quizzes?miniAppId=<courseId> + client-side find,
+//     which silently produced a blank QuizEditorPage whenever a course had no miniAppId to
+//     query by; this is a real dashboard GET, mutation-gated like the rest of /api/dashboard/*)
 //   - question detail/search: GET /dashboard/questions?courseId=&search= (already gated + scoped)
 // Only mutations go through /api/dashboard/*.
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
@@ -436,13 +439,10 @@ export const createQuiz = createAsyncThunk(
 
 export const fetchQuizDetail = createAsyncThunk(
   'studio/fetchQuizDetail',
-  async ({ courseId, quizId }: { courseId: string; quizId: string }, { rejectWithValue }) => {
+  async (quizId: string, { rejectWithValue }) => {
     try {
-      const res = await api.get(`/quiz/quizzes?miniAppId=${courseId}`);
-      const quizzes = res.data.data as IQuiz[];
-      const quiz = quizzes.find((q) => q._id === quizId);
-      if (!quiz) return rejectWithValue('Quiz not found');
-      return quiz;
+      const res = await api.get(`/dashboard/quizzes/${quizId}`);
+      return res.data.data as IQuiz;
     } catch (err: unknown) {
       return rejectWithValue(extractErrorMessage(err, 'Failed to load quiz'));
     }

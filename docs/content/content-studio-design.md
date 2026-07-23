@@ -28,13 +28,21 @@ The 21 `QuestionType` values collapse into five actual form shapes:
 
 | Archetype | Types | Fields |
 |---|---|---|
-| MCQ | `mcq_term_to_def`, `mcq_def_to_term`, `mcq_correct_usage`, `mcq_incorrect_usage`, `mcq_fill_blank`, `mcq_audio` | prompt, options[], correctAnswer, explanation |
-| True/False | `true_false_term_def`, `true_false_def_term`, `true_false_usage` | prompt, correctAnswer ('true'/'false'), explanation |
-| Text input | `fill_blank_typed`, `text_input_def`, `text_input_audio`, `text_input_example` | prompt, correctAnswer, explanation |
-| DnD (basic) | `dnd_single`, `dnd_select`, `dnd_count`, `dnd_sort`, `dnd_sequence`, `dnd_match` | draggables[], dropZones[], dragAreaImageUrl, feedback |
-| DnD (fill/build) | `dnd_fill`, `dnd_build` | draggables[], dropZones[], sentenceTemplate, blanks[], dragAreaImageUrl, feedback |
+| MCQ | `mcq_term_to_def`, `mcq_def_to_term`, `mcq_correct_usage`, `mcq_incorrect_usage`, `mcq_fill_blank`, `mcq_audio` | prompt, promptAudioUrl, options[], correctAnswer, explanation |
+| True/False | `true_false_term_def`, `true_false_def_term`, `true_false_usage` | prompt, promptAudioUrl, correctAnswer ('true'/'false'), explanation |
+| Text input | `fill_blank_typed`, `text_input_def`, `text_input_audio`, `text_input_example` | prompt, promptAudioUrl, correctAnswer, explanation |
+| DnD (basic) | `dnd_single`, `dnd_select`, `dnd_count`, `dnd_sort`, `dnd_sequence`, `dnd_match` | prompt, promptAudioUrl, draggables[], dropZones[], dragAreaImageUrl, feedback |
+| DnD (fill/build) | `dnd_fill`, `dnd_build` | prompt, promptAudioUrl, draggables[], dropZones[], sentenceTemplate, blanks[], dragAreaImageUrl, feedback |
 
-`mcq_audio`'s `prompt` needs the `audio:` prefix convention (a GCS *path*, not a full URL — see below); everything else is plain text.
+`prompt` + optional `promptAudioUrl` are universal across every archetype (DnD included) and edited
+from one Prompt section at the top of the question form regardless of type — `promptAudioUrl` is a
+GCS *path* (not a full URL, see below) for audio played alongside the plain display text in
+`prompt`. This is additive: `mcq_audio`'s old `audio:`-prefix-on-`prompt` convention (audio-only,
+no simultaneous text) still works as-is for content seeded before `promptAudioUrl` existed, but new
+questions of every type — including `mcq_audio` — use plain `prompt` text plus optional
+`promptAudioUrl` instead. `content.avatar` remains on the schema (rendered as-authored for existing
+questions) but is no longer editable from the question form — a v1 form-simplification, not a
+data-model change.
 
 v1 covers 16 of the 21 (matches the earlier scoping decision): the 13 with a frontend renderer, plus `mcq_audio`/`dnd_build`/`dnd_count` (already used in real seed content). The remaining 5 `dnd_*` types are a config-table addition later, not a rebuild — the archetype system is built so adding them is additive.
 
@@ -76,12 +84,14 @@ state, or ran into gaps this pass had to route around rather than expand the bac
   client-side: `GET /content/fields` → per field `.../subjects` → per subject `.../courses`,
   cached in `studioSlice.allCourses`. Small dataset today (2 fields, a handful of subjects), so
   the fan-out is cheap; worth a dedicated dashboard aggregation endpoint if the catalog grows.
-- **No dashboard GET for a single Quiz or Question by id.** Rather than add new `/api/dashboard/*`
-  reads, the quiz editor resolves the full quiz (settings + ordered `questionIds`) via the
-  existing learner-facing `GET /api/quiz/quizzes?miniAppId=<courseId>` (already returns full
-  `Quiz` docs, found by id client-side), and the question editor's edit mode reuses
-  `GET /api/dashboard/questions?courseId=` the same way. This is why every studio question-editor
-  link carries `?courseId=` as a query param even when editing, not just when creating.
+- **No dashboard GET for a single Question by id.** Rather than add a new `/api/dashboard/*` read,
+  the question editor's edit mode reuses `GET /api/dashboard/questions?courseId=`, found by id
+  client-side. This is why every studio question-editor link carries `?courseId=` as a query param
+  even when editing, not just when creating. (A single-Quiz equivalent, `GET
+  /api/dashboard/quizzes/:quizId`, *was* added — the original plan's client-side-find over
+  `GET /api/quiz/quizzes?miniAppId=<courseId>` produced a silent blank `QuizEditorPage` whenever
+  that lookup failed, with no way to distinguish "still loading" from "failed to load"; the direct
+  `Quiz.findById` route plus `QuizEditorPage` now rendering `error` state fixed both.)
 - **No item-reorder endpoint on a `RoadmapNode`.** Only node-reorder
   (`.../courses/:courseId/nodes/reorder`) and quiz-question-reorder
   (`.../quizzes/:quizId/questions`) exist — a node's own `items[]` (its Lessons/Quizzes) has no

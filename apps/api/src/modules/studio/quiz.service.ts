@@ -49,6 +49,12 @@ export async function createQuiz(nodeId: string, input: CreateQuizInput): Promis
   return quiz;
 }
 
+export async function getQuiz(quizId: string): Promise<IQuizDocument> {
+  const quiz = await Quiz.findById(quizId);
+  if (!quiz) throw new AppError('Quiz not found', 404);
+  return quiz;
+}
+
 export interface UpdateQuizInput {
   title?: string;
   settings?: Partial<IQuizSettings>;

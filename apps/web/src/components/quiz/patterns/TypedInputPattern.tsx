@@ -24,6 +24,16 @@ interface TypedInputPatternProps {
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
 }
 
+function resolvePromptAudioUrl(path?: string): string | undefined {
+  if (!path) return undefined;
+  return path.startsWith('http') ? path : `${ASSETS.GCS_BASE}/${path}`;
+}
+
+function playPromptAudio(path?: string) {
+  const url = resolvePromptAudioUrl(path);
+  if (url) void new Audio(url).play();
+}
+
 export default function TypedInputPattern({
   type,
   termId,
@@ -66,11 +76,25 @@ export default function TypedInputPattern({
 
   return (
     <div className="space-y-4">
-      {promptIsAudio || type === 'text_input_audio' ? (
-        <p className="text-lg text-gray-800 whitespace-pre-line">{content.prompt}</p>
-      ) : (
-        <SpokenText text={content.prompt ?? ''} lang={lang} />
-      )}
+      <div className="flex items-start gap-2">
+        <div className="flex-1">
+          {promptIsAudio || type === 'text_input_audio' ? (
+            <p className="text-lg text-gray-800 whitespace-pre-line">{content.prompt}</p>
+          ) : (
+            <SpokenText text={content.prompt ?? ''} lang={lang} />
+          )}
+        </div>
+        {content.promptAudioUrl && (
+          <button
+            type="button"
+            onClick={() => playPromptAudio(content.promptAudioUrl)}
+            aria-label="Play audio"
+            className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-xl bg-white/40 border border-white/50 hover:bg-white/60 transition-colors"
+          >
+            <Volume2 className="w-3.5 h-3.5 text-gray-600" />
+          </button>
+        )}
+      </div>
 
       {type === 'text_input_audio' && (
         <div className="flex items-center gap-3">

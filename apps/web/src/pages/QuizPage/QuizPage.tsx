@@ -160,6 +160,7 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
   const currentHelpers = quiz.currentQuestion
     ? resolveHelpers(quiz.currentQuestion.content.defaultHelpers, undefined)
     : null;
+  const isDndQuestion = quiz.currentQuestion?.type === 'dnd_single';
 
   return (
     <QuizPageShell
@@ -221,7 +222,23 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
               animate={{ opacity: 1 }}
               className="flex-1 min-h-0 flex flex-col overflow-hidden"
             >
-              <QuizProgress answered={quiz.progress.answered} total={quiz.progress.total} ageGroup={ageGroup} />
+              <QuizProgress
+                answered={quiz.progress.answered}
+                total={quiz.progress.total}
+                ageGroup={ageGroup}
+                rightSlot={
+                  isDndQuestion && quiz.status === 'active' && !currentHelpers.retryUntilCorrect ? (
+                    <button
+                      type="button"
+                      onClick={handleSkip}
+                      className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <SkipForward className="w-3.5 h-3.5" />
+                      Skip question
+                    </button>
+                  ) : undefined
+                }
+              />
 
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white/40 backdrop-blur rounded-3xl border border-white/50">
                 <QuestionRenderer
@@ -235,7 +252,7 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
                 />
               </div>
 
-              {quiz.status === 'active' && !currentHelpers.retryUntilCorrect && (
+              {!isDndQuestion && quiz.status === 'active' && !currentHelpers.retryUntilCorrect && (
                 <button
                   type="button"
                   onClick={handleSkip}

@@ -1,9 +1,9 @@
 // /studio/quizzes/:quizId?courseId=&nodeId= — title + settings (timeLimit, feedbackMode,
 // shuffleQuestions; mode is always 'fixed' here and never exposed as editable), plus the
 // ordered question list with drag-to-reorder, remove, and a two-option "+ Add Question"
-// chooser (pick existing vs. create new). courseId/nodeId travel as query params since a Quiz
-// document itself has no nodeId, and there's no dashboard GET for a single quiz — this page
-// resolves the full quiz via GET /quiz/quizzes?miniAppId=<courseId> (see studioSlice).
+// chooser (pick existing vs. create new). courseId/nodeId still travel as query params (a Quiz
+// document itself has no nodeId, and courseId scopes the question search/create flows), but the
+// quiz itself resolves via GET /dashboard/quizzes/:quizId (see studioSlice).
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Loader2, Plus, Search, X } from 'lucide-react';
@@ -131,7 +131,7 @@ export default function QuizEditorPage() {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
 
-  const { currentQuiz, questionCache, isLoading, isMutating } = useSelector(
+  const { currentQuiz, questionCache, isLoading, isMutating, error } = useSelector(
     (state: RootState) => state.studio
   );
 
@@ -144,8 +144,8 @@ export default function QuizEditorPage() {
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
 
   useEffect(() => {
-    if (quizId && courseId) void dispatch(fetchQuizDetail({ courseId, quizId }));
-  }, [dispatch, quizId, courseId]);
+    if (quizId) void dispatch(fetchQuizDetail(quizId));
+  }, [dispatch, quizId]);
 
   useEffect(() => {
     if (courseId) void dispatch(searchCourseQuestions({ courseId, search: undefined }));
@@ -168,6 +168,20 @@ export default function QuizEditorPage() {
     );
   }
 
+  if (error && !currentQuiz) {
+    return (
+      <div className="max-w-2xl text-center py-16">
+        <p className="text-sm text-red-500 mb-3">{error}</p>
+        <button
+          type="button"
+          onClick={() => navigate(nodeId ? `/studio/nodes/${nodeId}` : '/studio/courses')}
+          className="px-4 py-2 rounded-xl text-sm font-medium bg-white/50 border border-white/50 hover:bg-white/70 transition-colors"
+        >
+          Back to topic
+        </button>
+      </div>
+    );
+  }
   if (!currentQuiz || !quizId) return null;
 
   const questionIds = localOrder ?? currentQuiz.questionIds;

@@ -4,6 +4,7 @@ import { sendSuccess } from '../../utils/response';
 import { catchAsync } from '../../utils/AppError';
 import {
   createQuiz,
+  getQuiz,
   updateQuiz,
   updateQuizQuestions,
   deleteQuiz,
@@ -17,6 +18,14 @@ export const createQuizHandler = catchAsync(
     const input = req.body as CreateQuizInput;
     const quiz = await createQuiz(nodeId, input);
     sendSuccess(res, quiz, 201);
+  }
+);
+
+export const getQuizHandler = catchAsync(
+  async (req: Request, res: Response): Promise<void> => {
+    const { quizId } = req.params as { quizId: string };
+    const quiz = await getQuiz(quizId);
+    sendSuccess(res, quiz);
   }
 );
 

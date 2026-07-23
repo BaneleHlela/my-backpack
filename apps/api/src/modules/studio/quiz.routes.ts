@@ -3,6 +3,7 @@
 import { Router, IRouter } from 'express';
 import { requireProfile, requirePlatformAdmin } from '../auth/auth.middleware';
 import {
+  getQuizHandler,
   updateQuizHandler,
   updateQuizQuestionsHandler,
   deleteQuizHandler,
@@ -11,6 +12,9 @@ import {
 const router: IRouter = Router();
 
 router.use(requireProfile, requirePlatformAdmin);
+
+// GET /api/dashboard/quizzes/:quizId
+router.get('/:quizId', getQuizHandler);
 
 // PATCH /api/dashboard/quizzes/:quizId
 router.patch('/:quizId', updateQuizHandler);

@@ -700,6 +700,7 @@ POST   /api/dashboard/nodes/:nodeId/quizzes                  — { title, settin
 PATCH  /api/dashboard/lessons/:lessonId                       — title/resources only
 DELETE /api/dashboard/lessons/:lessonId                       — soft delete; removes its entry from the parent node's items[], renumbers the rest
 
+GET    /api/dashboard/quizzes/:quizId                          — direct Quiz.findById, no course/miniAppId dependency
 PATCH  /api/dashboard/quizzes/:quizId                          — title/settings only (not mode, not miniAppId)
 PATCH  /api/dashboard/quizzes/:quizId/questions                — { questionIds: string[] } full ordered replacement; keeps settings.questionCount in sync
 DELETE /api/dashboard/quizzes/:quizId                          — soft delete; removes its entry from the parent node's items[], renumbers the rest

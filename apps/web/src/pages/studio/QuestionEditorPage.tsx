@@ -27,14 +27,12 @@ import DraggableEditor from '../../features/studio/components/DraggableEditor';
 import DropZoneEditor from '../../features/studio/components/DropZoneEditor';
 import BlanksEditor from '../../features/studio/components/BlanksEditor';
 import FeedbackEditor from '../../features/studio/components/FeedbackEditor';
-import AvatarEditor from '../../features/studio/components/AvatarEditor';
 import type {
   QuestionType,
   IDraggable,
   IDropZone,
   IBlank,
   IFeedback,
-  IAvatarConfig,
 } from '@my-backpack/shared';
 
 function cleanFeedback(feedback: IFeedback): IFeedback | undefined {
@@ -58,7 +56,7 @@ export default function QuestionEditorPage() {
 
   const [type, setType] = useState<QuestionType>('mcq_term_to_def');
   const [prompt, setPrompt] = useState('');
-  const [audioPath, setAudioPath] = useState<string | undefined>(undefined);
+  const [promptAudioUrl, setPromptAudioUrl] = useState<string | undefined>(undefined);
   const [options, setOptions] = useState<string[]>(['']);
   const [correctAnswer, setCorrectAnswer] = useState('');
   const [explanation, setExplanation] = useState('');
@@ -71,7 +69,6 @@ export default function QuestionEditorPage() {
 
   const [successFeedback, setSuccessFeedback] = useState<IFeedback>({});
   const [tryAgainFeedback, setTryAgainFeedback] = useState<IFeedback>({});
-  const [avatar, setAvatar] = useState<IAvatarConfig | undefined>(undefined);
 
   const [maxPoints, setMaxPoints] = useState('');
   const [pointsCanBePartial, setPointsCanBePartial] = useState(false);
@@ -92,11 +89,8 @@ export default function QuestionEditorPage() {
     if (!currentQuestion) return;
     const c = currentQuestion.content;
     setType(currentQuestion.type);
-    if (currentQuestion.type === 'mcq_audio') {
-      setAudioPath(c.prompt?.startsWith('audio:') ? c.prompt.slice('audio:'.length) : undefined);
-    } else {
-      setPrompt(c.prompt ?? '');
-    }
+    setPrompt(c.prompt ?? '');
+    setPromptAudioUrl(c.promptAudioUrl);
     setOptions(c.options && c.options.length > 0 ? c.options : ['']);
     setCorrectAnswer(c.correctAnswer ?? '');
     setExplanation(c.explanation ?? '');
@@ -107,7 +101,6 @@ export default function QuestionEditorPage() {
     setBlanks(c.blanks ?? []);
     setSuccessFeedback(c.successFeedback ?? {});
     setTryAgainFeedback(c.tryAgainFeedback ?? {});
-    setAvatar(c.avatar);
     setMaxPoints(String(currentQuestion.maxPoints));
     setPointsCanBePartial(currentQuestion.pointsCanBePartial);
   }, [currentQuestion]);
@@ -126,16 +119,13 @@ export default function QuestionEditorPage() {
 
   const validate = (): Record<string, string> => {
     const errors: Record<string, string> = {};
+    if (!prompt.trim()) errors.prompt = 'Prompt is required.';
     if (isDnd) {
       if (draggables.length === 0) errors.draggables = 'Add at least one draggable.';
       if (dropZones.length === 0) errors.dropZones = 'Add at least one drop zone.';
       if (isFillBuild && !sentenceTemplate.trim()) {
         errors.sentenceTemplate = 'Sentence template is required for this type.';
       }
-    } else if (type === 'mcq_audio') {
-      if (!audioPath) errors.prompt = 'Select an audio file.';
-    } else if (!prompt.trim()) {
-      errors.prompt = 'Prompt is required.';
     }
     return errors;
   };
@@ -148,23 +138,24 @@ export default function QuestionEditorPage() {
 
     const content = isDnd
       ? {
+          prompt: prompt.trim(),
+          promptAudioUrl: promptAudioUrl || undefined,
           draggables,
           dropZones,
           dragAreaImageUrl,
           ...(isFillBuild ? { sentenceTemplate: sentenceTemplate.trim(), blanks } : {}),
           successFeedback: cleanFeedback(successFeedback),
           tryAgainFeedback: cleanFeedback(tryAgainFeedback),
-          avatar,
         }
       : {
-          prompt: type === 'mcq_audio' ? `audio:${audioPath}` : prompt.trim(),
+          prompt: prompt.trim(),
+          promptAudioUrl: promptAudioUrl || undefined,
           options:
             archetype === 'mcq' ? options.map((o) => o.trim()).filter(Boolean) : undefined,
           correctAnswer: correctAnswer.trim() || undefined,
           explanation: explanation.trim() || undefined,
           successFeedback: cleanFeedback(successFeedback),
           tryAgainFeedback: cleanFeedback(tryAgainFeedback),
-          avatar,
         };
 
     const points = maxPoints.trim() ? Number(maxPoints) : undefined;
@@ -176,7 +167,7 @@ export default function QuestionEditorPage() {
       if (createQuestion.fulfilled.match(result)) {
         const newQuestion = result.payload;
         if (addToQuiz) {
-          const quizResult = await dispatch(fetchQuizDetail({ courseId, quizId: addToQuiz }));
+          const quizResult = await dispatch(fetchQuizDetail(addToQuiz));
           if (fetchQuizDetail.fulfilled.match(quizResult)) {
             await dispatch(
               updateQuizQuestions({
@@ -241,6 +232,21 @@ export default function QuestionEditorPage() {
           {!isNew && <p className="text-xs text-gray-400 mt-1">Type can't be changed after creation.</p>}
         </div>
 
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Prompt</label>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={2}
+            placeholder='e.g. "Drag the letter E"'
+            className="w-full text-sm bg-white/60 border border-white/60 rounded-lg px-2.5 py-2 resize-none"
+          />
+          {fieldErrors.prompt && <p className="text-xs text-red-500 mt-1">{fieldErrors.prompt}</p>}
+          <div className="mt-2">
+            <AssetPicker assetType="audio" value={promptAudioUrl} onChange={setPromptAudioUrl} label="Audio (optional)" />
+          </div>
+        </div>
+
         {isDnd ? (
           <>
             <div>
@@ -287,26 +293,6 @@ export default function QuestionEditorPage() {
           </>
         ) : (
           <>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Prompt</label>
-              {type === 'mcq_audio' ? (
-                <>
-                  <AssetPicker assetType="audio" value={audioPath} onChange={setAudioPath} />
-                  {audioPath && (
-                    <p className="text-xs text-gray-400 mt-1 font-mono">Stored as: audio:{audioPath}</p>
-                  )}
-                </>
-              ) : (
-                <textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  rows={2}
-                  className="w-full text-sm bg-white/60 border border-white/60 rounded-lg px-2.5 py-2 resize-none"
-                />
-              )}
-              {fieldErrors.prompt && <p className="text-xs text-red-500 mt-1">{fieldErrors.prompt}</p>}
-            </div>
-
             {archetype === 'mcq' && (
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Options</label>
@@ -399,10 +385,6 @@ export default function QuestionEditorPage() {
         <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/40">
           <FeedbackEditor value={successFeedback} onChange={setSuccessFeedback} label="Success feedback" />
           <FeedbackEditor value={tryAgainFeedback} onChange={setTryAgainFeedback} label="Try-again feedback" />
-        </div>
-
-        <div className="pt-2 border-t border-white/40">
-          <AvatarEditor value={avatar} onChange={setAvatar} />
         </div>
 
         {saveError && <p className="text-sm text-red-500">{saveError}</p>}

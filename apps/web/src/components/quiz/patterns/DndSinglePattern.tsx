@@ -30,6 +30,7 @@ import { useSpeak, useSpeech } from 'react-text-to-speech';
 import { ASSETS } from '@my-backpack/shared';
 import type { AgeGroup, IQuestionContent, IQuestionHelpers, IDraggable } from '@my-backpack/shared';
 import { DEFAULT_TTS_VOICE } from '../../../lib/lang';
+import SpokenText from '../SpokenText';
 
 interface DndSinglePatternProps {
   content: IQuestionContent;
@@ -232,6 +233,12 @@ export default function DndSinglePattern({
   const poolItems = orderedDraggables.filter((d) => d.id !== placedId);
   const correctId = dropZone.requiredDraggableIds[0];
 
+  // Drive the always-visible hint/audio side buttons — shown at low opacity (and disabled)
+  // rather than hidden entirely when there's nothing to use/play yet.
+  const hintAvailable = helpers.hintsAllowed > 0 && hintsRemaining > 0 && hintButtonReady;
+  const audioAvailable =
+    Boolean(content.avatar?.dialogue) || Boolean(content.promptAudioUrl) || Boolean(placedItem?.audioUrl);
+
   const submit = (finalPlacedId: string | null) => {
     if (disabled || submittedRef.current || !finalPlacedId) return;
     submittedRef.current = true;
@@ -298,17 +305,18 @@ export default function DndSinglePattern({
     return (
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden gap-3 p-3">
-          {content.avatar?.dialogue && (
+          {(content.avatar?.dialogue || content.prompt) && (
             <div className="flex-shrink-0 flex items-start gap-3">
-              {promptAvatarUrl && (
+              {content.avatar?.dialogue && promptAvatarUrl && (
                 <img
                   src={promptAvatarUrl}
                   alt=""
                   className="w-8 h-8 rounded-full object-contain flex-shrink-0 mt-2"
                 />
               )}
-              <div 
-                className="bg-white
+              <div
+                className="w-[85%]
+                  bg-white
                   rounded-[25px]
                   shadow-xl
                   border-4 border-violet-300
@@ -317,30 +325,41 @@ export default function DndSinglePattern({
                   items-center
                   justify-center"
               >
-                <DialogueText className="text-2xl font-bold text-slate-700 text-center flex-1" />
+                {content.avatar?.dialogue ? (
+                  <DialogueText className="text-2xl font-bold text-slate-700 text-center flex-1" />
+                ) : (
+                  <SpokenText
+                    text={content.prompt ?? ''}
+                    lang={lang}
+                    className="text-2xl font-bold text-slate-700 text-center"
+                  />
+                )}
               </div>
 
-              <div className="hidden flex flex-col gap-2">
+              <div className="flex flex-col gap-2 ml-auto flex-shrink-0">
                 <button
                   type="button"
                   onClick={replayPrompt}
-                  aria-label="Replay"
-                  className="w-14 h-14 rounded-3xl bg-amber-100 border border-amber-200 flex items-center justify-center active:scale-95 transition-transform"
+                  disabled={!audioAvailable}
+                  aria-label={audioAvailable ? 'Play audio' : 'No audio available'}
+                  className={`w-14 h-14 rounded-3xl bg-amber-100 border border-amber-200 flex items-center justify-center active:scale-95 transition-transform ${
+                    audioAvailable ? '' : 'opacity-40'
+                  }`}
                 >
                   <Volume2 className="w-6 h-6 text-amber-700" />
                 </button>
 
-                {helpers.hintsAllowed > 0 && hintButtonReady && (
-                  <button
-                    type="button"
-                    onClick={useHint}
-                    disabled={hintsRemaining <= 0}
-                    aria-label={`Hint (${hintsRemaining} left)`}
-                    className="w-14 h-14 rounded-3xl bg-amber-50 border border-amber-100 flex items-center justify-center active:scale-95 disabled:opacity-40 transition-transform"
-                  >
-                    <Lightbulb className="w-6 h-6 text-amber-600" />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={useHint}
+                  disabled={!hintAvailable}
+                  aria-label={helpers.hintsAllowed > 0 ? `Hint (${hintsRemaining} left)` : 'No hints available'}
+                  className={`w-14 h-14 rounded-3xl bg-amber-50 border border-amber-100 flex items-center justify-center active:scale-95 transition-transform ${
+                    hintAvailable ? '' : 'opacity-40'
+                  }`}
+                >
+                  <Lightbulb className="w-6 h-6 text-amber-600" />
+                </button>
               </div>
             </div>
           )}
@@ -403,7 +422,43 @@ export default function DndSinglePattern({
             : undefined
         }
       >
-        {content.avatar?.dialogue && <DialogueText className="text-lg text-gray-800" />}
+        {(content.avatar?.dialogue || content.prompt) && (
+          <div className="flex items-start gap-3">
+            <div className="w-[85%] bg-white/70 rounded-[25px] border-4 border-violet-200 p-4">
+              {content.avatar?.dialogue ? (
+                <DialogueText className="text-lg text-gray-800" />
+              ) : (
+                <SpokenText text={content.prompt ?? ''} lang={lang} />
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 ml-auto flex-shrink-0">
+              <button
+                type="button"
+                onClick={replayPrompt}
+                disabled={!audioAvailable}
+                aria-label={audioAvailable ? 'Play audio' : 'No audio available'}
+                className={`flex items-center justify-center w-10 h-10 rounded-xl bg-white/40 border border-white/50 hover:bg-white/60 transition-colors ${
+                  audioAvailable ? 'text-gray-600' : 'text-gray-400 opacity-40'
+                }`}
+              >
+                <Volume2 className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={useHint}
+                disabled={!hintAvailable}
+                aria-label={helpers.hintsAllowed > 0 ? `Hint (${hintsRemaining} left)` : 'No hints available'}
+                className={`flex items-center justify-center w-10 h-10 rounded-xl bg-amber-100 border border-amber-200 hover:bg-amber-200 transition-colors ${
+                  hintAvailable ? 'text-amber-700' : 'text-amber-300 opacity-40'
+                }`}
+              >
+                <Lightbulb className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3 justify-center">
           {poolItems.map((item) => (
@@ -434,29 +489,6 @@ export default function DndSinglePattern({
             <img src={wrongAvatarUrl} alt="" className="w-20 h-20 object-contain" />
           </div>
         )}
-
-        <div className="flex items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={replayPrompt}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/40 border border-white/50 text-xs font-medium text-gray-600 hover:bg-white/60 transition-colors"
-          >
-            <Volume2 className="w-3.5 h-3.5" />
-            Replay
-          </button>
-
-          {helpers.hintsAllowed > 0 && hintButtonReady && (
-            <button
-              type="button"
-              onClick={useHint}
-              disabled={hintsRemaining <= 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-100 border border-amber-200 text-xs font-medium text-amber-700 hover:bg-amber-200 disabled:opacity-40 transition-colors"
-            >
-              <Lightbulb className="w-3.5 h-3.5" />
-              Hint ({hintsRemaining})
-            </button>
-          )}
-        </div>
 
         {!helpers.autoSubmit && (
           <button
