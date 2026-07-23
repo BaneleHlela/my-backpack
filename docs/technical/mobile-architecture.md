@@ -8,10 +8,16 @@ this doc only covers what's different about the mobile client.
 
 **Scope of the first mobile build:** Expo scaffold, auth (email/password
 only — no OAuth on native yet), a minimal Home screen (subject/enrollment
-navigation, no roadmap visualisation), and the Dictionary mini-app. Roadmap
-UI, Quiz UI, and DnD question types are deferred — Dictionary is the only
-mini-app ported in this pass, chosen because it's architecturally standalone
-(not roadmap-gated).
+navigation, no roadmap visualisation), and the Dictionary mini-app —
+Dictionary was the only mini-app ported in that first pass, chosen because
+it's architecturally standalone (not roadmap-gated).
+
+**Scope as of the Roadmap/Lesson/Quiz build (July 2026):** Course/Roadmap
+navigation, a Lesson resource player, and a quiz-taking engine for 13 of the
+20 question types now exist too — see "Roadmap, Lesson & Quiz UI" below.
+OAuth on native, forgot/reset-password/verify-email screens, live TTS, the
+remaining 7 `dnd_*` question types, `mcq_audio`, and a teacher/dashboard
+surface are still deferred.
 
 ---
 
@@ -22,7 +28,9 @@ tree where it makes sense, adapted to Expo Router's group syntax:
 
 ```
 apps/mobile/app/
-  _layout.tsx              # Redux <Provider>, font/splash handling, renders <Slot />
+  _layout.tsx              # Redux <Provider> + GestureHandlerRootView, font/splash handling,
+                            # renders <Stack screenOptions={{ headerShown: false }}> (was a
+                            # bare <Slot/> before the Roadmap/Lesson/Quiz build — see below)
   (auth)/
     _layout.tsx             # Stack for unauthenticated screens
     login.tsx
@@ -32,11 +40,22 @@ apps/mobile/app/
   (app)/
     _layout.tsx             # Guarded layout — redirects based on auth state
     home.tsx
+    subject/
+      [subjectSlug]/
+        index.tsx           # Courses grid + Subject-level MiniApps
+        course/
+          [courseSlug]/
+            index.tsx       # Progress header + RoadmapPath + linked-MiniApps row
+            lesson/
+              [lessonId].tsx  # Lesson resource player
     miniapp/
       [miniAppId]/
         index.tsx           # Dictionary home: search, trending, A–Z browse, recent
         term/[termId].tsx
         bucket.tsx
+  quiz/
+    [itemId].tsx            # Root-level, NOT nested in (app) — full-screen quiz-taking route,
+                            # presentation: 'fullScreenModal' (see "Roadmap, Lesson & Quiz UI")
 ```
 
 `(auth)` and `(app)` are route groups (parens excluded from the URL) used
@@ -80,13 +99,15 @@ Redux Toolkit, reusing web's slice shapes and thunk signatures directly —
 `ProfileSetupDto`) are imported, never redefined locally, so a divergence
 between the two clients' auth state is a type error, not a runtime surprise.
 
-Slices for this pass:
+Slices:
 
 | Slice | Mirrors (web) | Notes |
 |---|---|---|
 | `auth` | `features/auth/authSlice.ts` | Same thunks, minus `checkAuth`'s cookie dependency — see Bootstrap flow |
-| `content` | `features/enrollment/enrollmentSlice.ts` + `roadmapSlice.ts`'s `fetchSubjectTopics` | Enrollment + standalone-miniapp listing only, no roadmap fetch |
+| `content` | `features/enrollment/enrollmentSlice.ts` + `features/subjects/subjectsSlice.ts` + `features/courses/coursesSlice.ts` | Kept as one slice (not split three ways like web) — mobile doesn't yet have the independently-reused-pages pressure that motivated web's split. `fetchCoursesBySubject`/`fetchCourseDetail` added for the Roadmap/Lesson/Quiz build; `courseDetailByKey` exists only because the Course list endpoint returns unpopulated `miniAppIds` (plain id strings) — only the single-course detail endpoint populates them |
 | `vocab` | `features/vocab/vocabSlice.ts` | Ported near-verbatim — plain RTK + axios, nothing web-specific |
+| `roadmap` | `features/roadmap/roadmapSlice.ts` | Direct port — `currentRoadmap`/`currentNode`/`currentLesson`, `fetchRoadmapByCourse`/`fetchLesson` |
+| `quiz` | `features/quiz/quizSlice.ts` | Scoped to what `QuizItemPlayerPage` actually calls (`startQuizItemSession`/`submitAnswer`/`completeSession`/`abandonSession`) — the generic miniAppId-based `startSession` and the unused `GET session/:id`/`GET results` endpoints aren't ported |
 
 ### Bootstrap flow (replaces web's cookie-based `checkAuth`)
 
@@ -331,22 +352,172 @@ mobile doesn't need this variable to function — noted here so it isn't
 
 ---
 
+## Roadmap, Lesson & Quiz UI
+
+The first mobile build deliberately shipped without these (see "What's
+deliberately not here yet" below, historically) — this section covers the
+follow-up build that ports Course/Roadmap navigation, the Lesson resource
+player, and a quiz-taking engine for the 13 question types already working on
+web (12 text-based types + `dnd_single`; the other 7 `dnd_*` types and
+`mcq_audio` show the same "not yet supported" placeholder web shows for them,
+not a new mobile-only renderer). This is a straight port of already-working
+web code (`CoursePage`, `LessonPlayerPage`, `QuizItemPlayerPage`,
+`components/roadmap/*`, `components/quiz/*`) into RN idioms, not a redesign.
+**No backend changes were needed** — every route this build uses
+(`/api/content/.../courses`, `/api/roadmap/...`, `/api/quiz/...`) already
+existed and already returns the shapes the mobile client needs.
+
+### New routes
+
+```
+apps/mobile/app/
+  (app)/
+    subject/[subjectSlug]/
+      index.tsx                        # Courses grid + Subject-level MiniApps section
+      course/[courseSlug]/
+        index.tsx                      # Roadmap for one Course (progress header + path)
+        lesson/[lessonId].tsx          # Lesson resource player
+  quiz/[itemId].tsx                    # Full-screen quiz-taking route — see below
+```
+
+### Why `quiz/[itemId]` is a root-level route, not nested in `(app)`
+
+There is no tab bar in this app yet — `(app)` is currently just a guarded
+`<Slot/>` wrapping whatever screen is active. Placing the quiz screen at the
+root, as a sibling of `(app)`/`(auth)`/`select-profile`/`profile-setup`,
+means it never needs to be deliberately *hidden* from whatever navigator
+eventually ends up owning Home/Progress/Settings tabs — it simply isn't part
+of that navigator, the same way it isn't part of `(app)` today. It also gets
+its own `presentation: 'fullScreenModal'` + `headerShown: false` Stack
+options (see below) without those options leaking onto any other route.
+
+### Root layout: `<Slot/>` → `<Stack/>`
+
+Every route in the app previously rendered through a bare `<Slot/>` in the
+root `_layout.tsx` — no route had per-screen navigation options, because
+`<Slot/>` doesn't support them. Making the quiz route a true full-screen
+modal (no header, no shared-element transition, covers the whole screen)
+requires the root layout to render a `<Stack screenOptions={{ headerShown:
+false }}>` instead, with one explicit override:
+
+```tsx
+<Stack screenOptions={{ headerShown: false }}>
+  <Stack.Screen name="quiz/[itemId]" options={{ presentation: 'fullScreenModal' }} />
+</Stack>
+```
+
+`headerShown: false` on `screenOptions` preserves the exact zero-header look
+every existing route already had under `<Slot/>` — this is a structural
+change with no visual change for anything except the new quiz route.
+`GestureHandlerRootView` also wraps the root `<Provider>` here, needed for
+the `dnd_single` gesture work below.
+
+### New dependencies
+
+- `react-native-gesture-handler` — promoted from an incidental transitive
+  dependency (pulled in via `expo-router`'s drawer component) to a direct,
+  `expo install`-managed one, needed for `dnd_single`'s drag gestures.
+- `expo-video` — Lesson `video` resources (`VideoView`/`useVideoPlayer`);
+  every seeded Lesson today is a video intro. Not `expo-av` (deprecated).
+- `react-native-markdown-display` — Lesson `notes` resources; nothing
+  markdown-capable existed in the mobile dependency tree before this.
+- DnD library for `dnd_single` — see the DnD section below.
+
+### DnD (`dnd_single`)
+
+Web's `DndSinglePattern.tsx` uses `@dnd-kit/core`, which is React-DOM-only
+and has no RN equivalent. `react-native-reanimated-dnd` was evaluated as a
+drop-in (its `Draggable`/`Droppable` API shape maps closely onto dnd-kit's,
+and it's pure JS with no native code of its own, built on Reanimated 4 +
+Gesture Handler — both already present). Its peer-dependency ranges are
+satisfied by this app's exact versions (RN 0.86, Reanimated 4.5, Gesture
+Handler 2.32), so raw SDK-version compatibility wasn't actually the
+blocker — reading its `useDraggable` hook source directly turned up a hard
+behavioral one instead: **it always accepts any collision as a valid drop
+and animates the item permanently into the drop zone** — `Droppable`'s
+`onDrop` callback is fire-and-forget (`void` return), with no hook to
+reject a drop and bounce the item back. That's incompatible with
+`helpers.retryUntilCorrect` (a wrong drop must never reach `onAnswer` and
+must bounce back to the pool) — and `retryUntilCorrect` is `true` on all 6
+vowels `dnd_single` quiz variants, the primary graded content this pattern
+serves. The package was removed after this finding.
+
+**What was built instead**: a hand-rolled implementation directly on
+`react-native-gesture-handler` + Reanimated shared values —
+`Gesture.Pan()`/`Gesture.Tap()` composed via `Gesture.Race` (`.minDistance(8)`
+/`.maxDistance(8)` mirrors dnd-kit's 8px `PointerSensor` activation
+distance — short movement lets Tap win the race and fire the tap-to-hear-
+audio behavior, longer movement activates Pan), with drop-zone hit-testing
+done in JS (via `runOnJS`) against a rect measured with
+`measureInWindow()`, compared against the gesture's `absoluteX`/`absoluteY`
+on release. This gives full control over accept/reject, which
+`retryUntilCorrect` needs. One simplification from web: once an item is
+accepted into the drop zone it renders as a non-draggable (but still
+tap-for-audio) tile there — web supports dragging a placed item back out
+when `helpers.allowUndo` is set; that's not reproduced, since it's a
+secondary polish behavior not exercised by the graded content paths
+(`autoSubmit` fires immediately on every vowels variant, disabling the
+question right after).
+
+A real bug worth flagging for future worklet code in this codebase: gesture
+callbacks (`onStart`/`onUpdate`/`onEnd`) run as worklets on the UI thread —
+calling a plain JS function (state setters, audio playback) directly from
+inside one compiles and bundles fine, and only fails at runtime when the
+gesture actually fires. Every JS-side call from inside a gesture callback
+must cross back via `runOnJS(fn)(...)`.
+
+**Verification caveat**: this environment has no Android/iOS emulator or
+device attached, so gesture behavior could not be confirmed visually here.
+Verification performed instead: `tsc --noEmit` (typed Gesture Handler/
+Reanimated API surface), and a full `npx expo export --platform android`
+(real Metro/Babel bundle, 4002 modules, no errors) — this catches babel/
+worklet-transform and module-resolution failures, but not runtime gesture
+behavior. **The actual drag interaction — accept, reject/bounce-back,
+tap-for-audio, hint highlight — needs a real on-device smoke test before
+this ships**, per Phase 5 of the mobile roadmap/quiz plan.
+
+### 5-prompt roadmap
+
+This is prompt 1 of 5 for finishing the learner-facing mobile app (Studio,
+`apps/web/src/pages/studio/`, stays PC-only web across all 5 — out of scope
+throughout):
+
+1. **This prompt** — Course/Roadmap navigation, Lesson player, quiz engine
+   for the 13 working question types.
+2. Question types 14–20 (the remaining `dnd_*` types + `mcq_audio`).
+3. Live TTS / word-highlighting on mobile (the `SpokenText` equivalent).
+4. Profile management screens, OAuth on native, forgot/reset-password/
+   verify-email screens.
+5. Peanuts/XP rewards and test-readiness UI, once their backend services
+   exist (both are currently schema-only — see root `CLAUDE.md`).
+
+---
+
 ## What's deliberately not here yet
 
-- **Roadmap UI** — node path, lesson player, progress bars. Dictionary works
-  without it because it isn't roadmap-gated; other mini-apps (e.g. isiZulu
-  Sounds) are, and are simply not linked from Home until this exists.
-- **Quiz UI / `dnd_*` question types** — no question renderer of any kind
-  ships in this pass.
+- **7 of the 8 `dnd_*` question types, plus `mcq_audio`** — only `dnd_single`
+  has a renderer; the rest show the same placeholder web shows for them.
+  Prompt 2 of the 5-prompt roadmap above.
+- **Live TTS / word-highlighting** — question prompts, avatar dialogue, and
+  feedback all render as plain text with no speech. Prompt 3.
 - **OAuth on native** — deep-link/AuthSession work for Google/Facebook is a
-  separate follow-up; email/password only for now.
+  separate follow-up; email/password only for now. Prompt 4.
 - **Forgot-password / reset-password / verify-email screens** — the backend
   flow for these is fully built (SMTP send, token + expiry, dedicated
   routes) and already has web pages; mobile screens are simply deferred to
   keep this build scoped, not because anything is missing server-side.
+  Prompt 4.
+- **Profile management screens.** Prompt 4.
+- **Peanuts/XP rewards and test-readiness UI** — deferred until their
+  backend services exist (both are schema-only today — see root
+  `CLAUDE.md`). Prompt 5.
 - **A teacher/dashboard-facing surface** — web/desktop territory per
   `CLAUDE.md`.
+- **On-device confirmation of the `dnd_single` gesture interaction** — see
+  the DnD section above; built and statically verified (typed API surface,
+  clean Metro/Babel bundle) but not yet smoke-tested on a real device or
+  emulator from this environment.
 
 ---
 
-*Last updated: 2026-07-20.*
+*Last updated: 2026-07-23.*

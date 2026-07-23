@@ -16,7 +16,9 @@ at their own speed and are alerted when they are test-ready.
 - **Mobile**: React Native + Expo + TypeScript + Redux Toolkit (`apps/mobile`) —
   Expo Router (file-based routing), `expo-secure-store` (refresh token
   persistence), `expo-audio` (pronunciation playback — not `expo-av`,
-  deprecated), `expo-blur` (glassmorphism cards)
+  deprecated), `expo-blur` (glassmorphism cards), `expo-video` (Lesson video
+  resources), `react-native-gesture-handler` + Reanimated (hand-rolled
+  `dnd_single` drag-and-drop — see docs/technical/mobile-architecture.md)
 - **Shared types**: `packages/shared`
 - **Database**: MongoDB Atlas (Mongoose ODM)
 - **Cache**: Redis via Upstash
@@ -1067,7 +1069,6 @@ my-backpack/
 - [ ] Test readiness scoring (deferred)
 - [ ] Book/PDF upload pipeline (deferred)
 - [ ] AI-powered content generation from books (deferred)
-- [ ] Mobile auth UI (deferred)
 
 ### Frontend Web (apps/web)
 - [x] React + Vite + TypeScript + Redux setup
@@ -1138,13 +1139,29 @@ my-backpack/
 - [x] Backend mobile-auth support — refresh token returned in-body for `X-Client-Type: mobile`, stored in `expo-secure-store`
 - [x] Theme tokens (`packages/shared/constants/theme.ts`) + base UI primitives (GlassCard, PrimaryButton, ScreenBackground, TextField)
 - [x] Auth screens (login, signup, select-profile with PIN keypad, profile-setup) + guarded route tree (ProtectedRoute ported from web)
-- [x] Minimal Home screen — enrolled-subjects list + enroll modal + flat per-subject MiniApps
-      browsing (`fetchSubjectMiniApps`, no Topic grouping — matches the web restructure), no
-      Course/roadmap visualisation yet
+- [x] Minimal Home screen — enrolled-subjects list now navigates to a per-subject screen
+      (Courses grid + flat MiniApps section) instead of listing MiniApps inline
 - [x] Dictionary mini-app (search, trending, A-Z browse with pagination, recent searches, term detail, add-to-bucket, bucket management)
 - [x] EAS Build configured (eas.json — preview profile produces installable APK with production API URL baked in; production profile produces Play Store AAB)
-- [ ] Roadmap UI (node path, lesson player, progress bars) — deferred
-- [ ] Quiz UI / `dnd_*` question types — deferred
+- [x] Roadmap UI (July 2026) — Subject screen (Courses grid + MiniApps), Course screen
+      (progress header + `RoadmapPath`, winding-SVG child mode / card-list adult mode,
+      `NodeLessonsPanel` bottom sheet), Lesson player (all 6 resource types: video via
+      `expo-video`, image, audio, notes/steps via `react-native-markdown-display`, pdf via
+      `Linking.openURL`), roadmap/content slices (`roadmapSlice`, `contentSlice` extended
+      with `fetchCoursesBySubject`/`fetchCourseDetail`)
+- [x] Quiz UI, 13 of 20 question types (July 2026) — full-screen `quiz/[itemId]` route
+      (root layout converted `<Slot/>` -> `<Stack/>` for this one route's
+      `presentation: 'fullScreenModal'`), `quizSlice` (scoped to what the roadmap quiz-item
+      flow actually uses — no generic `/quiz/session` support), 12 text-based question types
+      (`QuestionRenderer`/`QuizProgress`/`AnswerFeedback`/`QuizResults` +
+      Mcq/TrueFalse/TypedInput patterns) plus `dnd_single` (hand-rolled on
+      `react-native-gesture-handler` + Reanimated, not a library — see
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s DnD
+      section for why `react-native-reanimated-dnd` was evaluated and rejected). The
+      remaining 7 `dnd_*` types + `mcq_audio` show the same placeholder web shows for them.
+      No live TTS yet (prompt 3). **The `dnd_single` gesture interaction (accept/reject/
+      tap-audio) has not been confirmed on a real device or emulator** — verified only via
+      `tsc` and a clean `expo export` bundle; do an on-device smoke test before relying on it.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens

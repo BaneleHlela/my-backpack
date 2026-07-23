@@ -3,6 +3,8 @@ packages:
   - "packages/*"
 allowBuilds:
   esbuild: true
+minimumReleaseAgeExclude:
+  - expo-video@57.0.2
 packageExtensions:
   lucide-react:
     peerDependencies:

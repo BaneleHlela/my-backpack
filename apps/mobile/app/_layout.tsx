@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Slot } from 'expo-router';
+import { Stack } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import * as SplashScreen from 'expo-splash-screen';
 import { store } from '../src/store/store';
@@ -37,13 +38,23 @@ function AuthBootstrap() {
     void hideSplash();
   }, [hideSplash]);
 
-  return <Slot />;
+  // headerShown: false on screenOptions preserves the zero-header look every route already
+  // had under the previous bare <Slot/> — the only route with its own override is the
+  // full-screen quiz-taking route (see docs/technical/mobile-architecture.md's "Root layout:
+  // <Slot/> -> <Stack/>" section for why it has to live at the root, not nested in (app)).
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="quiz/[itemId]" options={{ presentation: 'fullScreenModal' }} />
+    </Stack>
+  );
 }
 
 export default function RootLayout() {
   return (
-    <Provider store={store}>
-      <AuthBootstrap />
-    </Provider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Provider store={store}>
+        <AuthBootstrap />
+      </Provider>
+    </GestureHandlerRootView>
   );
 }

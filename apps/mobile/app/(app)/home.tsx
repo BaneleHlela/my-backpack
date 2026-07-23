@@ -1,25 +1,18 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { ChevronRight } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { colors, radii, spacing, typography } from '@my-backpack/shared';
-import type { AvailableSubject, IMiniApp } from '@my-backpack/shared';
+import type { AvailableSubject } from '@my-backpack/shared';
 import { GlassCard } from '../../src/components/GlassCard';
 import { PrimaryButton } from '../../src/components/PrimaryButton';
 import {
   fetchEnrolledSubjects,
   fetchAvailableSubjects,
-  fetchSubjectMiniApps,
   enrollInSubject,
 } from '../../src/features/content/contentSlice';
 import type { AppDispatch, RootState } from '../../src/store/store';
-
-const MINI_APP_EMOJI: Record<IMiniApp['type'], string> = {
-  dictionary: '📖',
-  quiz: '🧠',
-  flashcards: '🃏',
-  practice: '▶',
-};
 
 function AddSubjectsModal({ onClose }: { onClose: () => void }) {
   const dispatch = useDispatch<AppDispatch>();
@@ -92,23 +85,12 @@ function AddSubjectsModal({ onClose }: { onClose: () => void }) {
 export default function HomeScreen() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
-  const { enrolledSubjects, miniAppsBySubject, isLoading } = useSelector(
-    (state: RootState) => state.content
-  );
+  const { enrolledSubjects, isLoading } = useSelector((state: RootState) => state.content);
   const [showAddSubjects, setShowAddSubjects] = useState(false);
 
   useEffect(() => {
     dispatch(fetchEnrolledSubjects());
   }, [dispatch]);
-
-  useEffect(() => {
-    if (!enrolledSubjects) return;
-    enrolledSubjects.fields.forEach(({ field, subjects }) => {
-      subjects.forEach(({ subject }) => {
-        dispatch(fetchSubjectMiniApps({ fieldSlug: field.slug, subjectSlug: subject.slug, subjectId: subject._id }));
-      });
-    });
-  }, [enrolledSubjects, dispatch]);
 
   const hasEnrollments = (enrolledSubjects?.fields.length ?? 0) > 0;
 
@@ -135,37 +117,22 @@ export default function HomeScreen() {
   return (
     <ScrollView contentContainerStyle={styles.listContent}>
       {enrolledSubjects?.fields.map(({ subjects }) =>
-        subjects.map(({ subject }) => {
-          const miniApps = miniAppsBySubject[subject._id];
-          return (
-            <View key={subject._id} style={styles.subjectSection}>
+        subjects.map(({ subject }) => (
+          <Pressable
+            key={subject._id}
+            onPress={() =>
+              router.push({
+                pathname: '/(app)/subject/[subjectSlug]',
+                params: { subjectSlug: subject.slug },
+              })
+            }
+          >
+            <GlassCard style={styles.subjectCard}>
               <Text style={styles.subjectHeading}>{subject.name}</Text>
-
-              {miniApps === undefined ? (
-                <ActivityIndicator color={colors.primary.DEFAULT} style={styles.subjectLoading} />
-              ) : miniApps.length === 0 ? (
-                <Text style={styles.comingSoon}>More coming soon.</Text>
-              ) : (
-                miniApps.map((app) => (
-                  <Pressable
-                    key={app._id}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/(app)/miniapp/[miniAppId]',
-                        params: { miniAppId: app._id, name: app.name, type: app.type },
-                      })
-                    }
-                  >
-                    <GlassCard style={styles.miniAppCard}>
-                      <Text style={styles.miniAppEmoji}>{MINI_APP_EMOJI[app.type]}</Text>
-                      <Text style={styles.miniAppName}>{app.name}</Text>
-                    </GlassCard>
-                  </Pressable>
-                ))
-              )}
-            </View>
-          );
-        })
+              <ChevronRight size={18} color={colors.text.muted} />
+            </GlassCard>
+          </Pressable>
+        ))
       )}
 
       <Pressable onPress={() => setShowAddSubjects(true)} style={styles.addMore}>
@@ -207,35 +174,14 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.lg,
   },
-  subjectSection: {
-    gap: spacing.sm,
+  subjectCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   subjectHeading: {
     fontSize: typography.heading,
     fontWeight: '700',
-    color: colors.text.primary,
-  },
-  subjectLoading: {
-    alignSelf: 'flex-start',
-    marginTop: spacing.sm,
-  },
-  comingSoon: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-    fontStyle: 'italic',
-  },
-  miniAppCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  miniAppEmoji: {
-    fontSize: typography.heading,
-  },
-  miniAppName: {
-    fontSize: typography.body,
-    fontWeight: '600',
     color: colors.text.primary,
   },
   addMore: {
