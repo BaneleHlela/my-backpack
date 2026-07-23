@@ -3,6 +3,7 @@ import { Router, IRouter } from 'express';
 import {
   getFieldsHandler,
   getSubjectsHandler,
+  getSubjectHandler,
   getCoursesHandler,
   getCourseHandler,
   getMiniAppsHandler,
@@ -16,6 +17,9 @@ router.get('/fields', getFieldsHandler);
 
 // GET /api/content/fields/:fieldSlug/subjects
 router.get('/fields/:fieldSlug/subjects', getSubjectsHandler);
+
+// GET /api/content/fields/:fieldSlug/subjects/:subjectSlug
+router.get('/fields/:fieldSlug/subjects/:subjectSlug', getSubjectHandler);
 
 // GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/courses
 router.get('/fields/:fieldSlug/subjects/:subjectSlug/courses', getCoursesHandler);

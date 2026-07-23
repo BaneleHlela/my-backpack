@@ -560,4 +560,244 @@ Retries AI question generation for all terms with `aiGenerationStatus: 'failed'`
 
 ---
 
+## Dashboard (Content Studio)
+
+All `/api/dashboard/*` routes require `[requireProfile, requirePlatformAdmin]` — `req.profile.isPlatformAdmin` must be `true` (no granting UI yet; set directly in MongoDB). This is the authoring backend for the Course → Node → Lesson/Quiz → Question flow plus the shared asset library, described in `docs/content/content-studio-design.md`. Every Quiz/Question created through this namespace gets `miniAppId` set to the **Course's `_id`** — there's no MiniApp document for roadmap content, this is the same convention the Course/Roadmap migration already established. Every delete in this namespace is a **soft delete** (`isActive: false`); nothing here ever hard-deletes, since learner progress can already be attached by the time something gets edited.
+
+### `POST /api/dashboard/assets/upload`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Body:** multipart form — `file` + `type` (`'images' | 'audio' | 'video' | 'documents'`)
+
+**Response:** `{ path, url }` — `path` is the GCS-relative path to store on the referencing document (e.g. `IDraggable.imageUrl`); `url` is the full display URL.
+
+Uploads land under `question-media/{type}/`. No tracking collection — GCS itself is the index.
+
+---
+
+### `GET /api/dashboard/assets?type=&search=`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Query params:**
+- `type` — required, one of `images`, `audio`, `video`, `documents`
+- `search` — optional, filters by filename substring
+
+**Response:** Array of `{ name, path, url, size, updatedAt }`, newest first.
+
+---
+
+### `POST /api/dashboard/courses`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Body:**
+```json
+{
+  "subjectId": "...",
+  "name": "Phonics",
+  "slug": "phonics",
+  "description": "...",
+  "curriculumTags": [{ "curriculum": "CAPS", "gradeLevel": "r" }]
+}
+```
+
+Creates an empty `Roadmap` first, then the `Course` pointing at it. If the (subjectId, slug) pair already exists, the just-created Roadmap is rolled back and a 409 is returned.
+
+**Errors:** 404 if `subjectId` doesn't resolve to an active Subject. 409 on a duplicate slug within the subject.
+
+---
+
+### `PATCH /api/dashboard/courses/:courseId`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Body:** any subset of `name`, `description`, `iconUrl`, `miniAppIds`, `curriculumTags`. `subjectId`/`slug`/`roadmapId` are structural and not editable here.
+
+---
+
+### `DELETE /api/dashboard/courses/:courseId`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+Soft-deletes the Course only (`isActive: false`). The Roadmap/nodes/lessons/quizzes/questions underneath are left untouched — just no longer reachable via an active course.
+
+---
+
+### `POST /api/dashboard/courses/:courseId/nodes`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Body:**
+```json
+{
+  "title": "Vowel Sounds",
+  "slug": "vowel-sounds",
+  "description": "...",
+  "curriculumTags": [{ "curriculum": "CAPS", "gradeLevel": "r" }]
+}
+```
+
+Creates a `RoadmapNode` on the course's roadmap (`position` = current node count + 1) and appends `{ nodeId, position }` to `Roadmap.nodes[]`.
+
+**Errors:** 404 if the course doesn't exist. 409 if a node with this slug already exists on the roadmap.
+
+---
+
+### `PATCH /api/dashboard/nodes/:nodeId`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Body:** any subset of `title`, `description`, `curriculumTags`, `unlockRequires`, `rewards`. Not `slug` or `position` — those only change via the reorder route below.
+
+---
+
+### `PATCH /api/dashboard/courses/:courseId/nodes/reorder`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Body:** `{ "nodeIds": ["...", "...", "..."] }` — the full ordered list of the course's node ids.
+
+Rewrites `Roadmap.nodes[]` to this order and updates each `RoadmapNode.position` to match, so the two copies of ordering data never drift apart.
+
+**Errors:** 400 if `nodeIds` isn't exactly the roadmap's current set of nodes (missing, extra, or duplicate ids).
+
+---
+
+### `DELETE /api/dashboard/nodes/:nodeId`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+Soft-deletes the node and removes its entry from `Roadmap.nodes[]`, renumbering the remaining entries (and their `RoadmapNode.position` fields) so there's no gap.
+
+---
+
+### `POST /api/dashboard/nodes/:nodeId/lessons`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Body:**
+```json
+{
+  "title": "Let's Play!",
+  "resources": [{ "type": "notes", "position": 1, "markdown": "..." }]
+}
+```
+
+Creates a `Lesson` (`position` = current `node.items.length + 1`) and appends `{ itemType: 'lesson', itemId, position }` to `RoadmapNode.items[]`. `resources[]` entries with a `url` are expected to already be GCS paths from the asset-upload endpoint — this route doesn't handle file upload itself.
+
+---
+
+### `PATCH /api/dashboard/lessons/:lessonId`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Body:** any subset of `title`, `resources`.
+
+---
+
+### `DELETE /api/dashboard/lessons/:lessonId`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+Soft-deletes the lesson and removes its entry from the parent `RoadmapNode.items[]`, renumbering the remaining items (and syncing any remaining Lesson documents' `position` fields to match).
+
+---
+
+### `POST /api/dashboard/nodes/:nodeId/quizzes`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Body:**
+```json
+{
+  "title": "Vowel Sounds Quiz",
+  "settings": { "feedbackMode": "immediate", "shuffleQuestions": false }
+}
+```
+
+Creates a `Quiz` (`mode: 'fixed'`, `miniAppId: <course._id>`, `questionIds: []`, `isUserAdjustable: false`, `isDefault: false`) and appends `{ itemType: 'quiz', itemId, position }` to `RoadmapNode.items[]`. `settings.questionCount` always starts at `0` regardless of what's passed — it tracks `questionIds.length`, not an independently editable number.
+
+---
+
+### `PATCH /api/dashboard/quizzes/:quizId`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Body:** any subset of `title`, `settings`. Not `mode`, not `miniAppId`. If `settings` is included, `questionCount` is always recomputed from the current `questionIds.length`, ignoring any value passed in.
+
+---
+
+### `PATCH /api/dashboard/quizzes/:quizId/questions`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Body:** `{ "questionIds": ["...", "...", "..."] }` — full ordered replacement list (not a partial add/remove).
+
+Also updates `settings.questionCount` to match the new length.
+
+**Errors:** 400 if any `questionId` doesn't resolve to an active Question.
+
+---
+
+### `DELETE /api/dashboard/quizzes/:quizId`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+Soft-deletes the quiz and removes its entry from the parent `RoadmapNode.items[]`, renumbering the remaining items.
+
+---
+
+### `POST /api/dashboard/questions`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Body:**
+```json
+{
+  "courseId": "...",
+  "type": "mcq_term_to_def",
+  "content": { "prompt": "...", "options": ["...", "..."], "correctAnswer": "...", "explanation": "..." },
+  "termId": "...",
+  "definitionId": "...",
+  "maxPoints": 4,
+  "pointsCanBePartial": false
+}
+```
+
+`miniAppId` is resolved from `courseId`. `maxPoints` defaults from `DEFAULT_MAX_POINTS[type]` if omitted. Always created with `source: 'manual'`, `isGeneric: true`, `profileId: null`. Content-shape validation (DnD needs `draggables`/`dropZones`, non-DnD needs `prompt`) is enforced by the `Question` schema's own `pre('validate')` hook — a failed save surfaces as a 400 with the validation message, not a separately-coded check.
+
+**Errors:** 404 if `courseId` doesn't resolve to an active Course. 400 on a content-shape validation failure.
+
+---
+
+### `PATCH /api/dashboard/questions/:questionId`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Body:** any subset of `content`, `maxPoints`, `pointsCanBePartial`. Same `pre('validate')`-backed 400 behavior as create.
+
+---
+
+### `DELETE /api/dashboard/questions/:questionId`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+Soft-deletes the question. If it's still referenced by an active `Quiz.questionIds`, a warning is logged server-side — the delete is not blocked and the reference is not cleaned up.
+
+---
+
+### `GET /api/dashboard/questions?courseId=&search=`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+**Query params:**
+- `courseId` — required, scopes the list via `miniAppId: courseId`
+- `search` — optional, matches against `content.prompt`, falling back to `content.correctAnswer` for DnD types (which have no `prompt`)
+
+**Response:** Active questions for the course, newest first — backs the "add existing question to this quiz" picker in the quiz editor.
+
+---
+
 *Last updated: July 2026*

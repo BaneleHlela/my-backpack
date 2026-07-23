@@ -12,7 +12,8 @@ function useCrumbs(): Crumb[] {
   const location = useLocation();
   const params = useParams<Record<string, string>>();
   const { enrolledSubjects, activeField } = useSelector((state: RootState) => state.enrollment);
-  const { currentLesson, courses, currentCourse } = useSelector((state: RootState) => state.roadmap);
+  const { currentLesson } = useSelector((state: RootState) => state.roadmap);
+  const { coursesByKey, currentCourse } = useSelector((state: RootState) => state.courses);
 
   const path = location.pathname;
 
@@ -46,6 +47,7 @@ function useCrumbs(): Crumb[] {
 
     // Course level
     if (params.courseSlug) {
+      const courses = fieldSlug ? (coursesByKey[`${fieldSlug}/${params.subjectSlug}`] ?? []) : [];
       const course = courses.find((c) => c.slug === params.courseSlug) ?? currentCourse;
       crumbs.push({
         label: course?.name ?? params.courseSlug,
@@ -58,7 +60,6 @@ function useCrumbs(): Crumb[] {
       crumbs.push({ label: currentLesson.title, href: path });
     }
 
-    void fieldSlug; // available for future use
     return crumbs;
   }
 

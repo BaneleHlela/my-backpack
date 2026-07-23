@@ -18,6 +18,12 @@ import contentRouter from './modules/content/content.routes';
 import adminRouter from './modules/admin/admin.routes';
 import roadmapRouter from './modules/roadmap/roadmap.routes';
 import enrollmentRouter from './modules/enrollment/enrollment.routes';
+import assetRouter from './modules/asset/asset.routes';
+import studioCourseRouter from './modules/studio/course.routes';
+import studioNodeRouter from './modules/studio/node.routes';
+import studioLessonRouter from './modules/studio/lesson.routes';
+import studioQuizRouter from './modules/studio/quiz.routes';
+import studioQuestionRouter from './modules/studio/question.routes';
 
 const app: Application = express();
 
@@ -57,6 +63,12 @@ app.use('/api/content', contentRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/roadmap', roadmapRouter);
 app.use('/api/enrollment', enrollmentRouter);
+app.use('/api/dashboard/assets', assetRouter);
+app.use('/api/dashboard/courses', studioCourseRouter);
+app.use('/api/dashboard/nodes', studioNodeRouter);
+app.use('/api/dashboard/lessons', studioLessonRouter);
+app.use('/api/dashboard/quizzes', studioQuizRouter);
+app.use('/api/dashboard/questions', studioQuestionRouter);
 
 // Health check
 app.get('/health', (_req, res) => {

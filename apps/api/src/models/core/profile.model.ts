@@ -53,6 +53,7 @@ export interface IProfileDocument extends Document {
   ageGroup: AgeGroup;
   dateOfBirth?: Date;
   isOwner: boolean;
+  isPlatformAdmin: boolean;
   isSetupComplete: boolean;
   pin?: string;
   education: IEducation;
@@ -81,6 +82,7 @@ const profileSchema = new Schema<IProfileDocument>(
     ageGroup: { type: String, enum: ['child', 'teen', 'adult'], required: true },
     dateOfBirth: { type: Date },
     isOwner: { type: Boolean, default: false },
+    isPlatformAdmin: { type: Boolean, default: false },
     isSetupComplete: { type: Boolean, default: false },
     pin: { type: String },
     education: {

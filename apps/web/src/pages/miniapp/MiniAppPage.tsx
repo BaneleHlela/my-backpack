@@ -77,6 +77,9 @@ export default function MiniAppPage() {
     if (location.pathname.endsWith('/bucket')) {
       return <BucketPage miniApp={miniApp} subjectSlug={subjectSlug ?? ''} />;
     }
+    if (location.pathname.endsWith('/quiz')) {
+      return <QuizPage miniApp={miniApp} subjectSlug={subjectSlug ?? ''} />;
+    }
     return <DictionaryPage miniApp={miniApp} subjectSlug={subjectSlug ?? ''} />;
   }
 

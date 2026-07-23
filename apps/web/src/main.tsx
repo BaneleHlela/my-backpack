@@ -25,6 +25,13 @@ import CoursePage from './pages/course/CoursePage';
 import LessonPlayerPage from './pages/lesson/LessonPlayerPage';
 import QuizItemPlayerPage from './pages/lesson/QuizItemPlayerPage';
 import MiniAppPage from './pages/miniapp/MiniAppPage';
+import StudioLayout from './pages/studio/StudioLayout';
+import CoursesListPage from './pages/studio/CoursesListPage';
+import CourseDetailPage from './pages/studio/CourseDetailPage';
+import NodeDetailPage from './pages/studio/NodeDetailPage';
+import LessonEditorPage from './pages/studio/LessonEditorPage';
+import QuizEditorPage from './pages/studio/QuizEditorPage';
+import QuestionEditorPage from './pages/studio/QuestionEditorPage';
 
 import './index.css';
 
@@ -107,6 +114,21 @@ function AppRoutes() {
             path="/field/:fieldSlug/subject/:subjectSlug/miniapp/:miniAppSlug/bucket"
             element={<MiniAppPage />}
           />
+          <Route
+            path="/field/:fieldSlug/subject/:subjectSlug/miniapp/:miniAppSlug/quiz"
+            element={<MiniAppPage />}
+          />
+
+          {/* Content Studio — platform-admin only, gated inside StudioLayout itself */}
+          <Route path="/studio" element={<StudioLayout />}>
+            <Route path="courses" element={<CoursesListPage />} />
+            <Route path="courses/:courseId" element={<CourseDetailPage />} />
+            <Route path="nodes/:nodeId" element={<NodeDetailPage />} />
+            <Route path="lessons/:lessonId" element={<LessonEditorPage />} />
+            <Route path="quizzes/:quizId" element={<QuizEditorPage />} />
+            <Route path="questions/new" element={<QuestionEditorPage />} />
+            <Route path="questions/:questionId" element={<QuestionEditorPage />} />
+          </Route>
         </Route>
       </Routes>
     </BrowserRouter>

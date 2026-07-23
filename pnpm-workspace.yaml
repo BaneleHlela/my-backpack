@@ -3,3 +3,34 @@ packages:
   - "packages/*"
 allowBuilds:
   esbuild: true
+packageExtensions:
+  lucide-react:
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+  react-router-dom:
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+  react-router:
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+  "@dnd-kit/core":
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+  react-text-to-speech:
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true

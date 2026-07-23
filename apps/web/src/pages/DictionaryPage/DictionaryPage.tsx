@@ -4,7 +4,7 @@
 // linkable/bookmarkable and supports browser back/forward.
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Bookmark } from 'lucide-react';
+import { ChevronLeft, Bookmark, Sparkles } from 'lucide-react';
 import type { IMiniApp } from '@my-backpack/shared';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../../app/store';
@@ -54,6 +54,14 @@ export default function DictionaryPage({ miniApp, subjectSlug }: DictionaryPageP
         >
           <Bookmark className="w-4 h-4" />
           My Bucket
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate(`${miniAppBasePath}/quiz`)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/40 backdrop-blur border border-white/50 text-sm font-medium text-violet-600 hover:bg-white/60 transition-colors flex-shrink-0"
+        >
+          <Sparkles className="w-4 h-4" />
+          Take Quiz
         </button>
       </div>
 

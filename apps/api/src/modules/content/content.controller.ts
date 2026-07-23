@@ -5,6 +5,7 @@ import { catchAsync } from '../../utils/AppError';
 import {
   getFields,
   getSubjectsByField,
+  getSubjectBySlug,
   getCoursesBySubject,
   getCourseBySlug,
   getMiniAppsBySubject,
@@ -23,6 +24,14 @@ export const getSubjectsHandler = catchAsync(
     const { fieldSlug } = req.params as { fieldSlug: string };
     const subjects = await getSubjectsByField(fieldSlug);
     sendSuccess(res, subjects);
+  }
+);
+
+export const getSubjectHandler = catchAsync(
+  async (req: Request, res: Response): Promise<void> => {
+    const { fieldSlug, subjectSlug } = req.params as { fieldSlug: string; subjectSlug: string };
+    const subject = await getSubjectBySlug(fieldSlug, subjectSlug);
+    sendSuccess(res, subject);
   }
 );
 

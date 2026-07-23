@@ -6,10 +6,8 @@ import { motion } from 'framer-motion';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../../app/store';
-import {
-  fetchCourseBySlug,
-  fetchRoadmapByCourse,
-} from '../../features/roadmap/roadmapSlice';
+import { fetchCourseBySlug } from '../../features/courses/coursesSlice';
+import { fetchRoadmapByCourse } from '../../features/roadmap/roadmapSlice';
 import RoadmapPath from '../../components/roadmap/RoadmapPath';
 import type { AgeGroup, IMiniApp } from '@my-backpack/shared';
 
@@ -28,9 +26,8 @@ export default function CoursePage() {
   const navigate = useNavigate();
 
   const { enrolledSubjects } = useSelector((state: RootState) => state.enrollment);
-  const { courses, currentCourse, currentRoadmap, isLoading, error } = useSelector(
-    (state: RootState) => state.roadmap
-  );
+  const { coursesByKey, currentCourse } = useSelector((state: RootState) => state.courses);
+  const { currentRoadmap, isLoading, error } = useSelector((state: RootState) => state.roadmap);
   const { activeProfile } = useSelector((state: RootState) => state.auth);
 
   let fieldSlug = '';
@@ -47,6 +44,8 @@ export default function CoursePage() {
     }
   }
 
+  const courses =
+    fieldSlug && subjectSlug ? (coursesByKey[`${fieldSlug}/${subjectSlug}`] ?? []) : [];
   const listCourse = courses.find((c) => c.slug === courseSlug);
   const course = listCourse ?? (currentCourse?.slug === courseSlug ? currentCourse : undefined);
 

@@ -5,10 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Blocks, ChevronLeft, Loader2, Map } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../../app/store';
-import {
-  fetchCoursesBySubject,
-  fetchMiniAppsBySubject,
-} from '../../features/roadmap/roadmapSlice';
+import { fetchSubjectBySlug, fetchMiniAppsBySubject } from '../../features/subjects/subjectsSlice';
+import { fetchCoursesBySubject } from '../../features/courses/coursesSlice';
 import { markSubjectAccessed } from '../../features/enrollment/enrollmentSlice';
 
 const MINI_APP_EMOJI: Record<string, string> = {
@@ -25,14 +23,14 @@ export default function SubjectHomePage() {
   const [panelOpen, setPanelOpen] = useState(false);
 
   const { enrolledSubjects } = useSelector((state: RootState) => state.enrollment);
-  const { courses, subjectMiniApps, isLoading, error } = useSelector(
-    (state: RootState) => state.roadmap
-  );
+  const { subjectsByKey, miniAppsByKey } = useSelector((state: RootState) => state.subjects);
+  const { coursesByKey, isLoading, error } = useSelector((state: RootState) => state.courses);
 
-  // Find the enrolled subject entry by slug
+  // The /subject/:subjectSlug route carries no :fieldSlug segment, so fieldSlug/subjectId
+  // still have to be resolved via the enrolled-subjects list — only used to key the
+  // subject/courses/miniapps fetches below, not for display.
   let subjectId = '';
   let fieldSlug = '';
-  let subjectName = '';
   let fieldName = '';
 
   if (enrolledSubjects && subjectSlug) {
@@ -41,17 +39,22 @@ export default function SubjectHomePage() {
       if (found) {
         subjectId = found.subject._id;
         fieldSlug = field.slug;
-        subjectName = found.subject.name;
         fieldName = field.name;
         break;
       }
     }
   }
 
+  const subjectKey = fieldSlug && subjectSlug ? `${fieldSlug}/${subjectSlug}` : '';
+  const subjectName = subjectKey ? (subjectsByKey[subjectKey]?.name ?? '') : '';
+  const courses = subjectKey ? (coursesByKey[subjectKey] ?? []) : [];
+  const subjectMiniApps = subjectKey ? (miniAppsByKey[subjectKey] ?? []) : [];
+
   useEffect(() => {
     if (!subjectId) return;
     void dispatch(markSubjectAccessed(subjectId));
     if (fieldSlug && subjectSlug) {
+      void dispatch(fetchSubjectBySlug({ fieldSlug, subjectSlug }));
       void dispatch(fetchCoursesBySubject({ fieldSlug, subjectSlug }));
       void dispatch(fetchMiniAppsBySubject({ fieldSlug, subjectSlug }));
     }

@@ -72,6 +72,13 @@ export async function getSubjectsByField(fieldSlug: string): Promise<ISubjectDoc
     .sort({ name: 1 });
 }
 
+export async function getSubjectBySlug(
+  fieldSlug: string,
+  subjectSlug: string
+): Promise<ISubjectDocument> {
+  return findSubjectOrThrow(fieldSlug, subjectSlug);
+}
+
 export async function getCoursesBySubject(
   fieldSlug: string,
   subjectSlug: string

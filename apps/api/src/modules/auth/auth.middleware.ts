@@ -1,4 +1,4 @@
-﻿// Express middleware for JWT-based auth: requireAccount, requireProfile, requireOwner
+﻿// Express middleware for JWT-based auth: requireAccount, requireProfile, requireOwner, requirePlatformAdmin
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, FullTokenPayload } from '../../utils/jwt';
 import Account from '../../models/core/account.model';
@@ -77,6 +77,18 @@ export function requireOwner(
 ): void {
   if (!req.profile?.isOwner) {
     sendError(res, 'Owner profile required', 403);
+    return;
+  }
+  next();
+}
+
+export function requirePlatformAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  if (!req.profile?.isPlatformAdmin) {
+    sendError(res, 'Platform admin required', 403);
     return;
   }
   next();

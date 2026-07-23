@@ -50,6 +50,7 @@ export interface IProfile {
   ageGroup: AgeGroup;
   dateOfBirth?: string;
   isOwner: boolean;
+  isPlatformAdmin: boolean;
   isSetupComplete: boolean;
   education: IEducation;
   preferences: IPreferences;

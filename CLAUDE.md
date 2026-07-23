@@ -105,6 +105,8 @@ and learning data. Think Netflix-style profile switching.
 - `requireAccount` — verifies JWT, works with partial token
 - `requireProfile` — requires full token with profileId
 - `requireOwner` — checks profile.isOwner === true
+- `requirePlatformAdmin` — checks profile.isPlatformAdmin === true; mirrors `requireOwner`. Gates
+  every `/api/dashboard/*` route (mounted alongside `requireProfile`, since it reads `req.profile`)
 - `ageGroupFilter` — reads ageGroup from JWT, attaches contentPrefs to req
 
 ### Content preferences by ageGroup
@@ -236,8 +238,13 @@ authProviders[], profiles[], activeProfile, isEmailVerified.
 
 ### Profile
 App usage entity. Fields: accountId, displayName, avatarUrl, ageGroup, 
-dateOfBirth, isOwner, pin (bcrypt, cost 10), education, preferences, 
+dateOfBirth, isOwner, isPlatformAdmin, pin (bcrypt, cost 10), education, preferences, 
 progress, isSetupComplete.
+
+`isPlatformAdmin` gates the Content Studio dashboard (`requirePlatformAdmin` middleware, checked
+alongside `requireOwner` above). Defaults to `false` — no UI grants it yet; set it directly in
+MongoDB (`db.profiles.updateOne({_id: <profileId>}, {$set: {isPlatformAdmin: true}})`) for
+whichever profile should have dashboard access.
 
 Education levels (SA system):
 `grade-r | grade-1 ... grade-12 | certificate | diploma | bachelors | 
@@ -616,6 +623,7 @@ GET    /api/profiles/me/stats
 ```
 GET /api/content/fields
 GET /api/content/fields/:fieldSlug/subjects
+GET /api/content/fields/:fieldSlug/subjects/:subjectSlug
 GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/courses
 GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/courses/:courseSlug
 GET /api/content/fields/:fieldSlug/subjects/:subjectSlug/miniapps
@@ -673,6 +681,43 @@ GET  /api/admin/generation-status?miniAppId=
 POST /api/admin/retry-failed-generation
 ```
 
+### Dashboard (Content Studio — platform-admin only)
+```
+POST /api/dashboard/assets/upload           — multipart: file + type ('images'|'audio'|'video'|'documents')
+GET  /api/dashboard/assets?type=&search=    — list/browse assets under question-media/{type}/
+
+POST   /api/dashboard/courses                              — { subjectId, name, slug, description?, curriculumTags? }; also creates the Course's (empty) Roadmap
+PATCH  /api/dashboard/courses/:courseId                     — name/description/iconUrl/miniAppIds/curriculumTags only
+DELETE /api/dashboard/courses/:courseId                     — soft delete (isActive: false); roadmap/nodes/lessons/quizzes/questions untouched
+POST   /api/dashboard/courses/:courseId/nodes               — { title, slug, description?, curriculumTags? }
+PATCH  /api/dashboard/courses/:courseId/nodes/reorder        — { nodeIds: string[] } full ordered list; rewrites Roadmap.nodes[] + each RoadmapNode.position
+
+PATCH  /api/dashboard/nodes/:nodeId                          — title/description/curriculumTags/unlockRequires/rewards only
+DELETE /api/dashboard/nodes/:nodeId                          — soft delete; removes its entry from Roadmap.nodes[], renumbers the rest
+POST   /api/dashboard/nodes/:nodeId/lessons                  — { title, resources: IResource[] }
+POST   /api/dashboard/nodes/:nodeId/quizzes                  — { title, settings? }; always mode:'fixed', miniAppId: <course._id>
+
+PATCH  /api/dashboard/lessons/:lessonId                       — title/resources only
+DELETE /api/dashboard/lessons/:lessonId                       — soft delete; removes its entry from the parent node's items[], renumbers the rest
+
+PATCH  /api/dashboard/quizzes/:quizId                          — title/settings only (not mode, not miniAppId)
+PATCH  /api/dashboard/quizzes/:quizId/questions                — { questionIds: string[] } full ordered replacement; keeps settings.questionCount in sync
+DELETE /api/dashboard/quizzes/:quizId                          — soft delete; removes its entry from the parent node's items[], renumbers the rest
+
+POST   /api/dashboard/questions                                — { courseId, type, content, termId?, definitionId?, maxPoints?, pointsCanBePartial? }; always source:'manual', isGeneric:true
+PATCH  /api/dashboard/questions/:questionId                     — content/maxPoints/pointsCanBePartial only
+DELETE /api/dashboard/questions/:questionId                     — soft delete; warns (doesn't block) if still referenced by an active Quiz.questionIds
+GET    /api/dashboard/questions?courseId=&search=                — scoped to one course (miniAppId: courseId); search matches content.prompt, falling back to content.correctAnswer for DnD types
+```
+All `/api/dashboard/*` routes require `[requireProfile, requirePlatformAdmin]`. Course-flow CRUD
+(`apps/api/src/modules/studio/` — one routes/controller/service file per resource: course, node,
+lesson, quiz, question) is the second slice of the Content Studio backend, building on Part 1's
+auth gate + shared asset library. Every Quiz/Question created here gets `miniAppId` set to the
+**Course's `_id`** (no MiniApp document exists for roadmap content) — same convention the
+Course/Roadmap migration already established. Every delete across this module is a **soft
+delete** — real learner progress can already be attached by the time something gets edited. See
+[docs/content/content-studio-design.md](docs/content/content-studio-design.md).
+
 ---
 
 ## Google Cloud Storage Structure
@@ -712,13 +757,18 @@ my-backpack-assets/
 │       ├── vowels/         ← a.mp3, e.mp3, i.mp3, o.mp3, u.mp3 (short sounds)
 │       ├── questions/      ← pick-sound-a.mp3, etc.
 │       └── cvc/            ← cat.mp3, sit.mp3, sun.mp3, etc.
-└── content/
-    ├── vocab/
-    ├── math/
-    │   └── objects/        ← apple.png, cabbage.png, car.png, etc.
-    └── english/
-        ├── vowels/         ← card-a.png, card-e.png, etc. (superseded by draggables/alphabet/ for dnd_single)
-        └── cvc/            ← letter tile images
+├── content/
+│   ├── vocab/
+│   ├── math/
+│   │   └── objects/        ← apple.png, cabbage.png, car.png, etc.
+│   └── english/
+│       ├── vowels/         ← card-a.png, card-e.png, etc. (superseded by draggables/alphabet/ for dnd_single)
+│       └── cvc/            ← letter tile images
+└── question-media/         ← Content Studio dashboard uploads, not manually curated — GCS
+    ├── images/               itself is the index (no tracking collection); see
+    ├── audio/                docs/design/asset-locations.md
+    ├── video/
+    └── documents/
 ```
 
 Shared asset URLs: `packages/shared/constants/assets.ts`
@@ -780,6 +830,10 @@ my-backpack/
 │   │       │   ├── roadmap/
 │   │       │   ├── enrollment/
 │   │       │   ├── admin/
+│   │       │   ├── asset/      # /api/dashboard/assets — Content Studio shared asset library
+│   │       │   ├── studio/     # /api/dashboard/{courses,nodes,lessons,quizzes,questions} —
+│   │       │   │               # Content Studio course-flow CRUD; one routes/controller/service
+│   │       │   │               # file per resource
 │   │       │   └── question/
 │   │       │       └── question.types.ts  # IDraggable, IDropZone, IBlank,
 │   │       │                              # IFeedback, IAvatarConfig,
@@ -826,7 +880,23 @@ my-backpack/
 │   │       │                   # TypedInputPattern, DndSinglePattern)
 │   │       ├── features/
 │   │       │   ├── auth/       # authSlice
-│   │       │   └── theme/      # themeSlice
+│   │       │   ├── theme/      # themeSlice
+│   │       │   ├── enrollment/ # enrollmentSlice
+│   │       │   ├── subjects/   # subjectsSlice (subjectsByKey, miniAppsByKey — keyed by
+│   │       │   │                # `${fieldSlug}/${subjectSlug}`)
+│   │       │   ├── courses/    # coursesSlice (coursesByKey, currentCourse — same key)
+│   │       │   ├── roadmap/    # roadmapSlice (currentRoadmap/currentNode/currentLesson only)
+│   │       │   ├── vocab/      # vocabSlice
+│   │       │   ├── quiz/       # quizSlice
+│   │       │   └── studio/     # studioSlice (course/node/lesson/quiz/question CRUD state —
+│   │       │                   # one slice, since Content Studio is a single connected
+│   │       │                   # authoring flow always navigated course->node->lesson/quiz->
+│   │       │                   # question); components/ (AssetPicker, Modal, SortableList,
+│   │       │                   # CreateCourseModal, AddNodeModal, CurriculumTagsEditor,
+│   │       │                   # DraggableEditor, DropZoneEditor, BlanksEditor,
+│   │       │                   # FeedbackEditor, AvatarEditor); questionArchetypes.ts
+│   │       │                   # (5-archetype config table for the 16 v1 question types);
+│   │       │                   # utils/ (slug.ts, questionPreview.ts)
 │   │       ├── lib/            # axios instance
 │   │       └── pages/
 │   │           ├── LoginPage
@@ -841,7 +911,11 @@ my-backpack/
 │   │           │                              # a Subject can have multiple Courses now
 │   │           ├── course/CoursePage          # roadmap for one Course (progress header + RoadmapPath)
 │   │           ├── lesson/LessonPlayerPage, QuizItemPlayerPage
-│   │           └── miniapp/MiniAppPage
+│   │           ├── miniapp/MiniAppPage         # Dictionary sub-routes: term/:termId, bucket, quiz
+│   │           └── studio/                    # Content Studio (platform-admin only) — StudioLayout
+│   │               │                          # (gate + sidebar), CoursesListPage, CourseDetailPage,
+│   │               │                          # NodeDetailPage, LessonEditorPage, QuizEditorPage,
+│   │               │                          # QuestionEditorPage — see routes below
 │   └── mobile/
 │       ├── app/                 # Expo Router file-based routes
 │       │   ├── _layout.tsx      # Redux <Provider>, splash-hold-until-bootstrapped, <Slot />
@@ -958,6 +1032,36 @@ my-backpack/
       Term/Question/Quiz/QuizSession `miniAppId` references keep resolving without a mass data
       migration; established `seed/migrations/` as the convention for future one-off restructure
       scripts. Frontend (web/mobile) not yet updated to match — tracked separately.
+- [x] Content Studio backend, part 1 (July 2026) — `isPlatformAdmin: boolean` added to `Profile`
+      (default `false`, no granting UI — set directly in MongoDB); `requirePlatformAdmin`
+      middleware added (mirrors `requireOwner`); new `/api/dashboard/*` namespace (currently just
+      `modules/asset/`) gated by `[requireProfile, requirePlatformAdmin]`; GCS client
+      (`config/gcs.ts`, `@google-cloud/storage`) and asset upload/list endpoints
+      (`POST /api/dashboard/assets/upload`, `GET /api/dashboard/assets`) backing a new
+      `question-media/{images|audio|video|documents}/` GCS root — no tracking collection, GCS
+      itself is the index. Foundation for the rest of the Content Studio (course/node/lesson/
+      quiz/question authoring), which lands in later prompts — see
+      [docs/content/content-studio-design.md](docs/content/content-studio-design.md).
+- [x] Content Studio backend, part 2 — course-flow CRUD (July 2026) — `modules/studio/` added
+      (one routes/controller/service file per resource: course, node, lesson, quiz, question),
+      all mounted under `/api/dashboard/*` alongside Part 1's asset routes, same
+      `[requireProfile, requirePlatformAdmin]` gate. Creating a Course also creates its empty
+      Roadmap in the same request (rolled back on a slug conflict); every Quiz/Question created
+      here gets `miniAppId` set to the **Course's `_id`** (the established convention — no
+      MiniApp document exists for roadmap content); Quiz creation is always `mode: 'fixed'` with
+      `settings.questionCount` kept in sync with `questionIds.length` rather than editable
+      directly. Node/lesson/quiz deletion re-derives `position` for the remaining siblings on
+      both sides of the relationship (`Roadmap.nodes[]` + each `RoadmapNode.position` on node
+      delete; `RoadmapNode.items[]` + sibling `Lesson.position` on lesson/quiz delete) so the two
+      copies of ordering data can't drift — shared via `removeNodeItem`/`findNodeByItemId`
+      helpers in `node.service.ts`, reused by `lesson.service.ts` and `quiz.service.ts`. All
+      deletes are soft (`isActive: false`) — real learner progress can already be attached.
+      Question creation/update relies on `Question`'s existing `pre('validate')` hook for
+      per-type content-shape validation (DnD needs draggables/dropZones, non-DnD needs prompt) —
+      a failed save surfaces as a 400 rather than being re-validated in the controller. v1
+      question authoring is fully manual, no AI-assisted distractor/variant generation (a
+      documented future direction, not built). See
+      [docs/content/content-studio-design.md](docs/content/content-studio-design.md).
 - [ ] XP and peanuts reward system (deferred)
 - [ ] Test readiness scoring (deferred)
 - [ ] Book/PDF upload pipeline (deferred)
@@ -993,6 +1097,39 @@ my-backpack/
 - [x] Age-group-aware DnD/quiz-chrome styling — `DndSinglePattern`, `QuizProgress`, `AnswerFeedback` take an `ageGroup` prop and render a distinct child-mode glassmorphism treatment (large glass prompt bubble + stacked replay/hint buttons, clamp-sized draggable tiles, flex-1 drop zone) alongside the unchanged adult/teen default; see [docs/design/child-dnd-quiz-style.md](docs/design/child-dnd-quiz-style.md)
 - [x] No-scroll viewport contract for the active-question view — shared `QuizPageShell` (`apps/web/src/components/quiz/QuizPageShell.tsx`) locks `QuizPage`/`QuizItemPlayerPage` to `h-[calc(100dvh-60px)]` (accounts for AppLayout's 60px TopNav) with `overflow-hidden`; the active question region is `flex-1 min-h-0 overflow-hidden` so a 5-draggable `dnd_single` question never forces scrolling, while start/results/error/loading states keep their natural scrollable-if-needed treatment
 - [x] Live TTS with word highlighting (interim) — `SpokenText` component (browser Web Speech API via `react-text-to-speech`) reads question prompts, avatar dialogue, and answer feedback aloud with manual playback; always defers to prerecorded audio where it exists; see [docs/content/live-tts-word-highlighting.md](docs/content/live-tts-word-highlighting.md)
+- [x] `roadmapSlice` split into three properly-scoped slices (July 2026) — new `apps/web/src/features/subjects/subjectsSlice.ts` (`subjectsByKey`/`miniAppsByKey`, `fetchSubjectBySlug`/`fetchMiniAppsBySubject`) and `apps/web/src/features/courses/coursesSlice.ts` (`coursesByKey`/`currentCourse`, `fetchCoursesBySubject`/`fetchCourseBySlug`) took over everything that wasn't actually roadmap-scoped; `roadmapSlice` now only holds `currentRoadmap`/`currentNode`/`currentLesson` + `fetchRoadmapByCourse`/`fetchLesson`. Both new caches key by `` `${fieldSlug}/${subjectSlug}` `` (never bare `subjectSlug`) since `Subject.slug`/`Course.slug` are only unique per-field/per-subject. New backend route `GET /api/content/fields/:fieldSlug/subjects/:subjectSlug` (`getSubjectBySlug` in `content.service.ts`) backs `fetchSubjectBySlug`, letting `SubjectHomePage` read the subject header from `subjectsByKey` instead of the enrolled-subjects list — though `fieldSlug` itself still has to come from matching `enrollment.enrolledSubjects` first, since the `/subject/:subjectSlug` route carries no `:fieldSlug` segment; not fixed by this change. `Breadcrumb.tsx` updated to read `courses`/`currentCourse` from the new `coursesSlice`.
+- [x] "Take Quiz" entry point on the Dictionary page — `main.tsx` gained a `/field/:fieldSlug/subject/:subjectSlug/miniapp/:miniAppSlug/quiz` route (mirrors the existing `/bucket` sub-route), `MiniAppPage`'s `type === 'dictionary'` branch renders `QuizPage` when the path ends in `/quiz`, and `DictionaryPage` got a "Take Quiz" button next to "My Bucket". Closes out the "quiz access folds into Dictionary" item from the Course/Roadmap restructure — the Vocabulary Quiz MiniApp was deleted and its `Quiz` documents re-pointed at Dictionary's `miniAppId` during that migration, but no UI entry point existed until now. `QuizPage` itself needed no changes — it's already generic on `{miniApp, subjectSlug}` and resolves correctly now that `miniAppId` points at Dictionary.
+- [x] Content Studio frontend (July 2026) — the full course-authoring flow, gated to
+      `activeProfile.isPlatformAdmin` (`StudioLayout` redirects to `/dashboard` otherwise, mirroring
+      `ProtectedRoute`'s pattern). New routes, all nested under the existing protected
+      `AppLayout` group: `/studio/courses` (list, "+ New Course"), `/studio/courses/:courseId`
+      (meta edit + linked mini-apps + node list with drag-to-reorder), `/studio/nodes/:nodeId`
+      (meta edit + items[] list, "+ Add Lesson"/"+ Add Quiz" create an empty draft and navigate
+      straight into it), `/studio/lessons/:lessonId` (title + ordered `resources[]` editor, one
+      form per resource type), `/studio/quizzes/:quizId?courseId=&nodeId=` (settings +
+      drag-to-reorder question list, "+ Add Question" pick-existing/create-new chooser), and
+      `/studio/questions/new?courseId=&returnTo=&addToQuiz=` /
+      `/studio/questions/:questionId?courseId=` (type dropdown grouped by the 5 form
+      archetypes from `docs/content/content-studio-design.md`, driving a per-archetype config
+      table in `questionArchetypes.ts` — not a 21-type or 16-type switch; client-side validation
+      mirrors the `Question.pre('validate')` hook exactly). One `studioSlice.ts` covers all
+      course/node/lesson/quiz/question state (see folder structure above) — deliberately not
+      split like `subjectsSlice`/`coursesSlice`, since this is one connected authoring flow
+      always navigated in the same order, unlike those two which serve independently-reused
+      learner-facing pages. `AssetPicker` (`features/studio/components/`) is the one
+      upload-or-browse component used everywhere a GCS path is needed (question media, lesson
+      resources, avatar/feedback audio) — Upload posts to `/api/dashboard/assets/upload`, Browse
+      reads `/api/dashboard/assets?type=&search=`, always stores a GCS **path**, never a full URL.
+      Reads mostly reuse existing endpoints rather than adding new dashboard GETs (per the design
+      doc's read/write split) — course list is aggregated client-side from
+      `/content/fields` → `.../subjects` → `.../courses` (no "all courses" endpoint exists);
+      a course's node list comes from `GET /roadmap/course/:courseId`; a node's resolved items
+      from `GET /roadmap/node/:nodeId`; a lesson from `GET /roadmap/lesson/:lessonId`; a quiz's
+      full settings/questionIds from `GET /quiz/quizzes?miniAppId=<courseId>` (found by id
+      client-side, since no dashboard GET for a single quiz exists); a question for prefill/edit
+      from `GET /dashboard/questions?courseId=` (same reasoning — `courseId` travels as a query
+      param on every question-editor link specifically so this works). Divergences from the
+      original build plan are noted in `docs/content/content-studio-design.md`.
 - [ ] Profile management screens
 
 ### Frontend Mobile (apps/mobile)

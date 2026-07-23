@@ -55,14 +55,41 @@ my-backpack-assets/
 │       ├── vowels/       ← a.mp3, e.mp3, i.mp3, o.mp3, u.mp3 (short vowel sounds)
 │       ├── questions/    ← pick-sound-a.mp3, etc. (mcq_audio prompts)
 │       └── cvc/          ← cat.mp3, sit.mp3, sun.mp3, etc. (CVC word pronunciations)
-└── content/
-    ├── vocab/            ← Vocabulary word pronunciation audio files
-    ├── math/
-    │   └── objects/      ← apple.png, cabbage.png, car.png, etc. (drag-intro images)
-    └── english/
-        ├── vowels/       ← card-a.png, card-e.png, … card-u.png (letter cards)
-        └── cvc/          ← letter tile images for dnd_build questions
+├── content/
+│   ├── vocab/            ← Vocabulary word pronunciation audio files
+│   ├── math/
+│   │   └── objects/      ← apple.png, cabbage.png, car.png, etc. (drag-intro images)
+│   └── english/
+│       ├── vowels/       ← card-a.png, card-e.png, … card-u.png (letter cards)
+│       └── cvc/          ← letter tile images for dnd_build questions
+└── question-media/       ← Content Studio dashboard uploads (see below)
+    ├── images/
+    ├── audio/
+    ├── video/
+    └── documents/
 ```
+
+---
+
+## `question-media/` — Content Studio uploads
+
+Unlike the rest of the tree above, `question-media/{images|audio|video|documents}/` is not
+manually curated — it's populated by uploads through the Content Studio dashboard
+(`POST /api/dashboard/assets/upload`, gated behind `isPlatformAdmin`) while authoring a question
+or lesson resource, and browsed back via `GET /api/dashboard/assets?type=&search=`
+(`bucket.getFiles({ prefix: 'question-media/{type}/' })`).
+
+There is no separate MongoDB collection tracking what's been uploaded here — the bucket itself
+is the index. Listing is always a live `getFiles` call against GCS, never a cached/mirrored
+table, so it can never drift out of sync with what's actually in the bucket.
+
+Object paths are generated server-side as `` `question-media/${type}/${Date.now()}-${sanitized filename}` ``,
+where the filename is lowercased and every non-alphanumeric run (spaces, punctuation, the
+extension's dot) is collapsed to a single hyphen — e.g. `My Cat Photo.PNG` becomes
+`question-media/images/1753267200000-my-cat-photo-png`. The upload response returns both `path`
+and `url`; per the existing convention (`IDraggable.imageUrl`, `IFeedback.audioUrl`, etc.),
+question/lesson content fields store the `path`, not the full URL — the frontend builds the
+display URL the same way everywhere else does, `ASSETS.GCS_BASE + '/' + path`.
 
 ---
 
@@ -203,4 +230,4 @@ The bucket is configured for uniform access control with public read, so new upl
 
 ---
 
-*Last updated: June 2026*
+*Last updated: July 2026*
