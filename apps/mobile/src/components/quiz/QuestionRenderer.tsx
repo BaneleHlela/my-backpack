@@ -39,6 +39,7 @@ export interface QuestionRendererProps {
   question: IQuestion;
   helpers: IQuestionHelpers;
   ageGroup?: AgeGroup;
+  lang: string;
   disabled?: boolean;
   isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
@@ -48,6 +49,7 @@ export function QuestionRenderer({
   question,
   helpers,
   ageGroup,
+  lang,
   disabled,
   isSubmitting,
   onAnswer,
@@ -56,7 +58,14 @@ export function QuestionRenderer({
 
   if (MCQ_TYPES.has(question.type)) {
     return (
-      <McqPattern content={content} helpers={helpers} disabled={disabled} isSubmitting={isSubmitting} onAnswer={onAnswer} />
+      <McqPattern
+        content={content}
+        helpers={helpers}
+        lang={lang}
+        disabled={disabled}
+        isSubmitting={isSubmitting}
+        onAnswer={onAnswer}
+      />
     );
   }
 
@@ -65,6 +74,7 @@ export function QuestionRenderer({
       <TrueFalsePattern
         content={content}
         helpers={helpers}
+        lang={lang}
         disabled={disabled}
         isSubmitting={isSubmitting}
         onAnswer={onAnswer}
@@ -79,6 +89,7 @@ export function QuestionRenderer({
         termId={question.termId}
         content={content}
         helpers={helpers}
+        lang={lang}
         disabled={disabled}
         isSubmitting={isSubmitting}
         onAnswer={onAnswer}
@@ -92,6 +103,7 @@ export function QuestionRenderer({
         content={content}
         helpers={helpers}
         ageGroup={ageGroup}
+        lang={lang}
         disabled={disabled}
         isSubmitting={isSubmitting}
         onAnswer={onAnswer}
@@ -105,6 +117,7 @@ export function QuestionRenderer({
         content={content}
         helpers={helpers}
         ageGroup={ageGroup}
+        lang={lang}
         disabled={disabled}
         isSubmitting={isSubmitting}
         onAnswer={onAnswer}
@@ -118,6 +131,7 @@ export function QuestionRenderer({
         content={content}
         helpers={helpers}
         ageGroup={ageGroup}
+        lang={lang}
         disabled={disabled}
         isSubmitting={isSubmitting}
         onAnswer={onAnswer}

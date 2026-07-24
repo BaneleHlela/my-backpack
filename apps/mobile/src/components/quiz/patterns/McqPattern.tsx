@@ -1,7 +1,9 @@
 // Ports apps/web's McqPattern.tsx — shared UI for mcq_term_to_def, mcq_def_to_term,
 // mcq_correct_usage, mcq_incorrect_usage, mcq_fill_blank, and (new) mcq_audio. content.prompt
 // already carries the fully-composed question text from the generator for the text-based
-// types. No SpokenText/TTS wiring here — that's prompt 3; prompt renders as plain Text.
+// types. content.prompt is read aloud via SpokenText (live TTS, see
+// docs/technical/mobile-architecture.md's "Live TTS (Prompt 3)" section) unless it's the
+// "audio:" prefix case below, which already has its own dedicated "Play audio" affordance.
 // Selecting an option never submits immediately — the learner always confirms with the Submit
 // button.
 //
@@ -18,10 +20,12 @@ import { colors, radii, spacing, typography } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
+import { SpokenText } from '../SpokenText';
 
 interface McqPatternProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
+  lang: string;
   disabled?: boolean;
   isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
@@ -30,7 +34,7 @@ interface McqPatternProps {
 const OPTION_LABELS = ['A', 'B', 'C', 'D', 'E', 'F'];
 const AUDIO_PROMPT_PREFIX = 'audio:';
 
-export function McqPattern({ content, disabled, isSubmitting, onAnswer }: McqPatternProps) {
+export function McqPattern({ content, lang, disabled, isSubmitting, onAnswer }: McqPatternProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const options = content.options ?? [];
 
@@ -52,7 +56,7 @@ export function McqPattern({ content, disabled, isSubmitting, onAnswer }: McqPat
         </Pressable>
       ) : (
         <View style={styles.promptRow}>
-          <Text style={styles.prompt}>{content.prompt}</Text>
+          <SpokenText text={content.prompt ?? ''} lang={lang} containerStyle={styles.spokenPrompt} />
           {content.promptAudioUrl ? (
             <Pressable
               onPress={() => playAudioUrl(resolveAssetUrl(content.promptAudioUrl)!)}
@@ -104,10 +108,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
   },
-  prompt: {
+  spokenPrompt: {
     flex: 1,
-    fontSize: typography.body,
-    color: colors.text.primary,
   },
   audioButton: {
     width: 28,

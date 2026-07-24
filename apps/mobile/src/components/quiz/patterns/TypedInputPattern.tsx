@@ -1,5 +1,8 @@
 // Ports apps/web's TypedInputPattern.tsx — shared UI for fill_blank_typed, text_input_def,
-// text_input_audio, text_input_example: a text input + submit button.
+// text_input_audio, text_input_example: a text input + submit button. content.prompt is read
+// aloud via SpokenText (live TTS, see docs/technical/mobile-architecture.md's "Live TTS
+// (Prompt 3)" section) unless it's the "audio:" prefix case or text_input_audio (both already
+// have their own dedicated audio playback flow below).
 //
 // text_input_audio: the generator doesn't tag content.prompt with the "audio:" prefix
 // convention for this type (it only stores instructional text), so there's no GCS path on the
@@ -14,18 +17,28 @@ import type { IQuestionContent, IQuestionHelpers, QuestionType } from '@my-backp
 import api from '../../../lib/api';
 import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
+import { SpokenText } from '../SpokenText';
 
 interface TypedInputPatternProps {
   type: QuestionType;
   termId?: string;
   content: IQuestionContent;
   helpers: IQuestionHelpers;
+  lang: string;
   disabled?: boolean;
   isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
 }
 
-export function TypedInputPattern({ type, termId, content, disabled, isSubmitting, onAnswer }: TypedInputPatternProps) {
+export function TypedInputPattern({
+  type,
+  termId,
+  content,
+  lang,
+  disabled,
+  isSubmitting,
+  onAnswer,
+}: TypedInputPatternProps) {
   const [value, setValue] = useState('');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioLoading, setAudioLoading] = useState(false);
@@ -55,7 +68,11 @@ export function TypedInputPattern({ type, termId, content, disabled, isSubmittin
   return (
     <View style={styles.wrapper}>
       <View style={styles.promptRow}>
-        <Text style={styles.prompt}>{content.prompt}</Text>
+        {promptIsAudio || type === 'text_input_audio' ? (
+          <Text style={styles.prompt}>{content.prompt}</Text>
+        ) : (
+          <SpokenText text={content.prompt ?? ''} lang={lang} containerStyle={styles.spokenPrompt} />
+        )}
         {content.promptAudioUrl ? (
           <Pressable
             onPress={() => playAudioUrl(resolveAssetUrl(content.promptAudioUrl)!)}
@@ -119,6 +136,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.body,
     color: colors.text.primary,
+  },
+  spokenPrompt: {
+    flex: 1,
   },
   audioButton: {
     width: 28,

@@ -15,11 +15,13 @@ it's architecturally standalone (not roadmap-gated).
 **Scope as of the Roadmap/Lesson/Quiz build (July 2026):** Course/Roadmap
 navigation, a Lesson resource player, and a quiz-taking engine for 16 of the
 20 question types now exist too — see "Roadmap, Lesson & Quiz UI" and
-"Question types 14–20 & Dictionary quiz" below. OAuth on native, forgot/
-reset-password/verify-email screens, live TTS, the remaining 5 `dnd_*`
-question types (`dnd_select`, `dnd_sort`, `dnd_sequence`, `dnd_match`,
-`dnd_fill` — no seeded content exists for any of them yet), and a
-teacher/dashboard surface are still deferred.
+"Question types 14–20 & Dictionary quiz" below. Live TTS (question prompts,
+DnD dialogue, and answer feedback read aloud on demand) also now exists —
+see "Live TTS (Prompt 3)" below. OAuth on native, forgot/reset-password/
+verify-email screens, the remaining 5 `dnd_*` question types (`dnd_select`,
+`dnd_sort`, `dnd_sequence`, `dnd_match`, `dnd_fill` — no seeded content
+exists for any of them yet), and a teacher/dashboard surface are still
+deferred.
 
 ---
 
@@ -687,11 +689,159 @@ throughout):
    Dictionary's "Take Quiz" entry point. **Done** (`mcq_audio`, `dnd_build`,
    `dnd_count` — the 5 types with no seeded content are deliberately still
    deferred) — see "Question types 14–20 & Dictionary quiz" above.
-3. Live TTS / word-highlighting on mobile (the `SpokenText` equivalent).
+3. Live TTS on mobile (the `SpokenText` equivalent). **Done** (no live
+   word-highlighting — accepted regression, see "Live TTS (Prompt 3)"
+   below) — see that section for full detail.
 4. Profile management screens, OAuth on native, forgot/reset-password/
    verify-email screens.
 5. Peanuts/XP rewards and test-readiness UI, once their backend services
    exist (both are currently schema-only — see root `CLAUDE.md`).
+
+---
+
+## Live TTS (Prompt 3, July 2026)
+
+Ports web's interim live TTS layer
+([docs/content/live-tts-word-highlighting.md](../content/live-tts-word-highlighting.md))
+to mobile: question prompts, DnD avatar dialogue, and answer feedback are
+now read aloud on demand. Most of this prompt is a faithful port of web's
+*rules*, not its library (`react-text-to-speech` wraps the browser Web
+Speech API — no RN equivalent). Two pieces have no web reference at all and
+are original design: the DnD dialogue/draggable-audio wiring for
+`dnd_build`/`dnd_count`, and `dnd_count`'s `countingAudio` — web still only
+has `dnd_single` implemented (12 text-based question types + `dnd_single`,
+as of this writing) while mobile shipped `dnd_build`/`dnd_count` in Prompt 2.
+
+### Library: `expo-speech`, not `expo-edge-speech`
+
+Both were considered. `expo-edge-speech` wraps Microsoft Edge's cloud TTS
+service and does expose word-boundary timing events, which would recover
+live word-highlighting — `expo-speech`'s documented API has no usable
+equivalent (see "Accepted regression" below). But it's an unofficial,
+reverse-engineered wrapper around a consumer browser feature, not a
+sanctioned Expo API, and needs network connectivity with no offline path —
+too much to take on for an interim measure the team's own plan is to
+replace with properly licensed Azure AI Speech once Content Studio can
+author pre-generated audio. `expo-speech` mirrors web's own choice: free,
+on-device, zero new infrastructure, and the same limitation web already
+accepts (`zu-ZA` silently falling back to whatever voice the device has
+installed, on top of no live-highlighting parity path here either).
+
+Installed as `expo-speech@~57.0.1` (matches this project's `~57.0.x`
+convention for every other Expo module, and is what `npx expo install`
+would resolve for SDK 57). No `app.json` plugin entry needed — unlike
+`expo-audio`, it declares no native permissions.
+
+### Shared primitives
+
+- **`src/lib/lang.ts`** — `subjectSlugToLangCode()`, a direct port of web's
+  version (`'isizulu-hl'` → `'zu-ZA'`, else `'en-US'`). No
+  `DEFAULT_TTS_VOICE` equivalent: web forces one named Chrome voice via
+  `voiceURI`, but native voice identifiers aren't portable device-to-device
+  the same way — mobile just passes `language` and accepts whatever voice
+  the OS resolves for it.
+- **`src/lib/useSpeak.ts`** — imperative hook mirroring web's `useSpeak`:
+  `speak(text)`, `stop()`, `isSpeaking`. `expo-speech`'s
+  `Speech.speak(text, { language, onDone, onStopped, onError })` is
+  callback-based rather than itself a reactive hook, so `isSpeaking` is
+  tracked locally off those callbacks. `Speech.speak()` is wrapped in
+  try/catch — an unsupported language/voice fails silently (no-op) instead
+  of crashing the question, matching web's silent `zu-ZA` fallback.
+- **`src/components/quiz/SpokenText.tsx`** — bound-text component (text +
+  tap-to-play/stop speaker icon), wraps `useSpeak` internally, visually
+  mirrors web's speaker-icon pattern. Used for every fixed string that
+  needs reading (question prompts, feedback text, explanation). DnD
+  dialogue instead calls `useSpeak` directly inside each pattern component
+  rather than going through `SpokenText` — mirrors web's `DndSinglePattern`,
+  which bypasses its own shared component for the same reason (the
+  existing Replay button needs to drive `speak`/`stop` itself).
+
+### Accepted regression vs. web: no live word-by-word highlighting
+
+`expo-speech` has no word-boundary callback usable for driving live
+highlighting on this SDK. `SpokenText` shows a plain speaker icon with no
+in-text highlighting — an accepted interim gap, not a bug (see the
+`expo-edge-speech` discussion above for why that gap wasn't papered over
+with an unofficial dependency). `IFeedback.highlightWords` stays dormant
+here too, exactly as on web — it's scaffolding for a different,
+pre-computed highlighting approach, not something to build against now.
+
+### Scope — ported 1:1 from web
+
+| Component | Text | Skip condition |
+|---|---|---|
+| `McqPattern`, `TrueFalsePattern` | `content.prompt` | `content.prompt` starts with `audio:` |
+| `TypedInputPattern` | `content.prompt` | `promptIsAudio` (existing `audio:`-prefix logic) or `type === 'text_input_audio'` (has its own fetched-audio flow) |
+| `AnswerFeedback` | `content.explanation` | never — no prerecorded equivalent exists |
+| `AnswerFeedback` | `feedback.text` | `feedback.audioUrl` is set (plays that instead) |
+
+`lang` is threaded `QuizSessionScreen` → `QuestionRenderer`/`AnswerFeedback`
+→ pattern components, computed once per session (see "Language derivation"
+below). `QuestionRendererProps` gained a required `lang: string` field for
+this — mirrors web's `QuestionRenderer.tsx`, which already carried one.
+
+### DnD dialogue and draggable audio — ported, with one deliberate divergence
+
+`DndSinglePattern.tsx`, `DndBuildPattern.tsx`, and `DndCountPattern.tsx` each
+gained: `audioAvailable` now also true whenever `content.avatar?.dialogue`
+exists (previously only `dialogueAudioUrl` counted), and `replayPrompt()`
+falls back to `useSpeak(lang).speak(content.avatar.dialogue)` when
+`dialogueAudioUrl` is absent.
+
+**Divergence from web:** web's dialogue Replay *always* speaks live,
+overriding `dialogueAudioUrl` even when it's set — an explicit product
+decision, since word-highlighting during the read-out was judged more
+valuable than the prerecorded clip for that one control. Mobile has no
+highlighting (see above), so that justification doesn't carry over —
+mobile keeps the ordinary "prerecorded wins" rule for dialogue too:
+`dialogueAudioUrl` still plays first when present, live TTS only fills the
+gap when it's absent. Noted here explicitly since it's a real behavioral
+difference from web, not an oversight.
+
+Per-tile draggable audio (tap/drag-start to hear `draggable.label`) got the
+same *ordinary* fallback: `item.audioUrl` still wins when set
+(phonetically load-bearing content, e.g. isiZulu vowel/consonant
+recordings), live TTS of `item.label` fills the gap otherwise.
+`DndSinglePattern.tsx` has its own local tile component and gained this
+directly in its `playItemAudio` helper. `DndBuildPattern.tsx`/
+`DndCountPattern.tsx` share `DndTile.tsx`'s tile primitive, but
+`DndTile.tsx` itself wasn't touched — it already delegates the tap outcome
+entirely to whatever `onTap`/`onDragStart` callback its caller passes in
+(audio for pool tiles, remove-from-zone for placed tiles — a distinction
+`DndTile` doesn't itself make). The fallback was added at the call site
+instead: each pattern's pool-tile `onTap`/`onDragStart` now points at a
+local `playItemAudio` helper (same shape as `DndSinglePattern`'s) instead
+of a bare `playAsset(item.audioUrl)`.
+
+### `dnd_count`'s `countingAudio` (new — no web reference)
+
+`IQuestionHelpers.countingAudio` had never been implemented anywhere (web
+has no `dnd_count` to implement it against). Implemented in
+`handleDropAttempt`: when `helpers.countingAudio` is true, speak the new
+placed-count as a bare numeral string (`speak(String(placedInstanceIds.size
++ 1))`) each time a tile successfully lands in the zone — TTS engines
+pronounce digits as number words natively, no need to spell out
+"one"/"two". The existing "N placed" text label stays alongside this, not
+replaced by it — visual and audio reinforcement together. Only fires on
+landing, not on removing a tile back to the pool, and stops mattering once
+`submittedRef.current` blocks further drop attempts post-submit.
+
+### Language derivation per quiz source
+
+Computed once in `QuizSessionScreen.tsx`:
+
+- **Roadmap-item path** (`session.source === 'roadmapItem'`):
+  `subjectSlugToLangCode(session.subjectSlug)` — `subjectSlug` already
+  reaches this screen as a route param on every navigation path into
+  `quiz/[itemId]` (confirmed across `NodeLessonsPanel.tsx`, the lesson
+  player's auto-advance, and `QuizSessionScreen`'s own roadmap-item
+  auto-advance).
+- **Dictionary path** (`session.source === 'miniApp'`): hardcoded
+  `'en-US'`, not plumbed through `quiz/dictionary/[miniAppId].tsx`. Today
+  there is exactly one Dictionary mini-app, seeded under the English
+  subject — no isiZulu dictionary exists (per the seeded hierarchy in root
+  `CLAUDE.md`). A deliberate scoped-down decision, not an oversight —
+  revisit if a non-English dictionary is ever seeded.
 
 ---
 
@@ -702,8 +852,6 @@ throughout):
   for them. No seeded content exists for any of the 5 yet (matches web's own
   scope) — not slated on the current 5-prompt roadmap; revisit only if/when
   content gets authored for them.
-- **Live TTS / word-highlighting** — question prompts, avatar dialogue, and
-  feedback all render as plain text with no speech. Prompt 3.
 - **OAuth on native** — deep-link/AuthSession work for Google/Facebook is a
   separate follow-up; email/password only for now. Prompt 4.
 - **Forgot-password / reset-password / verify-email screens** — the backend

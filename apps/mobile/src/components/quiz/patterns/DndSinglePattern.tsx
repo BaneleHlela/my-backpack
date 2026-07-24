@@ -38,11 +38,13 @@ import { ASSETS, colors, radii, spacing, typography } from '@my-backpack/shared'
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
+import { useSpeak } from '../../../lib/useSpeak';
 
 interface DndSinglePatternProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
   ageGroup?: AgeGroup;
+  lang: string;
   disabled?: boolean;
   isSubmitting?: boolean;
   onAnswer: (rawResponse: string) => void;
@@ -150,10 +152,19 @@ const DraggableTile = forwardRef(function DraggableTile(
   );
 });
 
-export function DndSinglePattern({ content, helpers, ageGroup, disabled, isSubmitting, onAnswer }: DndSinglePatternProps) {
+export function DndSinglePattern({
+  content,
+  helpers,
+  ageGroup,
+  lang,
+  disabled,
+  isSubmitting,
+  onAnswer,
+}: DndSinglePatternProps) {
   const isChild = ageGroup === 'child';
   const { width: windowWidth } = useWindowDimensions();
   const tileSize = isChild ? clampTileSize(windowWidth) : undefined;
+  const { speak } = useSpeak(lang);
 
   const dropZone = content.dropZones?.[0];
 
@@ -199,10 +210,14 @@ export function DndSinglePattern({ content, helpers, ageGroup, disabled, isSubmi
   const correctId = dropZone.requiredDraggableIds[0];
 
   const hintAvailable = helpers.hintsAllowed > 0 && hintsRemaining > 0 && hintButtonReady;
-  // No live TTS on mobile yet (prompt 3) — unlike web, content.avatar?.dialogue alone doesn't
-  // make audio "available" here; only a prerecorded dialogueAudioUrl does.
+  // Live TTS fills the gap when there's dialogue text but no recording — unlike web, this
+  // doesn't override a prerecorded dialogueAudioUrl when one exists (see replayPrompt below);
+  // mobile has no word-highlighting benefit to justify web's override of recorded audio.
   const audioAvailable =
-    Boolean(content.avatar?.dialogueAudioUrl) || Boolean(content.promptAudioUrl) || Boolean(placedItem?.audioUrl);
+    Boolean(content.avatar?.dialogueAudioUrl) ||
+    Boolean(content.avatar?.dialogue) ||
+    Boolean(content.promptAudioUrl) ||
+    Boolean(placedItem?.audioUrl);
 
   const measureDropZone = () => {
     dropZoneRef.current?.measureInWindow((x, y, width, height) => {
@@ -216,7 +231,12 @@ export function DndSinglePattern({ content, helpers, ageGroup, disabled, isSubmi
     onAnswer(JSON.stringify({ placements: [{ draggableId: finalPlacedId, dropZoneId: dropZone.id }] }));
   };
 
-  const playItemAudio = (item: IDraggable) => playAsset(item.audioUrl);
+  // Ordinary fallback rule: prerecorded item.audioUrl wins when set (phonetically load-bearing,
+  // e.g. isiZulu vowel/consonant recordings) — live TTS of item.label fills the gap when it isn't.
+  const playItemAudio = (item: IDraggable) => {
+    if (item.audioUrl) playAsset(item.audioUrl);
+    else if (item.label) speak(item.label);
+  };
 
   const handleDropAttempt = (item: IDraggable, absoluteX: number, absoluteY: number) => {
     if (disabled || submittedRef.current) {
@@ -261,6 +281,8 @@ export function DndSinglePattern({ content, helpers, ageGroup, disabled, isSubmi
   const replayPrompt = () => {
     if (content.avatar?.dialogueAudioUrl) {
       playAsset(content.avatar.dialogueAudioUrl);
+    } else if (content.avatar?.dialogue) {
+      speak(content.avatar.dialogue);
     } else if (placedItem?.audioUrl) {
       playAsset(placedItem.audioUrl);
     }

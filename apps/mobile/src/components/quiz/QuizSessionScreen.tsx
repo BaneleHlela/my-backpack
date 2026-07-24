@@ -18,6 +18,7 @@ import { BookOpen, SkipForward, X } from 'lucide-react-native';
 import { resolveHelpers, colors, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, ApiResponse, ItemCompletionResult } from '@my-backpack/shared';
 import api from '../../lib/api';
+import { subjectSlugToLangCode } from '../../lib/lang';
 import {
   startQuizItemSession,
   startMiniAppQuizSession,
@@ -237,6 +238,10 @@ export function QuizSessionScreen({ session }: QuizSessionScreenProps) {
     : null;
   const isDndQuestion = quiz.currentQuestion?.type === 'dnd_single';
   const title = session.source === 'miniApp' ? session.title : undefined;
+  // Dictionary has exactly one mini-app, seeded under English — no isiZulu dictionary exists
+  // yet, so that path is hardcoded rather than plumbing subjectSlug through the mini-app quiz
+  // route. Revisit if a non-English dictionary is ever seeded.
+  const lang = session.source === 'roadmapItem' ? subjectSlugToLangCode(session.subjectSlug) : 'en-US';
 
   return (
     <View style={styles.screen}>
@@ -309,6 +314,7 @@ export function QuizSessionScreen({ session }: QuizSessionScreenProps) {
                   question={quiz.currentQuestion}
                   helpers={currentHelpers}
                   ageGroup={ageGroup}
+                  lang={lang}
                   disabled={quiz.status !== 'active'}
                   isSubmitting={quiz.status === 'submitting'}
                   onAnswer={handleAnswer}
@@ -329,6 +335,7 @@ export function QuizSessionScreen({ session }: QuizSessionScreenProps) {
                   maxPoints={quiz.lastAnswer.maxPoints}
                   content={quiz.currentQuestion.content}
                   ageGroup={ageGroup}
+                  lang={lang}
                   isLastQuestion={quiz.lastAnswer.sessionComplete}
                   wasSkipped={quiz.lastAnswer.wasSkipped}
                   onAdvance={handleAdvance}

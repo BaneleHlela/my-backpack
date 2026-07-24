@@ -1159,7 +1159,7 @@ my-backpack/
       [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s DnD
       section for why `react-native-reanimated-dnd` was evaluated and rejected). The
       remaining 7 `dnd_*` types + `mcq_audio` show the same placeholder web shows for them.
-      No live TTS yet (prompt 3). **The `dnd_single` gesture interaction (accept/reject/
+      **The `dnd_single` gesture interaction (accept/reject/
       tap-audio) had not been confirmed on a real device or emulator** at the time — verified
       only via `tsc` and a clean `expo export` bundle. Confirmed working on a physical device
       in the next entry below.
@@ -1193,6 +1193,34 @@ my-backpack/
       `POST /quiz/session` and `GET /quiz/has-content` already existed. See
       [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s
       "Question types 14–20 & Dictionary quiz" section for full detail.
+- [x] Live TTS (July 2026) — question prompts, DnD avatar dialogue, and answer feedback are now
+      read aloud on demand via `expo-speech` (not `expo-edge-speech` — that wraps an
+      unofficial, network-dependent Edge cloud-TTS API not worth taking on for an interim
+      layer; see the design doc for the full tradeoff), ported from web's `SpokenText`/
+      `useSpeak` rules (`docs/content/live-tts-word-highlighting.md`), not its library
+      (`react-text-to-speech` wraps the browser Web Speech API — no RN equivalent). New shared
+      primitives: `src/lib/lang.ts` (`subjectSlugToLangCode`, ported unchanged),
+      `src/lib/useSpeak.ts` (imperative hook wrapping `expo-speech`'s callback API),
+      `src/components/quiz/SpokenText.tsx` (bound-text + speaker-icon component).
+      `QuestionRendererProps` gained a required `lang: string`, computed once per session in
+      `QuizSessionScreen.tsx` (`subjectSlugToLangCode(session.subjectSlug)` for roadmap items;
+      hardcoded `'en-US'` for the Dictionary path — no isiZulu dictionary is seeded yet).
+      **Accepted regression from web: no live word-by-word highlighting** — `expo-speech` has
+      no word-boundary callback to drive it, so `SpokenText` is a plain speaker icon with no
+      in-text highlighting. **One deliberate divergence from web**: `DndSinglePattern`/
+      `DndBuildPattern`/`DndCountPattern`'s dialogue Replay button plays `dialogueAudioUrl`
+      first when set and only falls back to live TTS when it's absent — web always speaks
+      dialogue live regardless of `dialogueAudioUrl` (an explicit call justified by
+      word-highlighting, which mobile doesn't have, so that override doesn't carry over here).
+      Per-tile draggable-audio tap/drag-start got the ordinary fallback (`item.audioUrl` wins,
+      TTS of `item.label` fills the gap) in all three DnD patterns; `DndTile.tsx` itself wasn't
+      touched since it already delegates tap outcome entirely to its caller — the fallback
+      lives in each pattern's local `playItemAudio` helper instead.
+      `IQuestionHelpers.countingAudio` (new, no web reference — web has no `dnd_count`) now
+      speaks the running placed-count as a bare numeral on every successful landing in
+      `DndCountPattern`, alongside the existing "N placed" text label. See
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s
+      "Live TTS (Prompt 3)" section for full detail.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens

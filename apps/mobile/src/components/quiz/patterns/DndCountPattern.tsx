@@ -21,9 +21,11 @@
 //   - Placed tiles stay tappable-to-remove (via the shared DndTile from DndBuildPattern), same
 //     reasoning as dnd_build: a miscounted zone needs to be correctable rather than a dead end.
 //
-// helpers.countingAudio ("counts aloud as items drop into zone") has no effect yet — no live
-// TTS/number-speech exists on mobile (prompt 3); a running placed-count label substitutes as
-// the visual equivalent.
+// helpers.countingAudio ("counts aloud as items drop into zone") speaks the running placed
+// count (as a bare numeral string — TTS engines pronounce digits as number words natively) on
+// every successful landing in the zone, alongside the existing "N placed" text label — visual
+// and audio reinforcement together, not audio replacing the label. See
+// docs/technical/mobile-architecture.md's "Live TTS (Prompt 3)" section.
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -39,12 +41,14 @@ import { Lightbulb, Volume2 } from 'lucide-react-native';
 import { ASSETS, colors, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
+import { useSpeak } from '../../../lib/useSpeak';
 import { DndTile, DndTileHandle, Rect, clampTileSize, playAsset, pointInRect, shuffle } from './DndTile';
 
 interface DndCountPatternProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
   ageGroup?: AgeGroup;
+  lang: string;
   disabled?: boolean;
   isSubmitting?: boolean;
   onAnswer: (rawResponse: string) => void;
@@ -69,10 +73,19 @@ function buildInstances(draggables: IDraggable[], shuffleOrder: boolean): Dragga
   return shuffleOrder ? shuffle(instances) : instances;
 }
 
-export function DndCountPattern({ content, helpers, ageGroup, disabled, isSubmitting, onAnswer }: DndCountPatternProps) {
+export function DndCountPattern({
+  content,
+  helpers,
+  ageGroup,
+  lang,
+  disabled,
+  isSubmitting,
+  onAnswer,
+}: DndCountPatternProps) {
   const isChild = ageGroup === 'child';
   const { width: windowWidth } = useWindowDimensions();
   const tileSize = isChild ? clampTileSize(windowWidth) : undefined;
+  const { speak } = useSpeak(lang);
 
   const dropZone = content.dropZones?.[0];
 
@@ -115,8 +128,8 @@ export function DndCountPattern({ content, helpers, ageGroup, disabled, isSubmit
 
   const hintAvailable = helpers.hintsAllowed > 0 && hintsRemaining > 0 && hintButtonReady;
   const hintTypeId = dropZone.requiredDraggableIds[0];
-  // No live TTS on mobile yet (prompt 3) — only a prerecorded dialogueAudioUrl counts here.
-  const audioAvailable = Boolean(content.avatar?.dialogueAudioUrl);
+  // Live TTS fills the gap when there's dialogue text but no recording (see replayPrompt below).
+  const audioAvailable = Boolean(content.avatar?.dialogueAudioUrl) || Boolean(content.avatar?.dialogue);
 
   const measureZone = () => {
     zoneRef.current?.measureInWindow((x, y, width, height) => {
@@ -140,6 +153,7 @@ export function DndCountPattern({ content, helpers, ageGroup, disabled, isSubmit
       tileRefs.current.get(item.id)?.snapBack();
       return;
     }
+    if (helpers.countingAudio) speak(String(placedInstanceIds.size + 1));
     setPlacedInstanceIds((prev) => new Set(prev).add(item.id));
   };
 
@@ -163,6 +177,14 @@ export function DndCountPattern({ content, helpers, ageGroup, disabled, isSubmit
 
   const replayPrompt = () => {
     if (content.avatar?.dialogueAudioUrl) playAsset(content.avatar.dialogueAudioUrl);
+    else if (content.avatar?.dialogue) speak(content.avatar.dialogue);
+  };
+
+  // Ordinary fallback rule: prerecorded item.audioUrl wins when set — live TTS of item.label
+  // fills the gap when it isn't.
+  const playItemAudio = (item: IDraggable) => {
+    if (item.audioUrl) playAsset(item.audioUrl);
+    else if (item.label) speak(item.label);
   };
 
   const dragAreaBackground = resolveAssetUrl(content.dragAreaImageUrl);
@@ -218,8 +240,8 @@ export function DndCountPattern({ content, helpers, ageGroup, disabled, isSubmit
             disabled={disabled}
             draggable
             isChild={isChild}
-            onTap={(i) => playAsset(i.audioUrl)}
-            onDragStart={(i) => playAsset(i.audioUrl)}
+            onTap={playItemAudio}
+            onDragStart={playItemAudio}
             onDropAttempt={handleDropAttempt}
           />
         ))}

@@ -34,21 +34,32 @@ import { Lightbulb, Volume2 } from 'lucide-react-native';
 import { ASSETS, colors, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
+import { useSpeak } from '../../../lib/useSpeak';
 import { DndTile, DndTileHandle, Rect, clampTileSize, playAsset, pointInRect, shuffle } from './DndTile';
 
 interface DndBuildPatternProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
   ageGroup?: AgeGroup;
+  lang: string;
   disabled?: boolean;
   isSubmitting?: boolean;
   onAnswer: (rawResponse: string) => void;
 }
 
-export function DndBuildPattern({ content, helpers, ageGroup, disabled, isSubmitting, onAnswer }: DndBuildPatternProps) {
+export function DndBuildPattern({
+  content,
+  helpers,
+  ageGroup,
+  lang,
+  disabled,
+  isSubmitting,
+  onAnswer,
+}: DndBuildPatternProps) {
   const isChild = ageGroup === 'child';
   const { width: windowWidth } = useWindowDimensions();
   const tileSize = isChild ? clampTileSize(windowWidth) : undefined;
+  const { speak } = useSpeak(lang);
 
   const dropZones = content.dropZones ?? [];
 
@@ -94,8 +105,8 @@ export function DndBuildPattern({ content, helpers, ageGroup, disabled, isSubmit
   const hintCorrectId = firstUnfilledZone?.requiredDraggableIds[0];
 
   const hintAvailable = helpers.hintsAllowed > 0 && hintsRemaining > 0 && hintButtonReady && !allFilled;
-  // No live TTS on mobile yet (prompt 3) — only a prerecorded dialogueAudioUrl counts here.
-  const audioAvailable = Boolean(content.avatar?.dialogueAudioUrl);
+  // Live TTS fills the gap when there's dialogue text but no recording (see replayPrompt below).
+  const audioAvailable = Boolean(content.avatar?.dialogueAudioUrl) || Boolean(content.avatar?.dialogue);
 
   const submit = () => {
     if (disabled || submittedRef.current || !allFilled) return;
@@ -157,6 +168,14 @@ export function DndBuildPattern({ content, helpers, ageGroup, disabled, isSubmit
 
   const replayPrompt = () => {
     if (content.avatar?.dialogueAudioUrl) playAsset(content.avatar.dialogueAudioUrl);
+    else if (content.avatar?.dialogue) speak(content.avatar.dialogue);
+  };
+
+  // Ordinary fallback rule: prerecorded item.audioUrl wins when set — live TTS of item.label
+  // fills the gap when it isn't.
+  const playItemAudio = (item: IDraggable) => {
+    if (item.audioUrl) playAsset(item.audioUrl);
+    else if (item.label) speak(item.label);
   };
 
   const dragAreaBackground = resolveAssetUrl(content.dragAreaImageUrl);
@@ -251,8 +270,8 @@ export function DndBuildPattern({ content, helpers, ageGroup, disabled, isSubmit
             disabled={disabled}
             draggable
             isChild={isChild}
-            onTap={(i) => playAsset(i.audioUrl)}
-            onDragStart={(i) => playAsset(i.audioUrl)}
+            onTap={playItemAudio}
+            onDragStart={playItemAudio}
             onDropAttempt={handleDropAttempt}
           />
         ))}

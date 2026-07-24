@@ -1,13 +1,16 @@
 // Shown as a modal immediately after each answer. Ports apps/web's AnswerFeedback.tsx — no
 // backdrop-tap-to-dismiss (onRequestClose is a no-op), advancing via the button is the only
-// way out, so the learner can't skip past the result. No SpokenText/TTS wiring — that's
-// prompt 3; feedback.text/explanation render as plain Text.
+// way out, so the learner can't skip past the result. content.explanation and feedback.text
+// are read aloud via SpokenText (live TTS, see docs/technical/mobile-architecture.md's "Live
+// TTS (Prompt 3)" section) — explanation always (no prerecorded equivalent exists), feedback
+// text only when feedback.audioUrl isn't set (that prerecorded clip wins instead).
 import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CheckCircle2, SkipForward, Volume2, XCircle } from 'lucide-react-native';
 import { ASSETS, colors, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IQuestionContent } from '@my-backpack/shared';
 import { playAudioUrl } from '../../lib/audio';
 import { resolveAssetUrl } from '../../lib/assetUrl';
+import { SpokenText } from './SpokenText';
 
 interface AnswerFeedbackProps {
   isCorrect: boolean;
@@ -15,6 +18,7 @@ interface AnswerFeedbackProps {
   maxPoints: number;
   content: IQuestionContent;
   ageGroup: AgeGroup;
+  lang: string;
   isLastQuestion: boolean;
   wasSkipped?: boolean;
   onAdvance: () => void;
@@ -26,6 +30,7 @@ export function AnswerFeedback({
   maxPoints,
   content,
   ageGroup,
+  lang,
   isLastQuestion,
   wasSkipped,
   onAdvance,
@@ -92,7 +97,7 @@ export function AnswerFeedback({
                     </Pressable>
                   </View>
                 ) : (
-                  <Text style={styles.feedbackText}>{feedback.text}</Text>
+                  <SpokenText text={feedback.text} lang={lang} textStyle={styles.feedbackText} />
                 )
               ) : null}
 
@@ -103,7 +108,7 @@ export function AnswerFeedback({
               ) : null}
 
               {!wasSkipped && content.explanation ? (
-                <Text style={styles.explanationText}>{content.explanation}</Text>
+                <SpokenText text={content.explanation} lang={lang} textStyle={styles.explanationText} />
               ) : null}
             </View>
           </View>

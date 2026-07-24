@@ -1,6 +1,8 @@
 // Ports apps/web's TrueFalsePattern.tsx — shared UI for true_false_term_def,
 // true_false_def_term, true_false_usage. content.prompt already carries the full composed
-// question text (and quoted sentence, where relevant).
+// question text (and quoted sentence, where relevant) — read aloud via SpokenText (live TTS,
+// see docs/technical/mobile-architecture.md's "Live TTS (Prompt 3)" section) unless it starts
+// with the "audio:" prefix.
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check, Volume2, X } from 'lucide-react-native';
@@ -8,16 +10,18 @@ import { colors, radii, spacing, typography } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
+import { SpokenText } from '../SpokenText';
 
 interface TrueFalsePatternProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
+  lang: string;
   disabled?: boolean;
   isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
 }
 
-export function TrueFalsePattern({ content, disabled, isSubmitting, onAnswer }: TrueFalsePatternProps) {
+export function TrueFalsePattern({ content, lang, disabled, isSubmitting, onAnswer }: TrueFalsePatternProps) {
   const [selected, setSelected] = useState<'True' | 'False' | null>(null);
 
   const submit = () => {
@@ -28,7 +32,11 @@ export function TrueFalsePattern({ content, disabled, isSubmitting, onAnswer }: 
   return (
     <View style={styles.wrapper}>
       <View style={styles.promptRow}>
-        <Text style={styles.prompt}>{content.prompt}</Text>
+        {content.prompt?.startsWith('audio:') ? (
+          <Text style={styles.prompt}>{content.prompt}</Text>
+        ) : (
+          <SpokenText text={content.prompt ?? ''} lang={lang} containerStyle={styles.spokenPrompt} />
+        )}
         {content.promptAudioUrl ? (
           <Pressable
             onPress={() => playAudioUrl(resolveAssetUrl(content.promptAudioUrl)!)}
@@ -88,6 +96,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.body,
     color: colors.text.primary,
+  },
+  spokenPrompt: {
+    flex: 1,
   },
   audioButton: {
     width: 28,
