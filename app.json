@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "ed9f38e6-d560-40e9-9e80-356dd9a477ec"
+      }
+    },
+    "android": {
+      "package": "com.banelehlela.mybackback"
+    }
+  }
+}
