@@ -42,8 +42,15 @@ function AuthBootstrap() {
   // had under the previous bare <Slot/> — the only route with its own override is the
   // full-screen quiz-taking route (see docs/technical/mobile-architecture.md's "Root layout:
   // <Slot/> -> <Stack/>" section for why it has to live at the root, not nested in (app)).
+  //
+  // initialRouteName is required: React Navigation's Stack defaults initialRouteName to the
+  // first registered screen when it isn't set explicitly, and quiz/[itemId] is the only
+  // EXPLICITLY declared <Stack.Screen> child here (everything else is auto-discovered from
+  // the file system) — without this, the app launches directly into the quiz screen on cold
+  // start instead of index.tsx's auth redirect. This was the actual root cause behind a long
+  // on-device debugging session that looked like a crash (see mobile-architecture.md).
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false }} initialRouteName="index">
       <Stack.Screen name="quiz/[itemId]" options={{ presentation: 'fullScreenModal' }} />
     </Stack>
   );

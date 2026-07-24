@@ -466,15 +466,31 @@ inside one compiles and bundles fine, and only fails at runtime when the
 gesture actually fires. Every JS-side call from inside a gesture callback
 must cross back via `runOnJS(fn)(...)`.
 
-**Verification caveat**: this environment has no Android/iOS emulator or
-device attached, so gesture behavior could not be confirmed visually here.
-Verification performed instead: `tsc --noEmit` (typed Gesture Handler/
-Reanimated API surface), and a full `npx expo export --platform android`
-(real Metro/Babel bundle, 4002 modules, no errors) — this catches babel/
-worklet-transform and module-resolution failures, but not runtime gesture
-behavior. **The actual drag interaction — accept, reject/bounce-back,
-tap-for-audio, hint highlight — needs a real on-device smoke test before
-this ships**, per Phase 5 of the mobile roadmap/quiz plan.
+**Root layout gotcha found during on-device verification**: the app was
+launching directly into the quiz screen on cold start — skipping
+`index.tsx`'s auth redirect entirely — no matter how the cache was cleared
+or the app relaunched, on both an emulator and a physical device. Root
+cause: React Navigation's Stack defaults `initialRouteName` to the *first
+registered screen* when it isn't set explicitly, and `quiz/[itemId]` was
+the only **explicitly** declared `<Stack.Screen>` child of the root
+`<Stack>` — every other route is auto-discovered from the file system, but
+that one explicit child was implicitly winning the "first screen" slot and
+being treated as the whole app's initial route. Fixed by adding
+`initialRouteName="index"` to the root `<Stack>`. This one config gap
+produced a confusing, hard-to-diagnose symptom (looked at various points
+like a native crash, a memory issue, and a gesture-handler incompatibility,
+none of which it was) purely because the app never reached the screen it
+was actually supposed to start on. Worth remembering for any future root
+`<Stack>` that mixes explicit `<Stack.Screen>` overrides with auto-
+discovered file routes — set `initialRouteName` explicitly, don't rely on
+registration order.
+
+Once that was fixed, the app correctly landed back on the login/home
+screen on cold start on both an Android emulator and a physical device.
+The full Home → Subject → Course → node → quiz item flow, including the
+`dnd_single` drag interaction, still needs to be walked end-to-end per
+Phase 5 of the mobile roadmap/quiz plan — this fix unblocks that testing,
+it doesn't substitute for it.
 
 ### 5-prompt roadmap
 

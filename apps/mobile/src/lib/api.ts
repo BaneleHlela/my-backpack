@@ -19,6 +19,8 @@ export const injectStore = (appStore: AppStore) => {
 const api = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL,
   headers: { 'X-Client-Type': 'mobile' },
+  timeout: 30000, // Render free-tier cold starts can take ~30s; without this a hung
+  // request leaves callers' isLoading stuck true forever with no way to recover.
 });
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
