@@ -9,7 +9,7 @@
 // { ..., nextQuestion, sessionComplete }. There is no batch question-fetch endpoint, so this
 // slice tracks `currentQuestion` (swapped out after each answer) instead of a
 // `questions[] + currentIndex` pair.
-import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
+import { createAsyncThunk, createSlice, isAnyOf } from '@reduxjs/toolkit';
 import type { AxiosError } from 'axios';
 import type { ApiResponse, FeedbackMode, IQuestion, ResponseType, SessionResults } from '@my-backpack/shared';
 import api from '../../lib/api';
@@ -112,6 +112,22 @@ export const startQuizItemSession = createAsyncThunk(
   }
 );
 
+// Starts a quiz session for a mini-app's default Quiz (e.g. Dictionary's "General Dictionary
+// Quiz") — the generic miniAppId-scoped endpoint, sibling to startQuizItemSession above. No
+// settings are passed: the session snapshots the Quiz's own authored settings, same as tapping
+// web's "Start Quiz" default button (mobile doesn't port QuizStartScreen's customize flow).
+export const startMiniAppQuizSession = createAsyncThunk(
+  'quiz/startMiniAppQuizSession',
+  async ({ miniAppId }: { miniAppId: string }, { rejectWithValue }) => {
+    try {
+      const res = await api.post<ApiResponse<StartSessionResult>>('/quiz/session', { miniAppId });
+      return res.data.data;
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error, 'Failed to start quiz'));
+    }
+  }
+);
+
 interface CaptureAnswerResult {
   answerRecordId: string;
   isCorrect: boolean;
@@ -203,26 +219,6 @@ const quizSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(startQuizItemSession.pending, (state) => {
-        state.status = 'starting';
-        state.error = null;
-      })
-      .addCase(startQuizItemSession.fulfilled, (state, action) => {
-        state.sessionId = action.payload.session._id;
-        state.currentQuestion = action.payload.firstQuestion;
-        state.feedbackMode = action.payload.session.settings.feedbackMode;
-        state.answeredQuestions = [];
-        state.progress = {
-          answered: 0,
-          total: action.payload.session.questionIds.length,
-          correct: 0,
-        };
-        state.status = action.payload.firstQuestion ? 'active' : 'completed';
-      })
-      .addCase(startQuizItemSession.rejected, (state, action) => {
-        state.status = 'error';
-        state.error = action.payload as string;
-      })
       .addCase(submitAnswer.pending, (state) => {
         state.status = 'submitting';
         state.error = null;
@@ -268,6 +264,31 @@ const quizSlice = createSlice({
         state.results = action.payload.results ?? null;
       })
       .addCase(completeSession.rejected, (state, action) => {
+        state.status = 'error';
+        state.error = action.payload as string;
+      })
+      // startQuizItemSession and startMiniAppQuizSession return the identical
+      // { session, firstQuestion } shape and drive identical state transitions — the only
+      // difference is which route/params kick off session creation server-side. Matchers must
+      // come after every addCase in RTK's builder chain, hence these trailing at the end rather
+      // than up top alongside the thunks they mirror.
+      .addMatcher(isAnyOf(startQuizItemSession.pending, startMiniAppQuizSession.pending), (state) => {
+        state.status = 'starting';
+        state.error = null;
+      })
+      .addMatcher(isAnyOf(startQuizItemSession.fulfilled, startMiniAppQuizSession.fulfilled), (state, action) => {
+        state.sessionId = action.payload.session._id;
+        state.currentQuestion = action.payload.firstQuestion;
+        state.feedbackMode = action.payload.session.settings.feedbackMode;
+        state.answeredQuestions = [];
+        state.progress = {
+          answered: 0,
+          total: action.payload.session.questionIds.length,
+          correct: 0,
+        };
+        state.status = action.payload.firstQuestion ? 'active' : 'completed';
+      })
+      .addMatcher(isAnyOf(startQuizItemSession.rejected, startMiniAppQuizSession.rejected), (state, action) => {
         state.status = 'error';
         state.error = action.payload as string;
       });

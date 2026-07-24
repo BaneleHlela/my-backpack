@@ -1,7 +1,8 @@
-// Dispatches to one of the shared interaction patterns based on question.type — ports
-// apps/web's QuestionRenderer.tsx with the identical grouping: dnd_single is implemented
-// (DndSinglePattern); the remaining 7 dnd_* types and mcq_audio fall through to the same
-// placeholder web shows for them — no renderers built for those here.
+// Dispatches to one of the shared interaction patterns based on question.type. dnd_single,
+// mcq_audio, dnd_build, and dnd_count are now implemented; dnd_select/dnd_sort/dnd_sequence/
+// dnd_match/dnd_fill still fall through to the placeholder below — no seeded content exists
+// for any of those 5 yet (see docs/technical/mobile-architecture.md), so building renderers
+// for them now would be speculative.
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IQuestion, IQuestionHelpers } from '@my-backpack/shared';
@@ -9,6 +10,8 @@ import { McqPattern } from './patterns/McqPattern';
 import { TrueFalsePattern } from './patterns/TrueFalsePattern';
 import { TypedInputPattern } from './patterns/TypedInputPattern';
 import { DndSinglePattern } from './patterns/DndSinglePattern';
+import { DndBuildPattern } from './patterns/DndBuildPattern';
+import { DndCountPattern } from './patterns/DndCountPattern';
 
 const MCQ_TYPES = new Set<IQuestion['type']>([
   'mcq_term_to_def',
@@ -16,6 +19,7 @@ const MCQ_TYPES = new Set<IQuestion['type']>([
   'mcq_correct_usage',
   'mcq_incorrect_usage',
   'mcq_fill_blank',
+  'mcq_audio',
 ]);
 
 const TRUE_FALSE_TYPES = new Set<IQuestion['type']>([
@@ -85,6 +89,32 @@ export function QuestionRenderer({
   if (question.type === 'dnd_single') {
     return (
       <DndSinglePattern
+        content={content}
+        helpers={helpers}
+        ageGroup={ageGroup}
+        disabled={disabled}
+        isSubmitting={isSubmitting}
+        onAnswer={onAnswer}
+      />
+    );
+  }
+
+  if (question.type === 'dnd_build') {
+    return (
+      <DndBuildPattern
+        content={content}
+        helpers={helpers}
+        ageGroup={ageGroup}
+        disabled={disabled}
+        isSubmitting={isSubmitting}
+        onAnswer={onAnswer}
+      />
+    );
+  }
+
+  if (question.type === 'dnd_count') {
+    return (
+      <DndCountPattern
         content={content}
         helpers={helpers}
         ageGroup={ageGroup}

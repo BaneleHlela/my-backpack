@@ -1,8 +1,8 @@
-// Final results screen shown after a session completes. Ports apps/web's QuizResults.tsx —
-// simplified to a single "Back to roadmap" return action (mobile's quiz route only ever
-// reaches this screen from a roadmap quiz item in this pass, unlike web's QuizResults, which
-// is reused by the vocab mini-app's quiz too). When feedbackMode was 'end', answeredQuestions
-// carries a per-question breakdown withheld during the quiz.
+// Final results screen shown after a session completes. Ports apps/web's QuizResults.tsx.
+// Now reused by both a roadmap quiz item and a mini-app quiz (Dictionary's "Take Quiz") via
+// QuizSessionScreen, so the return action is generic (onReturn/returnLabel) rather than
+// roadmap-specific — mirrors web's onReturnToDictionary/returnLabel props. When feedbackMode
+// was 'end', answeredQuestions carries a per-question breakdown withheld during the quiz.
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { BookOpen, CheckCircle2, RotateCcw, SkipForward, Trophy, XCircle } from 'lucide-react-native';
 import { colors, radii, spacing, typography } from '@my-backpack/shared';
@@ -13,10 +13,17 @@ interface QuizResultsProps {
   results: SessionResults;
   answeredQuestions?: AnsweredQuestionSummary[];
   onQuizAgain: () => void;
-  onReturnToRoadmap: () => void;
+  onReturn: () => void;
+  returnLabel?: string;
 }
 
-export function QuizResults({ results, answeredQuestions, onQuizAgain, onReturnToRoadmap }: QuizResultsProps) {
+export function QuizResults({
+  results,
+  answeredQuestions,
+  onQuizAgain,
+  onReturn,
+  returnLabel = 'Back to roadmap',
+}: QuizResultsProps) {
   const seconds = Math.round(results.timeTakenMs / 1000);
   const timeLabel = seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
 
@@ -77,9 +84,9 @@ export function QuizResults({ results, answeredQuestions, onQuizAgain, onReturnT
       ) : null}
 
       <View style={styles.actionsRow}>
-        <Pressable onPress={onReturnToRoadmap} style={styles.secondaryButton}>
+        <Pressable onPress={onReturn} style={styles.secondaryButton}>
           <BookOpen size={16} color={colors.text.secondary} />
-          <Text style={styles.secondaryButtonText}>Back to roadmap</Text>
+          <Text style={styles.secondaryButtonText}>{returnLabel}</Text>
         </Pressable>
         <Pressable onPress={onQuizAgain} style={styles.primaryButton}>
           <RotateCcw size={16} color="#fff" />

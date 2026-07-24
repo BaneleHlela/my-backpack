@@ -5,7 +5,7 @@
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { ChevronLeft, Bookmark } from 'lucide-react-native';
+import { ChevronLeft, Bookmark, Sparkles } from 'lucide-react-native';
 import { colors, spacing, typography } from '@my-backpack/shared';
 import { SearchInput } from '../../../../src/components/dictionary/SearchInput';
 import { TrendingTerms } from '../../../../src/components/dictionary/TrendingTerms';
@@ -53,13 +53,22 @@ export default function DictionaryHomeScreen() {
               <ChevronLeft size={18} color={colors.text.secondary} />
               <Text style={styles.backText}>Home</Text>
             </Pressable>
-            <Pressable
-              onPress={() => router.push({ pathname: '/(app)/miniapp/[miniAppId]/bucket', params: { miniAppId, name } })}
-              style={styles.bucketButton}
-            >
-              <Bookmark size={14} color={colors.primary.DEFAULT} />
-              <Text style={styles.bucketButtonText}>My Bucket</Text>
-            </Pressable>
+            <View style={styles.topBarActions}>
+              <Pressable
+                onPress={() => router.push({ pathname: '/quiz/dictionary/[miniAppId]', params: { miniAppId, name } })}
+                style={styles.bucketButton}
+              >
+                <Sparkles size={14} color={colors.primary.DEFAULT} />
+                <Text style={styles.bucketButtonText}>Take Quiz</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push({ pathname: '/(app)/miniapp/[miniAppId]/bucket', params: { miniAppId, name } })}
+                style={styles.bucketButton}
+              >
+                <Bookmark size={14} color={colors.primary.DEFAULT} />
+                <Text style={styles.bucketButtonText}>My Bucket</Text>
+              </Pressable>
+            </View>
           </View>
 
           <Text style={styles.title}>{name ?? 'Dictionary'}</Text>
@@ -135,6 +144,10 @@ const styles = StyleSheet.create({
   backText: {
     fontSize: typography.small,
     color: colors.text.secondary,
+  },
+  topBarActions: {
+    flexDirection: 'row',
+    gap: spacing.xs,
   },
   bucketButton: {
     flexDirection: 'row',

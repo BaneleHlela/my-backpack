@@ -1160,8 +1160,39 @@ my-backpack/
       section for why `react-native-reanimated-dnd` was evaluated and rejected). The
       remaining 7 `dnd_*` types + `mcq_audio` show the same placeholder web shows for them.
       No live TTS yet (prompt 3). **The `dnd_single` gesture interaction (accept/reject/
-      tap-audio) has not been confirmed on a real device or emulator** — verified only via
-      `tsc` and a clean `expo export` bundle; do an on-device smoke test before relying on it.
+      tap-audio) had not been confirmed on a real device or emulator** at the time — verified
+      only via `tsc` and a clean `expo export` bundle. Confirmed working on a physical device
+      in the next entry below.
+- [x] Quiz UI, question types 14–16 of 20 + Dictionary quiz entry point (July 2026) —
+      `dnd_single`'s gesture interaction (accept/reject/tap-audio) **confirmed working on a
+      physical device**, unblocking the two DnD additions below. `mcq_audio` added to
+      `McqPattern`'s options-list UI (reuses `TypedInputPattern`'s `audio:`-prefix affordance,
+      simpler here since `mcq_audio` is exclusively hand-curated seed content, never
+      auto-generated, so it always follows the prefix with no `termId`-fallback branch to
+      port). `dnd_build` (build a word letter-by-letter into N blanks,
+      `content.dropZones[]`-per-blank) and `dnd_count` (drag a quantity of items into one zone,
+      `content.draggables[].quantity` expanded into individual tile instances client-side) both
+      extend `dnd_single`'s `Gesture.Pan()`/`Gesture.Tap()` + `measureInWindow()` foundation via
+      a newly extracted shared tile primitive (`components/quiz/patterns/DndTile.tsx`) rather
+      than rewriting it; `DndSinglePattern.tsx` itself is untouched. Both new patterns let a
+      placed tile be tapped to remove it back to the pool (dnd_single's placed tile never
+      needed this — its `autoSubmit` fires the instant the one slot fills); `dnd_count` always
+      shows an explicit Submit button and doesn't read `helpers.autoSubmit` at all (no per-drop
+      "landing" moment to hang it off), even though the seed content sets that field per
+      question. The remaining 5 `dnd_*` types (`dnd_select`/`dnd_sort`/`dnd_sequence`/
+      `dnd_match`/`dnd_fill`) stay on the placeholder — no seeded content exists for any of
+      them (matches web's own scope), so building renderers now would be speculative.
+      Dictionary's "Take Quiz" button (`app/(app)/miniapp/[miniAppId]/index.tsx`) opens a new
+      root-level `quiz/dictionary/[miniAppId]` route; the session-lifecycle/question-rendering
+      UI previously inline in `quiz/[itemId].tsx` is now a shared `QuizSessionScreen` component
+      taking a discriminated `{ source: 'roadmapItem' | 'miniApp' }` prop, so both routes are
+      thin wrappers around one implementation. `quizSlice` gained `startMiniAppQuizSession`
+      (`POST /quiz/session` with `{ miniAppId }`, no settings screen — mobile doesn't port
+      web's `QuizStartScreen` customize flow); it shares `pending`/`fulfilled`/`rejected`
+      reducers with `startQuizItemSession` via `isAnyOf` matchers. No backend changes needed —
+      `POST /quiz/session` and `GET /quiz/has-content` already existed. See
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s
+      "Question types 14–20 & Dictionary quiz" section for full detail.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens

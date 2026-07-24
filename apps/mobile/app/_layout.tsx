@@ -52,6 +52,7 @@ function AuthBootstrap() {
   return (
     <Stack screenOptions={{ headerShown: false }} initialRouteName="index">
       <Stack.Screen name="quiz/[itemId]" options={{ presentation: 'fullScreenModal' }} />
+      <Stack.Screen name="quiz/dictionary/[miniAppId]" options={{ presentation: 'fullScreenModal' }} />
     </Stack>
   );
 }

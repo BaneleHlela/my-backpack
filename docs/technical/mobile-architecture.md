@@ -13,11 +13,13 @@ Dictionary was the only mini-app ported in that first pass, chosen because
 it's architecturally standalone (not roadmap-gated).
 
 **Scope as of the Roadmap/Lesson/Quiz build (July 2026):** Course/Roadmap
-navigation, a Lesson resource player, and a quiz-taking engine for 13 of the
-20 question types now exist too — see "Roadmap, Lesson & Quiz UI" below.
-OAuth on native, forgot/reset-password/verify-email screens, live TTS, the
-remaining 7 `dnd_*` question types, `mcq_audio`, and a teacher/dashboard
-surface are still deferred.
+navigation, a Lesson resource player, and a quiz-taking engine for 16 of the
+20 question types now exist too — see "Roadmap, Lesson & Quiz UI" and
+"Question types 14–20 & Dictionary quiz" below. OAuth on native, forgot/
+reset-password/verify-email screens, live TTS, the remaining 5 `dnd_*`
+question types (`dnd_select`, `dnd_sort`, `dnd_sequence`, `dnd_match`,
+`dnd_fill` — no seeded content exists for any of them yet), and a
+teacher/dashboard surface are still deferred.
 
 ---
 
@@ -56,6 +58,9 @@ apps/mobile/app/
   quiz/
     [itemId].tsx            # Root-level, NOT nested in (app) — full-screen quiz-taking route,
                             # presentation: 'fullScreenModal' (see "Roadmap, Lesson & Quiz UI")
+    dictionary/
+      [miniAppId].tsx       # Same treatment, for a mini-app's default Quiz (Dictionary's
+                            # "Take Quiz") — see "Question types 14–20 & Dictionary quiz"
 ```
 
 `(auth)` and `(app)` are route groups (parens excluded from the URL) used
@@ -107,7 +112,7 @@ Slices:
 | `content` | `features/enrollment/enrollmentSlice.ts` + `features/subjects/subjectsSlice.ts` + `features/courses/coursesSlice.ts` | Kept as one slice (not split three ways like web) — mobile doesn't yet have the independently-reused-pages pressure that motivated web's split. `fetchCoursesBySubject`/`fetchCourseDetail` added for the Roadmap/Lesson/Quiz build; `courseDetailByKey` exists only because the Course list endpoint returns unpopulated `miniAppIds` (plain id strings) — only the single-course detail endpoint populates them |
 | `vocab` | `features/vocab/vocabSlice.ts` | Ported near-verbatim — plain RTK + axios, nothing web-specific |
 | `roadmap` | `features/roadmap/roadmapSlice.ts` | Direct port — `currentRoadmap`/`currentNode`/`currentLesson`, `fetchRoadmapByCourse`/`fetchLesson` |
-| `quiz` | `features/quiz/quizSlice.ts` | Scoped to what `QuizItemPlayerPage` actually calls (`startQuizItemSession`/`submitAnswer`/`completeSession`/`abandonSession`) — the generic miniAppId-based `startSession` and the unused `GET session/:id`/`GET results` endpoints aren't ported |
+| `quiz` | `features/quiz/quizSlice.ts` | Scoped to what the quiz screens actually call (`startQuizItemSession`/`startMiniAppQuizSession`/`submitAnswer`/`completeSession`/`abandonSession`) — the unused `GET session/:id`/`GET results` endpoints still aren't ported. `startMiniAppQuizSession` (added in Prompt 2, for Dictionary's "Take Quiz") is the `miniAppId`-based sibling of `startQuizItemSession`; both share one set of `pending`/`fulfilled`/`rejected` reducers via `isAnyOf` matchers rather than duplicating identical logic twice |
 
 ### Bootstrap flow (replaces web's cookie-based `checkAuth`)
 
@@ -492,15 +497,196 @@ The full Home → Subject → Course → node → quiz item flow, including the
 Phase 5 of the mobile roadmap/quiz plan — this fix unblocks that testing,
 it doesn't substitute for it.
 
+## Question types 14–20 & Dictionary quiz (Prompt 2, July 2026)
+
+Prompt 2 of the 5-prompt roadmap (see below). Three of the remaining 8
+question types now have renderers — `mcq_audio`, `dnd_build`, `dnd_count` —
+plus a second quiz entry point: Dictionary's "Take Quiz" button. `dnd_select`,
+`dnd_sort`, `dnd_sequence`, `dnd_match`, and `dnd_fill` are still unbuilt.
+
+### Why only 3 of the remaining 8 types
+
+Of the 8 types without a renderer after Prompt 1, only `mcq_audio`,
+`dnd_build`, and `dnd_count` back any seeded content anywhere in the app
+(English/isiZulu phonics Node 2s, the Math counting node). The other 5 are
+defined in the type system but back zero seeded questions — building
+renderers for them now would be speculative, with nothing real to test
+against. This mirrors web's own current scope exactly (web has never built
+renderers for any of the 8 either), rather than mobile getting ahead of a
+shared design that doesn't exist yet.
+
+### Dictionary "Take Quiz" — no new question types needed
+
+Checked what Dictionary's quiz actually needs before building anything: the
+Dictionary's default Quiz (`General Dictionary Quiz`, `mode: 'dynamic'`,
+seeded in `seed/seeders/quizzes.seed.ts`) draws only from the auto/AI
+generation pipeline's own output — 12 question types, all already supported
+since Prompt 1 (`mcq_audio` and every `dnd_*` type are absent from both the
+auto and AI generator's type lists in root `CLAUDE.md`'s "Question
+Generation System" section — you can't auto-generate drag illustrations or
+curated audio from an arbitrary dictionary lookup). So Dictionary parity
+needed no new question types, just a new session-start path reusing the
+existing quiz engine. No backend changes were needed either —
+`POST /quiz/session` and `GET /quiz/has-content` already existed and already
+return the shapes the mobile client needs.
+
+**Session-start path**: `quizSlice.ts` gained `startMiniAppQuizSession`
+(`POST /quiz/session` with `{ miniAppId }`, no settings — mobile doesn't
+port web's `QuizStartScreen` customize flow, it starts directly against the
+Quiz's own authored settings, same as tapping web's "Start Quiz" default
+button). It returns the identical `{ session, firstQuestion }` shape
+`startQuizItemSession` already did, so both thunks share one set of
+`pending`/`fulfilled`/`rejected` reducers via `isAnyOf` matchers. Note for
+future editors: RTK requires every `addMatcher` call to come after all
+`addCase` calls in the builder chain — the matchers live at the end of
+`extraReducers`, not interleaved next to the thunks they mirror, or it's a
+type error, not just a style choice.
+
+**Shared screen, two thin route wrappers**: the session-lifecycle/question-
+rendering UI that used to live directly inline in `app/quiz/[itemId].tsx` is
+now `src/components/quiz/QuizSessionScreen.tsx`, taking a discriminated
+`session` prop:
+
+```ts
+type QuizSessionSource =
+  | { source: 'roadmapItem'; nodeId: string; itemId: string; subjectSlug: string; courseSlug: string }
+  | { source: 'miniApp'; miniAppId: string; title?: string };
+```
+
+`roadmapItem` drives the existing roadmap item-complete + auto-advance-to-
+next-item flow unchanged. `miniApp` just finishes the session and shows
+results — no roadmap progress to update, and no `hasContent` pre-check
+needed for `roadmapItem` (a roadmap quiz item's questions are curated for
+that node; only `miniApp` runs the fail-open `GET /quiz/has-content` check,
+mirroring `apps/web/src/pages/QuizPage/QuizPage.tsx`'s behavior exactly —
+resolving `false` shows web's same "No words to quiz yet" empty state, any
+fetch error fails open and lets the start attempt try anyway). Both
+`app/quiz/[itemId].tsx` and the new `app/quiz/dictionary/[miniAppId].tsx`
+are now thin wrappers rendering `QuizSessionScreen` with the appropriate
+`session` prop — both stay root-level routes (siblings of `(app)`), both
+need an explicit `<Stack.Screen>` entry in the root `_layout.tsx` for
+`presentation: 'fullScreenModal'` (see "Root layout: `<Slot/>` -> `<Stack/>`"
+above; the `initialRouteName="index"` fix from Prompt 1 already covers any
+number of explicit `Stack.Screen` children, so adding a second one needed no
+further change there).
+
+`QuizResults.tsx` generalized its return button from a roadmap-specific
+`onReturnToRoadmap` to `onReturn`/`returnLabel` (default `'Back to
+roadmap'`) — mirrors web's own `QuizResults.tsx`, which already has this
+exact `onReturnToDictionary`/`returnLabel` shape. The Dictionary quiz route
+uses `returnLabel="Back to Dictionary"` and `router.back()`; the roadmap
+route keeps its existing `router.replace(...)` back to the course page.
+
+The Dictionary mini-app screen (`app/(app)/miniapp/[miniAppId]/index.tsx`)
+gained a "Take Quiz" button (Sparkles icon, matching web's
+`DictionaryPage.tsx`) next to the existing "My Bucket" button, navigating to
+`/quiz/dictionary/[miniAppId]`.
+
+### mcq_audio
+
+Not a new interaction pattern — `McqPattern.tsx`'s existing options-list UI,
+plus an audio-prompt affordance. Reuses the "audio:" prefix convention
+`TypedInputPattern.tsx` already built for `text_input_audio`, but simpler:
+`mcq_audio` is exclusively hand-curated seed content (confirmed against the
+generation pipeline — never auto-generated), so it always follows the
+"audio:" prefix on `content.prompt` with no `termId`-based fallback fetch to
+port (that fallback exists on `TypedInputPattern` only because the
+auto-generator doesn't tag `text_input_audio`'s prompt the same way —
+`mcq_audio` has nothing to fall back to). Added to `QuestionRenderer.tsx`'s
+`MCQ_TYPES` set — same options-selection UI as the rest of that group.
+
+### dnd_build and dnd_count — extending the dnd_single gesture foundation
+
+Both new patterns build on the exact same `Gesture.Pan()`/`Gesture.Tap()`
+race and `measureInWindow()` hit-testing `DndSinglePattern.tsx` established
+in Prompt 1 (see "DnD (dnd_single)" above) — not a rewrite. The shared
+draggable-tile primitive (gesture handling, `snapBack`, tap-vs-drag race)
+was extracted to `src/components/quiz/patterns/DndTile.tsx` so both new
+patterns reuse it instead of re-implementing the same worklet/`runOnJS`
+recipe twice; `DndSinglePattern.tsx` itself was left untouched (Phase 0
+found no bug to justify touching it — see below) and still owns its own
+local tile component.
+
+Two real behavioral differences from `dnd_single`, common to both new
+patterns — not just "more zones":
+
+- **Submit timing.** `dnd_single` submits the instant its one slot fills —
+  there's only one drop to wait for. `dnd_build` waits until every blank
+  (`content.dropZones[]`, one per letter/syllable position) is occupied
+  before ever calling `onAnswer`; a half-built word can't be graded.
+  `dnd_count` has no autoSubmit at all (see below).
+- **Per-blank/per-item correction.** `dnd_single`'s one placed tile can be a
+  permanent, non-draggable (but still tap-for-audio) display, because
+  `autoSubmit` fires the instant it lands. Neither new pattern can assume
+  that: `dnd_build`'s seeded content (CVC words, isiZulu syllables) sets
+  `retryUntilCorrect: false`, so a wrong letter *can* sit in a blank —
+  tapping a filled blank removes it back to the pool. `dnd_count` needs the
+  same correction for a miscounted basket. Both reuse `DndTile`'s
+  `draggable={false}` + `onTap`-as-remove for this, the one piece of shared
+  behavior worth factoring out (`DndTile.tsx`'s module comment explains why
+  this differs from `dnd_single`'s tile, which never needed removal).
+
+**`dnd_build`** (`content.sentenceTemplate` + one `dropZones[]` entry per
+blank position, built from `content.draggables` letters/syllables):
+`evaluateDnDAnswer` on the API side grades this with the identical "set
+equality per zone" branch as `dnd_single`, just across N zones — confirmed
+by reading `quizSession.service.ts` directly rather than assuming
+`content.blanks[]` (which carries the same position/correctDraggableId
+pairing) was what grading actually used. `content.dropZones[]` alone is
+sufficient to render and grade; `content.blanks[]` isn't read by this
+pattern. `helpers.retryUntilCorrect`, where a future question sets it, still
+applies per-blank exactly like `dnd_single`: a wrong tile is rejected at
+drop time (bounce + `tryAgain` feedback) rather than ever landing in the
+blank.
+
+**`dnd_count`** (one `dropZones[]` entry with `requiredCount`,
+`content.draggables` carrying one entry per item *type* with a `quantity` —
+how many individual copies exist in the pool): each type is expanded into
+`quantity` individual tile instances client-side (a rendered tile needs a
+unique id; the underlying type id is kept alongside as `typeId` and is what
+actually goes into the submitted `rawResponse`, since
+`zone.requiredDraggableIds` checks against the type id, not a per-instance
+one). No `autoSubmit` — there's no single "landing" moment the way
+`dnd_single` has one, so this pattern always shows an explicit Submit button
+(enabled once at least one item is placed) and doesn't read
+`helpers.autoSubmit` at all, even though
+`seed/questions/math/counting.questions.ts` sets that field per-question
+(`true` for counts 1–5, `false` from 6 onward, specifically to force
+deliberate confirmation on the harder questions). This is a deliberate v1
+simplification, not an oversight: there's no per-drop "did this just
+complete the count" moment to hang an auto-submit off of without
+re-litigating a check the current UI model doesn't do per-drop.
+`helpers.countingAudio` ("counts aloud as items drop into zone") also has no
+effect yet — no live TTS/number-speech exists on mobile until Prompt 3 — a
+running "N placed" text label substitutes as the visual equivalent for now.
+Correctness for both is resolved server-side on submit, same as every other
+non-`autoSubmit` pattern in this app.
+
+### Phase 0 — dnd_single on-device verification
+
+Prompt 1 shipped `dnd_single` verified only via `tsc` and a clean
+`expo export` bundle, with the actual gesture interaction (drag
+registering, the tap-vs-drag race, correct/wrong drop handling) explicitly
+unconfirmed on a real device or emulator — flagged as a real risk before
+extending that same foundation to two more patterns. Resolved this prompt:
+**confirmed working on a physical device** (drag-and-drop registers
+correctly, tap-vs-drag race resolves as intended). No bug turned up, so
+`DndSinglePattern.tsx` was left completely unmodified — `dnd_build`/
+`dnd_count` extend its gesture recipe (via the newly extracted
+`DndTile.tsx`) rather than patching anything in it.
+
 ### 5-prompt roadmap
 
 This is prompt 1 of 5 for finishing the learner-facing mobile app (Studio,
 `apps/web/src/pages/studio/`, stays PC-only web across all 5 — out of scope
 throughout):
 
-1. **This prompt** — Course/Roadmap navigation, Lesson player, quiz engine
-   for the 13 working question types.
-2. Question types 14–20 (the remaining `dnd_*` types + `mcq_audio`).
+1. Course/Roadmap navigation, Lesson player, quiz engine for the first 13
+   working question types. **Done** — see "Roadmap, Lesson & Quiz UI" above.
+2. Question types 14–20 (the remaining `dnd_*` types + `mcq_audio`), plus
+   Dictionary's "Take Quiz" entry point. **Done** (`mcq_audio`, `dnd_build`,
+   `dnd_count` — the 5 types with no seeded content are deliberately still
+   deferred) — see "Question types 14–20 & Dictionary quiz" above.
 3. Live TTS / word-highlighting on mobile (the `SpokenText` equivalent).
 4. Profile management screens, OAuth on native, forgot/reset-password/
    verify-email screens.
@@ -511,9 +697,11 @@ throughout):
 
 ## What's deliberately not here yet
 
-- **7 of the 8 `dnd_*` question types, plus `mcq_audio`** — only `dnd_single`
-  has a renderer; the rest show the same placeholder web shows for them.
-  Prompt 2 of the 5-prompt roadmap above.
+- **5 of the remaining 8 `dnd_*` question types** — `dnd_select`, `dnd_sort`,
+  `dnd_sequence`, `dnd_match`, `dnd_fill` show the same placeholder web shows
+  for them. No seeded content exists for any of the 5 yet (matches web's own
+  scope) — not slated on the current 5-prompt roadmap; revisit only if/when
+  content gets authored for them.
 - **Live TTS / word-highlighting** — question prompts, avatar dialogue, and
   feedback all render as plain text with no speech. Prompt 3.
 - **OAuth on native** — deep-link/AuthSession work for Google/Facebook is a
@@ -529,11 +717,7 @@ throughout):
   `CLAUDE.md`). Prompt 5.
 - **A teacher/dashboard-facing surface** — web/desktop territory per
   `CLAUDE.md`.
-- **On-device confirmation of the `dnd_single` gesture interaction** — see
-  the DnD section above; built and statically verified (typed API surface,
-  clean Metro/Babel bundle) but not yet smoke-tested on a real device or
-  emulator from this environment.
 
 ---
 
-*Last updated: 2026-07-23.*
+*Last updated: 2026-07-24.*

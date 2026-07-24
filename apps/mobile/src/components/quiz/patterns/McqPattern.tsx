@@ -1,8 +1,16 @@
 // Ports apps/web's McqPattern.tsx — shared UI for mcq_term_to_def, mcq_def_to_term,
-// mcq_correct_usage, mcq_incorrect_usage, mcq_fill_blank. content.prompt already carries the
-// fully-composed question text from the generator. No SpokenText/TTS wiring here — that's
-// prompt 3; prompt renders as plain Text. Selecting an option never submits immediately — the
-// learner always confirms with the Submit button.
+// mcq_correct_usage, mcq_incorrect_usage, mcq_fill_blank, and (new) mcq_audio. content.prompt
+// already carries the fully-composed question text from the generator for the text-based
+// types. No SpokenText/TTS wiring here — that's prompt 3; prompt renders as plain Text.
+// Selecting an option never submits immediately — the learner always confirms with the Submit
+// button.
+//
+// mcq_audio: reuses the "audio:" prefix affordance TypedInputPattern.tsx built for
+// text_input_audio, but simpler — mcq_audio is exclusively hand-curated seed content (never
+// auto-generated, confirmed against the generation pipeline), so it always follows the
+// "audio:" prefix convention on content.prompt with no termId-based fallback fetch to port
+// (that fallback exists on TypedInputPattern only because the auto-generator doesn't tag
+// text_input_audio's prompt the same way).
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Volume2 } from 'lucide-react-native';
@@ -20,10 +28,15 @@ interface McqPatternProps {
 }
 
 const OPTION_LABELS = ['A', 'B', 'C', 'D', 'E', 'F'];
+const AUDIO_PROMPT_PREFIX = 'audio:';
 
 export function McqPattern({ content, disabled, isSubmitting, onAnswer }: McqPatternProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const options = content.options ?? [];
+
+  const audioPromptUrl = content.prompt?.startsWith(AUDIO_PROMPT_PREFIX)
+    ? resolveAssetUrl(content.prompt.slice(AUDIO_PROMPT_PREFIX.length))
+    : undefined;
 
   const submit = () => {
     if (selected === null || disabled) return;
@@ -32,18 +45,25 @@ export function McqPattern({ content, disabled, isSubmitting, onAnswer }: McqPat
 
   return (
     <View style={styles.wrapper}>
-      <View style={styles.promptRow}>
-        <Text style={styles.prompt}>{content.prompt}</Text>
-        {content.promptAudioUrl ? (
-          <Pressable
-            onPress={() => playAudioUrl(resolveAssetUrl(content.promptAudioUrl)!)}
-            hitSlop={8}
-            style={styles.audioButton}
-          >
-            <Volume2 size={16} color={colors.text.secondary} />
-          </Pressable>
-        ) : null}
-      </View>
+      {audioPromptUrl ? (
+        <Pressable onPress={() => playAudioUrl(audioPromptUrl)} style={styles.playAudioButton}>
+          <Volume2 size={16} color="#fff" />
+          <Text style={styles.playAudioButtonText}>Play audio</Text>
+        </Pressable>
+      ) : (
+        <View style={styles.promptRow}>
+          <Text style={styles.prompt}>{content.prompt}</Text>
+          {content.promptAudioUrl ? (
+            <Pressable
+              onPress={() => playAudioUrl(resolveAssetUrl(content.promptAudioUrl)!)}
+              hitSlop={8}
+              style={styles.audioButton}
+            >
+              <Volume2 size={16} color={colors.text.secondary} />
+            </Pressable>
+          ) : null}
+        </View>
+      )}
 
       <View style={styles.options}>
         {options.map((option, i) => (
@@ -96,6 +116,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surface.glassSoft,
+  },
+  playAudioButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: colors.primary.DEFAULT,
+  },
+  playAudioButtonText: {
+    fontSize: typography.small,
+    fontWeight: '700',
+    color: '#fff',
   },
   options: {
     gap: spacing.sm,
