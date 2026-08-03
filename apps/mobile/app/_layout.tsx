@@ -7,6 +7,7 @@ import { store } from '../src/store/store';
 import type { AppDispatch, RootState } from '../src/store/store';
 import { injectStore } from '../src/lib/api';
 import { bootstrapAuth, fetchActiveProfile } from '../src/features/auth/authSlice';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 injectStore(store);
 
@@ -61,7 +62,9 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Provider store={store}>
-        <AuthBootstrap />
+        <ThemeProvider>
+          <AuthBootstrap />
+        </ThemeProvider>
       </Provider>
     </GestureHandlerRootView>
   );

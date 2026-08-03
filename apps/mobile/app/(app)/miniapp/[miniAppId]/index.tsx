@@ -6,7 +6,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { ChevronLeft, Bookmark, Sparkles } from 'lucide-react-native';
-import { colors, spacing, typography } from '@my-backpack/shared';
+import { spacing, typography } from '@my-backpack/shared';
 import { SearchInput } from '../../../../src/components/dictionary/SearchInput';
 import { TrendingTerms } from '../../../../src/components/dictionary/TrendingTerms';
 import { AlphabetPicker } from '../../../../src/components/dictionary/AlphabetPicker';
@@ -14,8 +14,11 @@ import { RecentSearches } from '../../../../src/components/dictionary/RecentSear
 import { useDictionaryBrowse, BrowseResultRow } from '../../../../src/components/dictionary/DictionaryBrowseList';
 import { setBrowseLetter, type DictionaryTermPreview } from '../../../../src/features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../../../src/store/store';
+import { useTheme } from '../../../../src/theme/ThemeContext';
 
 export default function DictionaryHomeScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { miniAppId, name, type } = useLocalSearchParams<{ miniAppId: string; name?: string; type?: string }>();
@@ -112,7 +115,8 @@ export default function DictionaryHomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
   center: {
     flex: 1,
     alignItems: 'center',
@@ -192,4 +196,5 @@ const styles = StyleSheet.create({
   footer: {
     paddingBottom: spacing.lg,
   },
-});
+  });
+}

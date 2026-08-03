@@ -3,15 +3,19 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IResourceStep } from '@my-backpack/shared';
-import { markdownStyles } from './markdownStyles';
+import { createMarkdownStyles } from './markdownStyles';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface SteppedNotesViewerProps {
   steps: IResourceStep[];
 }
 
 export function SteppedNotesViewer({ steps }: SteppedNotesViewerProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const markdownStyles = createMarkdownStyles(colors);
   const [index, setIndex] = useState(0);
 
   if (steps.length === 0) return null;
@@ -39,34 +43,36 @@ export function SteppedNotesViewer({ steps }: SteppedNotesViewerProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: {
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface.glassSoft,
-  },
-  stepTitle: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  nav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.xs,
-  },
-  navText: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.primary.DEFAULT,
-  },
-  navTextDisabled: {
-    color: colors.text.faint,
-  },
-  stepCount: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    wrapper: {
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: radii.md,
+      backgroundColor: colors.surface.glassSoft,
+    },
+    stepTitle: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    nav: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: spacing.xs,
+    },
+    navText: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.primary.DEFAULT,
+    },
+    navTextDisabled: {
+      color: colors.text.faint,
+    },
+    stepCount: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+    },
+  });
+}

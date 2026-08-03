@@ -38,11 +38,12 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Lightbulb, Volume2 } from 'lucide-react-native';
-import { ASSETS, colors, radii, spacing, typography } from '@my-backpack/shared';
+import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useSpeak } from '../../../lib/useSpeak';
 import { DndTile, DndTileHandle, Rect, clampTileSize, playAsset, pointInRect, shuffle } from './DndTile';
+import { useTheme } from '../../../theme/ThemeContext';
 
 interface DndCountPatternProps {
   content: IQuestionContent;
@@ -82,6 +83,8 @@ export function DndCountPattern({
   isSubmitting,
   onAnswer,
 }: DndCountPatternProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const isChild = ageGroup === 'child';
   const { width: windowWidth } = useWindowDimensions();
   const tileSize = isChild ? clampTileSize(windowWidth) : undefined;
@@ -293,7 +296,8 @@ export function DndCountPattern({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
   dragAreaBackground: {
     flex: 1,
   },
@@ -399,4 +403,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
-});
+  });
+}

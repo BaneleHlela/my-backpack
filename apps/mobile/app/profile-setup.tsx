@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { EducationLevel } from '@my-backpack/shared';
 import { GlassCard } from '../src/components/GlassCard';
 import { PrimaryButton } from '../src/components/PrimaryButton';
@@ -10,6 +10,7 @@ import { ScreenBackground } from '../src/components/ScreenBackground';
 import { ProtectedRoute } from '../src/components/ProtectedRoute';
 import { completeProfileSetup } from '../src/features/auth/authSlice';
 import type { AppDispatch, RootState } from '../src/store/store';
+import { useTheme } from '../src/theme/ThemeContext';
 
 const SCHOOL_LEVELS: EducationLevel[] = [
   'grade-r', 'grade-1', 'grade-2', 'grade-3', 'grade-4', 'grade-5', 'grade-6',
@@ -35,6 +36,8 @@ const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 100 }, (_, i) => currentYear - i);
 
 function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <Pressable onPress={onPress} style={[styles.chip, selected ? styles.chipSelected : null]}>
       <Text style={[styles.chipText, selected ? styles.chipTextSelected : null]}>{label}</Text>
@@ -53,6 +56,8 @@ function ChipRow<T extends string | number>({
   onSelect: (item: T) => void;
   format?: (item: T) => string;
 }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
       {items.map((item) => (
@@ -68,10 +73,14 @@ function ChipRow<T extends string | number>({
 }
 
 function SectionLabel({ children }: { children: string }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return <Text style={styles.sectionLabel}>{children}</Text>;
 }
 
 function ProfileSetupScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
   const { activeProfile, isLoading, error } = useSelector((state: RootState) => state.auth);
@@ -171,78 +180,80 @@ export default function ProfileSetupRoute() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-  },
-  scrollContent: {
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 480,
-  },
-  heading: {
-    fontSize: typography.headingLg,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  subheading: {
-    fontSize: typography.body,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  sectionLabel: {
-    fontSize: typography.small,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    color: colors.text.secondary,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  chipRow: {
-    gap: spacing.xs,
-    paddingBottom: spacing.xs,
-  },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface.glass,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
-  },
-  chipSelected: {
-    backgroundColor: colors.primary.DEFAULT,
-    borderColor: colors.primary.DEFAULT,
-  },
-  chipText: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.text.secondary,
-  },
-  chipTextSelected: {
-    color: '#fff',
-  },
-  error: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.error.dark,
-    marginTop: spacing.md,
-  },
-  submit: {
-    marginTop: spacing.lg,
-  },
-  skip: {
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  skipText: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-    textDecorationLine: 'underline',
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+    },
+    scrollContent: {
+      alignItems: 'center',
+      padding: spacing.lg,
+    },
+    card: {
+      width: '100%',
+      maxWidth: 480,
+    },
+    heading: {
+      fontSize: typography.headingLg,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    subheading: {
+      fontSize: typography.body,
+      color: colors.text.secondary,
+      marginTop: spacing.xs,
+      marginBottom: spacing.md,
+    },
+    sectionLabel: {
+      fontSize: typography.small,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      color: colors.text.secondary,
+      marginTop: spacing.md,
+      marginBottom: spacing.xs,
+    },
+    chipRow: {
+      gap: spacing.xs,
+      paddingBottom: spacing.xs,
+    },
+    chip: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: radii.full,
+      backgroundColor: colors.surface.glass,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
+    },
+    chipSelected: {
+      backgroundColor: colors.primary.DEFAULT,
+      borderColor: colors.primary.DEFAULT,
+    },
+    chipText: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.text.secondary,
+    },
+    chipTextSelected: {
+      color: '#fff',
+    },
+    error: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.error.dark,
+      marginTop: spacing.md,
+    },
+    submit: {
+      marginTop: spacing.lg,
+    },
+    skip: {
+      alignItems: 'center',
+      marginTop: spacing.md,
+    },
+    skipText: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+      textDecorationLine: 'underline',
+    },
+  });
+}

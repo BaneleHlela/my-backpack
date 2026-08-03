@@ -203,15 +203,45 @@ single source of truth for colour, spacing, radius, and typography for
 than inventing a new one. `docs/design/brand-guide.md` has been updated to
 point here instead of saying "to be defined."
 
-Shape: `colors` (background, primary/success/warning/error each with
+Shape: `lightColors`/`darkColors` (background, primary/success/warning/error each with
 light/DEFAULT/dark, text, surface — the glass fill/border tones), `radii`,
 `spacing`, `typography`. Exported from `packages/shared/index.ts` alongside
 the existing type/constant exports. Plain TypeScript, no JSX — importable
-from either app.
+from either app. `IThemeColors` is the explicit (non-`as const`-literal) interface both
+colour objects are typed against — without it, `lightColors` and `darkColors` would infer
+their own incompatible literal-string types and couldn't be swapped for each other through a
+single `colors` variable.
+
+### Light/dark theme system (`apps/mobile/src/theme/ThemeContext.tsx`)
+
+Mobile has a real theme system as of Phase A (August 2026) — `ThemeProvider` (React Context)
+holds the active theme name (`'light' | 'dark'`) and resolves it to `lightColors` or
+`darkColors`; `useTheme()` returns `{ theme, colors }`. **Dark is the default and only active
+theme today** — there's no persistence and no user-facing toggle yet (no Settings screen exists
+to host one); the active theme is a hardcoded constant inside `ThemeContext.tsx`.
+`ThemeProvider` wraps the app in the root `_layout.tsx`, inside the Redux `<Provider>`.
+
+Every component that reads `colors` calls `const { colors } = useTheme()` instead of a static
+import — `colors` is no longer exported from `packages/shared` (only `lightColors`/`darkColors`
+are). Since `useTheme()` is a hook, any `StyleSheet.create({...})` that references `colors` can
+no longer live at module scope — the convention across the codebase is a `createStyles(colors)`
+function defined below the component, called as `const styles = createStyles(colors);` inside
+the component body (not memoized — `StyleSheet.create` is cheap enough to call per-render, and
+memoizing it everywhere would add a `useMemo` import + dependency array to ~40 files for no
+measurable benefit at this scale). Any module-scope `Record<Status, {...}>` style lookup table
+that referenced `colors` (e.g. `RoadmapNodeCard`'s status-badge colours) became a
+`getXStyles(colors)` function for the same reason.
+
+`ScreenBackground.tsx` picks its wallpaper by `theme` — `ASSETS.wallpapers.portraitLight` /
+`portraitDark`. **Both are placeholder values today** (`packages/shared/constants/assets.ts`),
+not real GCS URLs — the light/dark wallpapers are designed in Figma but haven't been exported
+and uploaded to GCS yet. `ImageBackground` fails silently on an invalid `uri` (no broken-image
+icon like on web), so the screen still shows a flat `colors.background` fill in the meantime.
+Replace both constants with real `wallpapers/9x16/...` GCS URLs once uploaded.
 
 ### Base UI primitives (`apps/mobile/src/components/`)
 
-Every primitive reads exclusively from `theme.ts` — no hardcoded hex codes in
+Every primitive reads exclusively from `theme.ts` (via `useTheme()`) — no hardcoded hex codes in
 component files:
 
 - **`GlassCard`** — the frosted-glass surface that's the brand's signature
@@ -231,11 +261,12 @@ NativeWind v4 is the natural choice if/when closer class-for-class parity
 with web's Tailwind usage is wanted, but that's a deliberate follow-up, not
 part of this build.
 
-### Dark mode — explicitly not built
+### Dark mode
 
-`docs/design/brand-guide.md` avoids dark backgrounds by design, and
-`IPreferences.theme` exists in the schema without an implementation on
-either client. No dark palette variant exists in `theme.ts`.
+Built as of Phase A (August 2026) — see "Light/dark theme system" above. `darkColors` exists in
+`theme.ts` and is the active default; `IPreferences.theme` still has no persistence/toggle
+wiring to it, and web hasn't adopted a theme system at all (still hardcoded Tailwind classes
+per `docs/design/brand-guide.md`'s light-only design).
 
 ---
 

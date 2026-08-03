@@ -34,11 +34,12 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Lightbulb, Volume2 } from 'lucide-react-native';
-import { ASSETS, colors, radii, spacing, typography } from '@my-backpack/shared';
+import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useSpeak } from '../../../lib/useSpeak';
+import { useTheme } from '../../../theme/ThemeContext';
 
 interface DndSinglePatternProps {
   content: IQuestionContent;
@@ -93,6 +94,8 @@ const DraggableTile = forwardRef(function DraggableTile(
   { item, size, showLabel, highlight, disabled, isChild, onTapAudio, onDragAudio, onDropAttempt }: DraggableTileProps,
   ref: Ref<DraggableTileHandle>
 ) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
 
@@ -161,6 +164,8 @@ export function DndSinglePattern({
   isSubmitting,
   onAnswer,
 }: DndSinglePatternProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const isChild = ageGroup === 'child';
   const { width: windowWidth } = useWindowDimensions();
   const tileSize = isChild ? clampTileSize(windowWidth) : undefined;
@@ -398,7 +403,8 @@ export function DndSinglePattern({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
   dragAreaBackground: {
     flex: 1,
   },
@@ -530,4 +536,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
-});
+  });
+}

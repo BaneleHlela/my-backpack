@@ -13,10 +13,11 @@ import type { Ref } from 'react';
 import { Image, StyleSheet, Text } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import { colors, radii, typography } from '@my-backpack/shared';
+import { radii, typography } from '@my-backpack/shared';
 import type { IDraggable } from '@my-backpack/shared';
 import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
+import { useTheme } from '../../../theme/ThemeContext';
 
 export function playAsset(path?: string): void {
   const url = resolveAssetUrl(path);
@@ -72,6 +73,8 @@ export const DndTile = forwardRef(function DndTile(
   { item, size, showLabel, highlight, disabled, isChild, draggable, onTap, onDragStart, onDropAttempt }: DndTileProps,
   ref: Ref<DndTileHandle>
 ) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
 
@@ -132,34 +135,36 @@ export const DndTile = forwardRef(function DndTile(
   );
 });
 
-const styles = StyleSheet.create({
-  tile: {
-    width: 64,
-    height: 64,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface.glassStrong,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
-  },
-  tileChild: {
-    borderRadius: radii.lg,
-    borderWidth: 3,
-    borderColor: colors.primary.light,
-    backgroundColor: '#fff',
-  },
-  tileHighlight: {
-    borderColor: colors.warning.DEFAULT,
-    borderWidth: 3,
-  },
-  tileImage: {
-    width: '70%',
-    height: '70%',
-  },
-  tileLabel: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    tile: {
+      width: 64,
+      height: 64,
+      borderRadius: radii.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface.glassStrong,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
+    },
+    tileChild: {
+      borderRadius: radii.lg,
+      borderWidth: 3,
+      borderColor: colors.primary.light,
+      backgroundColor: '#fff',
+    },
+    tileHighlight: {
+      borderColor: colors.warning.DEFAULT,
+      borderWidth: 3,
+    },
+    tileImage: {
+      width: '70%',
+      height: '70%',
+    },
+    tileLabel: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+  });
+}

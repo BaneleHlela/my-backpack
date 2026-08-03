@@ -3,7 +3,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View
 import { useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AvailableSubject } from '@my-backpack/shared';
 import { GlassCard } from '../../src/components/GlassCard';
 import { PrimaryButton } from '../../src/components/PrimaryButton';
@@ -13,8 +13,11 @@ import {
   enrollInSubject,
 } from '../../src/features/content/contentSlice';
 import type { AppDispatch, RootState } from '../../src/store/store';
+import { useTheme } from '../../src/theme/ThemeContext';
 
 function AddSubjectsModal({ onClose }: { onClose: () => void }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const dispatch = useDispatch<AppDispatch>();
   const { availableSubjects, isLoadingAvailable } = useSelector((state: RootState) => state.content);
   const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set());
@@ -83,6 +86,8 @@ function AddSubjectsModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function HomeScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { enrolledSubjects, isLoading } = useSelector((state: RootState) => state.content);
@@ -144,110 +149,112 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: spacing.md,
-  },
-  emptyHeading: {
-    fontSize: typography.heading,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  emptyBody: {
-    fontSize: typography.body,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-    marginBottom: spacing.lg,
-    textAlign: 'center',
-  },
-  emptyButton: {
-    minWidth: 180,
-  },
-  listContent: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
-  subjectCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  subjectHeading: {
-    fontSize: typography.heading,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  addMore: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-  },
-  addMoreText: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.text.secondary,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  modalSheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
-    padding: spacing.lg,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  modalTitle: {
-    fontSize: typography.heading,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  modalClose: {
-    fontSize: typography.body,
-    fontWeight: '600',
-    color: colors.primary.DEFAULT,
-  },
-  modalLoading: {
-    paddingVertical: spacing.xl,
-  },
-  subjectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.surface.border,
-  },
-  subjectInfo: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  subjectName: {
-    fontSize: typography.body,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  subjectField: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-  },
-  enrolledLabel: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.success.dark,
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing.lg,
+    },
+    emptyEmoji: {
+      fontSize: 64,
+      marginBottom: spacing.md,
+    },
+    emptyHeading: {
+      fontSize: typography.heading,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    emptyBody: {
+      fontSize: typography.body,
+      color: colors.text.secondary,
+      marginTop: spacing.xs,
+      marginBottom: spacing.lg,
+      textAlign: 'center',
+    },
+    emptyButton: {
+      minWidth: 180,
+    },
+    listContent: {
+      padding: spacing.lg,
+      gap: spacing.lg,
+    },
+    subjectCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    subjectHeading: {
+      fontSize: typography.heading,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    addMore: {
+      alignItems: 'center',
+      paddingVertical: spacing.md,
+    },
+    addMoreText: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.text.secondary,
+    },
+    modalOverlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    modalSheet: {
+      backgroundColor: '#fff',
+      borderTopLeftRadius: radii.lg,
+      borderTopRightRadius: radii.lg,
+      padding: spacing.lg,
+      maxHeight: '80%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    modalTitle: {
+      fontSize: typography.heading,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    modalClose: {
+      fontSize: typography.body,
+      fontWeight: '600',
+      color: colors.primary.DEFAULT,
+    },
+    modalLoading: {
+      paddingVertical: spacing.xl,
+    },
+    subjectRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.surface.border,
+    },
+    subjectInfo: {
+      flex: 1,
+      marginRight: spacing.sm,
+    },
+    subjectName: {
+      fontSize: typography.body,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    subjectField: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+    },
+    enrolledLabel: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.success.dark,
+    },
+  });
+}

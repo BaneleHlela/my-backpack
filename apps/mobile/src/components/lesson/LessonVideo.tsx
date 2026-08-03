@@ -9,8 +9,9 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEvent } from 'expo';
 import { Play, RotateCcw } from 'lucide-react-native';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface LessonVideoProps {
   url: string;
@@ -23,6 +24,8 @@ interface LessonVideoProps {
 const READY_TIMEOUT_MS = 15000;
 
 export function LessonVideo({ url, caption }: LessonVideoProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const player = useVideoPlayer(null);
   const { status } = useEvent(player, 'statusChange', { status: player.status });
   const [hasStarted, setHasStarted] = useState(false);
@@ -89,66 +92,68 @@ export function LessonVideo({ url, caption }: LessonVideoProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: {
-    gap: spacing.xs,
-  },
-  placeholder: {
-    aspectRatio: 16 / 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  playCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface.glassStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderCaption: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
-  },
-  videoBox: {
-    aspectRatio: 16 / 9,
-    borderRadius: radii.md,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-  },
-  video: {
-    width: '100%',
-    height: '100%',
-  },
-  overlay: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  errorText: {
-    fontSize: typography.small,
-    color: '#fff',
-    textAlign: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  retryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.full,
-    backgroundColor: colors.primary.DEFAULT,
-  },
-  retryText: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  caption: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    wrapper: {
+      gap: spacing.xs,
+    },
+    placeholder: {
+      aspectRatio: 16 / 9,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    playCircle: {
+      width: 56,
+      height: 56,
+      borderRadius: radii.full,
+      backgroundColor: colors.surface.glassStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    placeholderCaption: {
+      fontSize: typography.small,
+      color: colors.text.secondary,
+    },
+    videoBox: {
+      aspectRatio: 16 / 9,
+      borderRadius: radii.md,
+      overflow: 'hidden',
+      backgroundColor: '#000',
+    },
+    video: {
+      width: '100%',
+      height: '100%',
+    },
+    overlay: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    errorText: {
+      fontSize: typography.small,
+      color: '#fff',
+      textAlign: 'center',
+      paddingHorizontal: spacing.md,
+    },
+    retryButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.full,
+      backgroundColor: colors.primary.DEFAULT,
+    },
+    retryText: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: '#fff',
+    },
+    caption: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+    },
+  });
+}

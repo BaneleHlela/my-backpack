@@ -11,19 +11,23 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { ChevronLeft, CheckCircle } from 'lucide-react-native';
 import Markdown from 'react-native-markdown-display';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { ApiResponse, ItemCompletionResult } from '@my-backpack/shared';
 import api from '../../../../../../../src/lib/api';
 import { playAudioUrl } from '../../../../../../../src/lib/audio';
 import { fetchLesson, clearLesson } from '../../../../../../../src/features/roadmap/roadmapSlice';
 import { LessonVideo } from '../../../../../../../src/components/lesson/LessonVideo';
 import { SteppedNotesViewer } from '../../../../../../../src/components/lesson/SteppedNotesViewer';
-import { markdownStyles } from '../../../../../../../src/components/lesson/markdownStyles';
+import { createMarkdownStyles } from '../../../../../../../src/components/lesson/markdownStyles';
 import type { AppDispatch, RootState } from '../../../../../../../src/store/store';
+import { useTheme } from '../../../../../../../src/theme/ThemeContext';
 
 const AUTO_ADVANCE_DELAY_MS = 1500;
 
 export default function LessonPlayerScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const markdownStyles = createMarkdownStyles(colors);
   const { subjectSlug, courseSlug, lessonId } = useLocalSearchParams<{
     subjectSlug: string;
     courseSlug: string;
@@ -176,7 +180,8 @@ export default function LessonPlayerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
   content: {
     padding: spacing.lg,
     gap: spacing.md,
@@ -283,4 +288,5 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.text.muted,
   },
-});
+  });
+}

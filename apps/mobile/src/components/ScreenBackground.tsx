@@ -1,5 +1,6 @@
 import { ImageBackground, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, type ViewProps } from 'react-native';
-import { ASSETS, colors } from '@my-backpack/shared';
+import { ASSETS } from '@my-backpack/shared';
+import { useTheme } from '../theme/ThemeContext';
 
 interface ScreenBackgroundProps extends ViewProps {
   // Wraps children in a KeyboardAvoidingView + ScrollView — for form
@@ -10,11 +11,14 @@ interface ScreenBackgroundProps extends ViewProps {
 }
 
 export function ScreenBackground({ scroll = false, style, children, ...rest }: ScreenBackgroundProps) {
+  const { theme, colors } = useTheme();
+  const wallpaperUri = theme === 'dark' ? ASSETS.wallpapers.portraitDark : ASSETS.wallpapers.portraitLight;
+
   return (
     <ImageBackground
-      source={{ uri: ASSETS.wallpapers.portrait }}
+      source={{ uri: wallpaperUri }}
       resizeMode="cover"
-      style={[styles.background, scroll ? undefined : style]}
+      style={[styles.background, { backgroundColor: colors.background }, scroll ? undefined : style]}
       {...rest}
     >
       {scroll ? (
@@ -33,7 +37,6 @@ export function ScreenBackground({ scroll = false, style, children, ...rest }: S
 const styles = StyleSheet.create({
   background: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   flex: {
     flex: 1,

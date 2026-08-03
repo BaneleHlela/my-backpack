@@ -19,6 +19,8 @@ export interface IResource {
   title?: string;          // pdf
   markdown?: string;       // notes
   steps?: IResourceStep[]; // steps
+  thumbnailUrl?: string;   // video
+  description?: string;    // video
 }
 
 export interface ILessonDocument extends Document {
@@ -53,6 +55,8 @@ const resourceSchema = new Schema<IResource>(
     title: { type: String },
     markdown: { type: String },
     steps: { type: [resourceStepSchema] },
+    thumbnailUrl: { type: String },
+    description: { type: String },
   },
   { _id: false }
 );

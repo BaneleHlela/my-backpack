@@ -9,11 +9,12 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { ChevronLeft, Map } from 'lucide-react-native';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IMiniApp } from '@my-backpack/shared';
 import { GlassCard } from '../../../../src/components/GlassCard';
 import { fetchCoursesBySubject, fetchSubjectMiniApps } from '../../../../src/features/content/contentSlice';
 import type { AppDispatch, RootState } from '../../../../src/store/store';
+import { useTheme } from '../../../../src/theme/ThemeContext';
 
 const MINI_APP_EMOJI: Record<IMiniApp['type'], string> = {
   dictionary: '📖',
@@ -23,6 +24,8 @@ const MINI_APP_EMOJI: Record<IMiniApp['type'], string> = {
 };
 
 export default function SubjectHomeScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const { subjectSlug } = useLocalSearchParams<{ subjectSlug: string }>();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
@@ -138,7 +141,8 @@ export default function SubjectHomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
   content: {
     padding: spacing.lg,
     gap: spacing.md,
@@ -218,4 +222,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text.primary,
   },
-});
+  });
+}

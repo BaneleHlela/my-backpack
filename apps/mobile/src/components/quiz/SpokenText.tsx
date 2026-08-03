@@ -7,8 +7,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 import { Volume2 } from 'lucide-react-native';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import { useSpeak } from '../../lib/useSpeak';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface SpokenTextProps {
   text: string;
@@ -18,6 +19,8 @@ interface SpokenTextProps {
 }
 
 export function SpokenText({ text, lang, textStyle, containerStyle }: SpokenTextProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const { speak, stop, isSpeaking } = useSpeak(lang);
 
   if (!text?.trim()) {
@@ -39,27 +42,29 @@ export function SpokenText({ text, lang, textStyle, containerStyle }: SpokenText
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  text: {
-    flex: 1,
-    fontSize: typography.body,
-    color: colors.text.primary,
-  },
-  button: {
-    width: 28,
-    height: 28,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface.glassSoft,
-    marginTop: 2,
-  },
-  buttonActive: {
-    backgroundColor: colors.surface.glassStrong,
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+    },
+    text: {
+      flex: 1,
+      fontSize: typography.body,
+      color: colors.text.primary,
+    },
+    button: {
+      width: 28,
+      height: 28,
+      borderRadius: radii.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface.glassSoft,
+      marginTop: 2,
+    },
+    buttonActive: {
+      backgroundColor: colors.surface.glassStrong,
+    },
+  });
+}

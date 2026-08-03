@@ -3,9 +3,10 @@
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import { fetchAlphabet } from '../../features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../store/store';
+import { useTheme } from '../../theme/ThemeContext';
 
 const LETTERS = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i));
 
@@ -16,6 +17,8 @@ interface AlphabetPickerProps {
 }
 
 export function AlphabetPicker({ miniAppId, activeLetter, onSelectLetter }: AlphabetPickerProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const dispatch = useDispatch<AppDispatch>();
   const { alphabet } = useSelector((state: RootState) => state.vocab);
 
@@ -53,39 +56,41 @@ export function AlphabetPicker({ miniAppId, activeLetter, onSelectLetter }: Alph
   );
 }
 
-const styles = StyleSheet.create({
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  letter: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  letterActive: {
-    backgroundColor: colors.primary.DEFAULT,
-  },
-  letterAvailable: {
-    backgroundColor: colors.surface.glass,
-  },
-  letterUnavailable: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  letterText: {
-    fontSize: typography.small,
-    fontWeight: '700',
-  },
-  letterTextActive: {
-    color: '#fff',
-  },
-  letterTextAvailable: {
-    color: colors.text.secondary,
-  },
-  letterTextUnavailable: {
-    color: colors.text.faint,
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.xs,
+    },
+    letter: {
+      width: 32,
+      height: 32,
+      borderRadius: radii.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    letterActive: {
+      backgroundColor: colors.primary.DEFAULT,
+    },
+    letterAvailable: {
+      backgroundColor: colors.surface.glass,
+    },
+    letterUnavailable: {
+      backgroundColor: 'rgba(255,255,255,0.1)',
+    },
+    letterText: {
+      fontSize: typography.small,
+      fontWeight: '700',
+    },
+    letterTextActive: {
+      color: '#fff',
+    },
+    letterTextAvailable: {
+      color: colors.text.secondary,
+    },
+    letterTextUnavailable: {
+      color: colors.text.faint,
+    },
+  });
+}

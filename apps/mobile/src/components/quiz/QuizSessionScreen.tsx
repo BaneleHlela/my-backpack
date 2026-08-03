@@ -15,10 +15,11 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { BookOpen, SkipForward, X } from 'lucide-react-native';
-import { resolveHelpers, colors, radii, spacing, typography } from '@my-backpack/shared';
+import { resolveHelpers, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, ApiResponse, ItemCompletionResult } from '@my-backpack/shared';
 import api from '../../lib/api';
 import { subjectSlugToLangCode } from '../../lib/lang';
+import { useTheme } from '../../theme/ThemeContext';
 import {
   startQuizItemSession,
   startMiniAppQuizSession,
@@ -45,6 +46,8 @@ interface QuizSessionScreenProps {
 }
 
 export function QuizSessionScreen({ session }: QuizSessionScreenProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const quiz = useSelector((state: RootState) => state.quiz);
@@ -378,7 +381,8 @@ export function QuizSessionScreen({ session }: QuizSessionScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -491,4 +495,5 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.text.muted,
   },
-});
+  });
+}

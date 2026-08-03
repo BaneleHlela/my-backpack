@@ -9,7 +9,9 @@ import mongoose, { Document, Schema, Model, Types } from 'mongoose';
 
 export type NodeType = 'lesson' | 'checkpoint' | 'practice';
 export type CurriculumType = 'CAPS' | 'IEB' | 'Cambridge' | 'University' | 'Other';
-export type NodeItemType = 'lesson' | 'quiz'; // extensible: future 'resource' | 'notes' | 'chatbot'
+// 'project' is reserved — no Project model, resolution, or progress logic exists yet (no icon
+// asset either). Extensible: future 'resource' | 'notes' | 'chatbot'
+export type NodeItemType = 'lesson' | 'quiz' | 'project';
 
 export interface ICurriculumTag {
   curriculum: CurriculumType;
@@ -64,7 +66,7 @@ const curriculumTagSchema = new Schema<ICurriculumTag>(
 
 const nodeItemRefSchema = new Schema<INodeItemRef>(
   {
-    itemType: { type: String, enum: ['lesson', 'quiz'], required: true },
+    itemType: { type: String, enum: ['lesson', 'quiz', 'project'], required: true },
     // No static `ref` — polymorphic (Lesson or Quiz depending on itemType), resolved manually
     // in the service layer via two separate find() calls split by itemType.
     itemId: { type: Schema.Types.ObjectId, required: true },

@@ -6,11 +6,12 @@
 // text only when feedback.audioUrl isn't set (that prerecorded clip wins instead).
 import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CheckCircle2, SkipForward, Volume2, XCircle } from 'lucide-react-native';
-import { ASSETS, colors, radii, spacing, typography } from '@my-backpack/shared';
+import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IQuestionContent } from '@my-backpack/shared';
 import { playAudioUrl } from '../../lib/audio';
 import { resolveAssetUrl } from '../../lib/assetUrl';
 import { SpokenText } from './SpokenText';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface AnswerFeedbackProps {
   isCorrect: boolean;
@@ -35,6 +36,8 @@ export function AnswerFeedback({
   wasSkipped,
   onAdvance,
 }: AnswerFeedbackProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const isChild = ageGroup === 'child';
 
   const headline = wasSkipped
@@ -122,98 +125,100 @@ export function AnswerFeedback({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: '#fff',
-    borderRadius: radii.lg,
-    borderWidth: 2,
-    padding: spacing.lg,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    alignSelf: 'center',
-    marginBottom: spacing.sm,
-  },
-  avatarChild: {
-    width: 80,
-    height: 80,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  headerText: {
-    flex: 1,
-    gap: 4,
-  },
-  headline: {
-    fontSize: typography.heading,
-    fontWeight: '700',
-  },
-  headlineChild: {
-    fontSize: typography.headingLg,
-  },
-  pointsText: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
-  },
-  feedbackTextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  feedbackText: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-    flexShrink: 1,
-  },
-  audioButton: {
-    width: 24,
-    height: 24,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface.glassSoft,
-  },
-  correctAnswerText: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-  },
-  correctAnswerValue: {
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  explanationText: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-  },
-  advanceButton: {
-    marginTop: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary.DEFAULT,
-    alignItems: 'center',
-  },
-  advanceButtonChild: {
-    paddingVertical: spacing.md + 4,
-  },
-  advanceButtonText: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: '#fff',
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing.lg,
+    },
+    card: {
+      width: '100%',
+      maxWidth: 420,
+      backgroundColor: '#fff',
+      borderRadius: radii.lg,
+      borderWidth: 2,
+      padding: spacing.lg,
+    },
+    avatar: {
+      width: 64,
+      height: 64,
+      alignSelf: 'center',
+      marginBottom: spacing.sm,
+    },
+    avatarChild: {
+      width: 80,
+      height: 80,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    headerText: {
+      flex: 1,
+      gap: 4,
+    },
+    headline: {
+      fontSize: typography.heading,
+      fontWeight: '700',
+    },
+    headlineChild: {
+      fontSize: typography.headingLg,
+    },
+    pointsText: {
+      fontSize: typography.small,
+      color: colors.text.secondary,
+    },
+    feedbackTextRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      marginTop: spacing.xs,
+    },
+    feedbackText: {
+      fontSize: typography.small,
+      color: colors.text.secondary,
+      marginTop: spacing.xs,
+      flexShrink: 1,
+    },
+    audioButton: {
+      width: 24,
+      height: 24,
+      borderRadius: radii.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface.glassSoft,
+    },
+    correctAnswerText: {
+      fontSize: typography.small,
+      color: colors.text.secondary,
+      marginTop: spacing.xs,
+    },
+    correctAnswerValue: {
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    explanationText: {
+      fontSize: typography.small,
+      color: colors.text.secondary,
+      marginTop: spacing.xs,
+    },
+    advanceButton: {
+      marginTop: spacing.lg,
+      paddingVertical: spacing.md,
+      borderRadius: radii.md,
+      backgroundColor: colors.primary.DEFAULT,
+      alignItems: 'center',
+    },
+    advanceButtonChild: {
+      paddingVertical: spacing.md + 4,
+    },
+    advanceButtonText: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: '#fff',
+    },
+  });
+}

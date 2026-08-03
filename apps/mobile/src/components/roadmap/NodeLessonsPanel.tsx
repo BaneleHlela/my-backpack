@@ -9,8 +9,9 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CheckCircle, Lock, Play, Star, X } from 'lucide-react-native';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { ItemStatus, NodeItemType, NodeStatus } from '@my-backpack/shared';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface ItemForPanel {
   _id: string;
@@ -38,12 +39,22 @@ interface NodeLessonsPanelProps {
   onClose: () => void;
 }
 
-const ITEM_TYPE_META: Record<NodeItemType, { label: string; color: string }> = {
-  lesson: { label: 'Study', color: colors.primary.DEFAULT },
-  quiz: { label: 'Quiz', color: colors.primary.dark },
-};
+type ThemeColors = ReturnType<typeof useTheme>['colors'];
+
+// 'project' is a reserved NodeItemType (no Project model/content yet) — this placeholder entry
+// exists only to satisfy Record<NodeItemType, ...> exhaustiveness; no node ever has one today.
+function getItemTypeMeta(colors: ThemeColors): Record<NodeItemType, { label: string; color: string }> {
+  return {
+    lesson: { label: 'Study', color: colors.primary.DEFAULT },
+    quiz: { label: 'Quiz', color: colors.primary.dark },
+    project: { label: 'Project', color: colors.text.secondary },
+  };
+}
 
 export default function NodeLessonsPanel({ node, subjectSlug, courseSlug, onClose }: NodeLessonsPanelProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const itemTypeMeta = getItemTypeMeta(colors);
   const router = useRouter();
 
   const handleItemPress = (item: ItemForPanel) => {
@@ -93,7 +104,7 @@ export default function NodeLessonsPanel({ node, subjectSlug, courseSlug, onClos
 
           <ScrollView contentContainerStyle={styles.listContent}>
             {node.items.map((item, i) => {
-              const meta = ITEM_TYPE_META[item.itemType];
+              const meta = itemTypeMeta[item.itemType];
               const isLocked = !item.isUnlocked;
               const isDone = item.progressStatus === 'completed';
               const isActive = item.progressStatus === 'unlocked' || item.progressStatus === 'in_progress';
@@ -159,104 +170,106 @@ export default function NodeLessonsPanel({ node, subjectSlug, courseSlug, onClos
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
-    maxHeight: '75%',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.lg,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  headerText: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  title: {
-    fontSize: typography.heading,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  description: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
-  },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 2,
-  },
-  dragHandle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface.border,
-    marginVertical: spacing.sm,
-  },
-  listContent: {
-    gap: spacing.sm,
-    paddingBottom: spacing.md,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface.glassSoft,
-  },
-  itemLocked: {
-    opacity: 0.5,
-  },
-  itemNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemNumberText: {
-    fontSize: typography.small,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  itemInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  itemTitle: {
-    fontSize: typography.body,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  itemMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  itemBadge: {
-    fontSize: typography.small,
-    fontWeight: '600',
-  },
-  itemMetaText: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-  },
-  emptyText: {
-    textAlign: 'center',
-    fontSize: typography.small,
-    color: colors.text.muted,
-    paddingVertical: spacing.lg,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: 'rgba(0,0,0,0.3)',
+    },
+    sheet: {
+      backgroundColor: '#fff',
+      borderTopLeftRadius: radii.lg,
+      borderTopRightRadius: radii.lg,
+      maxHeight: '75%',
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.lg,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+    },
+    headerText: {
+      flex: 1,
+      gap: spacing.xs,
+    },
+    title: {
+      fontSize: typography.heading,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    description: {
+      fontSize: typography.small,
+      color: colors.text.secondary,
+    },
+    starsRow: {
+      flexDirection: 'row',
+      gap: 2,
+    },
+    dragHandle: {
+      alignSelf: 'center',
+      width: 40,
+      height: 4,
+      borderRadius: radii.full,
+      backgroundColor: colors.surface.border,
+      marginVertical: spacing.sm,
+    },
+    listContent: {
+      gap: spacing.sm,
+      paddingBottom: spacing.md,
+    },
+    itemRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: radii.md,
+      backgroundColor: colors.surface.glassSoft,
+    },
+    itemLocked: {
+      opacity: 0.5,
+    },
+    itemNumber: {
+      width: 32,
+      height: 32,
+      borderRadius: radii.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    itemNumberText: {
+      fontSize: typography.small,
+      fontWeight: '700',
+      color: '#fff',
+    },
+    itemInfo: {
+      flex: 1,
+      gap: 2,
+    },
+    itemTitle: {
+      fontSize: typography.body,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    itemMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    itemBadge: {
+      fontSize: typography.small,
+      fontWeight: '600',
+    },
+    itemMetaText: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+    },
+    emptyText: {
+      textAlign: 'center',
+      fontSize: typography.small,
+      color: colors.text.muted,
+      paddingVertical: spacing.lg,
+    },
+  });
+}

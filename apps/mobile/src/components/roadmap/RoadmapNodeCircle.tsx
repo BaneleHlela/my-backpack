@@ -7,8 +7,9 @@
 // into node rendering ahead of Phase 4's DnD work; a highlighted border stands in for it.
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Lock, Star } from 'lucide-react-native';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { NodeStatus } from '@my-backpack/shared';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface RoadmapNodeCircleProps {
   title: string;
@@ -17,16 +18,23 @@ interface RoadmapNodeCircleProps {
   onPress: () => void;
 }
 
-const STATUS_COLOR: Record<NodeStatus, string> = {
-  locked: colors.text.faint,
-  unlocked: colors.primary.DEFAULT,
-  in_progress: colors.primary.dark,
-  completed: colors.success.DEFAULT,
-};
+type ThemeColors = ReturnType<typeof useTheme>['colors'];
+
+function getStatusColors(colors: ThemeColors): Record<NodeStatus, string> {
+  return {
+    locked: colors.text.faint,
+    unlocked: colors.primary.DEFAULT,
+    in_progress: colors.primary.dark,
+    completed: colors.success.DEFAULT,
+  };
+}
 
 const CIRCLE_SIZE = 80;
 
 export default function RoadmapNodeCircle({ title, status, stars, onPress }: RoadmapNodeCircleProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const statusColor = getStatusColors(colors);
   const isLocked = status === 'locked';
 
   return (
@@ -36,7 +44,7 @@ export default function RoadmapNodeCircle({ title, status, stars, onPress }: Roa
         disabled={isLocked}
         style={[
           styles.circle,
-          { backgroundColor: STATUS_COLOR[status] },
+          { backgroundColor: statusColor[status] },
           isLocked && styles.locked,
           status === 'unlocked' && styles.unlockedRing,
         ]}
@@ -70,41 +78,43 @@ export default function RoadmapNodeCircle({ title, status, stars, onPress }: Roa
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: {
-    width: CIRCLE_SIZE,
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  circle: {
-    width: CIRCLE_SIZE,
-    height: CIRCLE_SIZE,
-    borderRadius: radii.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locked: {
-    opacity: 0.5,
-  },
-  unlockedRing: {
-    borderWidth: 3,
-    borderColor: colors.primary.light,
-  },
-  innerDot: {
-    width: 18,
-    height: 18,
-    borderRadius: radii.full,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 2,
-  },
-  title: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.text.secondary,
-    textAlign: 'center',
-    width: CIRCLE_SIZE,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    wrapper: {
+      width: CIRCLE_SIZE,
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    circle: {
+      width: CIRCLE_SIZE,
+      height: CIRCLE_SIZE,
+      borderRadius: radii.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    locked: {
+      opacity: 0.5,
+    },
+    unlockedRing: {
+      borderWidth: 3,
+      borderColor: colors.primary.light,
+    },
+    innerDot: {
+      width: 18,
+      height: 18,
+      borderRadius: radii.full,
+      backgroundColor: 'rgba(255,255,255,0.3)',
+    },
+    starsRow: {
+      flexDirection: 'row',
+      gap: 2,
+    },
+    title: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.text.secondary,
+      textAlign: 'center',
+      width: CIRCLE_SIZE,
+    },
+  });
+}

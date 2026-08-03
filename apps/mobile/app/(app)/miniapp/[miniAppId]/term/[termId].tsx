@@ -6,14 +6,17 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { ChevronLeft, Volume2 } from 'lucide-react-native';
-import { colors, spacing, typography } from '@my-backpack/shared';
+import { spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../../../../../src/components/GlassCard';
 import { DefinitionCard } from '../../../../../src/components/dictionary/DefinitionCard';
 import { playAudioUrl } from '../../../../../src/lib/audio';
 import { clearActiveTerm, fetchTermDetail } from '../../../../../src/features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../../../../src/store/store';
+import { useTheme } from '../../../../../src/theme/ThemeContext';
 
 export default function TermDetailScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { miniAppId, termId } = useLocalSearchParams<{ miniAppId: string; termId: string }>();
@@ -76,7 +79,8 @@ export default function TermDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
   content: {
     padding: spacing.lg,
     gap: spacing.md,
@@ -120,4 +124,5 @@ const styles = StyleSheet.create({
   definitions: {
     gap: spacing.sm,
   },
-});
+  });
+}

@@ -2,19 +2,24 @@ import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { ProfileSummary } from '@my-backpack/shared';
 import { GlassCard } from '../src/components/GlassCard';
 import { ScreenBackground } from '../src/components/ScreenBackground';
 import { ProtectedRoute } from '../src/components/ProtectedRoute';
 import { selectProfile, fetchActiveProfile, logoutAsync, clearError } from '../src/features/auth/authSlice';
 import type { AppDispatch, RootState } from '../src/store/store';
+import { useTheme } from '../src/theme/ThemeContext';
 
-const AGE_GROUP_STYLES: Record<string, { bg: string; text: string }> = {
-  child: { bg: colors.warning.light, text: colors.warning.dark },
-  teen: { bg: colors.primary.light, text: colors.primary.darker },
-  adult: { bg: colors.success.light, text: colors.success.dark },
-};
+type ThemeColors = ReturnType<typeof useTheme>['colors'];
+
+function getAgeGroupStyles(colors: ThemeColors): Record<string, { bg: string; text: string }> {
+  return {
+    child: { bg: colors.warning.light, text: colors.warning.dark },
+    teen: { bg: colors.primary.light, text: colors.primary.darker },
+    adult: { bg: colors.success.light, text: colors.success.dark },
+  };
+}
 
 function initials(name: string): string {
   return name
@@ -26,7 +31,10 @@ function initials(name: string): string {
 }
 
 function ProfileTile({ profile, onPress }: { profile: ProfileSummary; onPress: () => void }) {
-  const ageStyle = AGE_GROUP_STYLES[profile.ageGroup] ?? { bg: colors.surface.glass, text: colors.text.secondary };
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const ageGroupStyles = getAgeGroupStyles(colors);
+  const ageStyle = ageGroupStyles[profile.ageGroup] ?? { bg: colors.surface.glass, text: colors.text.secondary };
   return (
     <Pressable onPress={onPress} style={styles.tile}>
       <View style={styles.avatar}>
@@ -58,6 +66,8 @@ function PinEntryModal({
   onSubmit: (pin: string) => void;
   onClose: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const [pin, setPin] = useState('');
 
   useEffect(() => {
@@ -114,6 +124,8 @@ function PinEntryModal({
 }
 
 function SelectProfileScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const [pendingProfile, setPendingProfile] = useState<ProfileSummary | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
 
@@ -199,153 +211,155 @@ export default function SelectProfileRoute() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 480,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.lg,
-  },
-  heading: {
-    fontSize: typography.heading,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  subheading: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-  },
-  signOut: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.text.secondary,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  tile: {
-    width: '30%',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: '#fff',
-    borderRadius: radii.md,
-    paddingVertical: spacing.md,
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface.glassStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text.secondary,
-  },
-  pinBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 16,
-    height: 16,
-    borderRadius: radii.full,
-    backgroundColor: colors.text.primary,
-  },
-  tileName: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.text.primary,
-    maxWidth: '100%',
-  },
-  ageBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.full,
-  },
-  ageBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  error: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.error.dark,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalCard: {
-    width: '85%',
-    maxWidth: 340,
-    backgroundColor: '#fff',
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  modalTitle: {
-    fontSize: typography.heading,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  modalSubtitle: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
-  },
-  dotsRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  dot: {
-    width: 16,
-    height: 16,
-    borderRadius: radii.full,
-    borderWidth: 2,
-    borderColor: colors.text.faint,
-  },
-  dotFilled: {
-    backgroundColor: colors.text.primary,
-    borderColor: colors.text.primary,
-  },
-  padGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    width: '100%',
-    justifyContent: 'space-between',
-  },
-  padKey: {
-    width: '30%',
-    paddingVertical: spacing.md,
-    marginBottom: spacing.sm,
-    borderRadius: radii.sm,
-    backgroundColor: colors.surface.glassSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  padKeyText: {
-    fontSize: typography.heading,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing.lg,
+    },
+    card: {
+      width: '100%',
+      maxWidth: 480,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: spacing.lg,
+    },
+    heading: {
+      fontSize: typography.heading,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    subheading: {
+      fontSize: typography.small,
+      color: colors.text.secondary,
+      marginTop: spacing.xs,
+    },
+    signOut: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.text.secondary,
+    },
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.md,
+    },
+    tile: {
+      width: '30%',
+      alignItems: 'center',
+      gap: spacing.xs,
+      backgroundColor: '#fff',
+      borderRadius: radii.md,
+      paddingVertical: spacing.md,
+    },
+    avatar: {
+      width: 56,
+      height: 56,
+      borderRadius: radii.full,
+      backgroundColor: colors.surface.glassStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarText: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text.secondary,
+    },
+    pinBadge: {
+      position: 'absolute',
+      bottom: -2,
+      right: -2,
+      width: 16,
+      height: 16,
+      borderRadius: radii.full,
+      backgroundColor: colors.text.primary,
+    },
+    tileName: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.text.primary,
+      maxWidth: '100%',
+    },
+    ageBadge: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: radii.full,
+    },
+    ageBadgeText: {
+      fontSize: 11,
+      fontWeight: '600',
+      textTransform: 'capitalize',
+    },
+    error: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.error.dark,
+      marginBottom: spacing.md,
+      textAlign: 'center',
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalCard: {
+      width: '85%',
+      maxWidth: 340,
+      backgroundColor: '#fff',
+      borderRadius: radii.lg,
+      padding: spacing.lg,
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    modalTitle: {
+      fontSize: typography.heading,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    modalSubtitle: {
+      fontSize: typography.small,
+      color: colors.text.secondary,
+    },
+    dotsRow: {
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    dot: {
+      width: 16,
+      height: 16,
+      borderRadius: radii.full,
+      borderWidth: 2,
+      borderColor: colors.text.faint,
+    },
+    dotFilled: {
+      backgroundColor: colors.text.primary,
+      borderColor: colors.text.primary,
+    },
+    padGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      width: '100%',
+      justifyContent: 'space-between',
+    },
+    padKey: {
+      width: '30%',
+      paddingVertical: spacing.md,
+      marginBottom: spacing.sm,
+      borderRadius: radii.sm,
+      backgroundColor: colors.surface.glassSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    padKeyText: {
+      fontSize: typography.heading,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+  });
+}

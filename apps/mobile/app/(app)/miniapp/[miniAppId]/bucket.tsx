@@ -5,7 +5,7 @@ import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, V
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { ChevronLeft, BookOpen } from 'lucide-react-native';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../../../../src/components/GlassCard';
 import { PrimaryButton } from '../../../../src/components/PrimaryButton';
 import { BucketEntryCard } from '../../../../src/components/dictionary/BucketEntryCard';
@@ -16,6 +16,7 @@ import {
   type BucketTermEntryLite,
 } from '../../../../src/features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../../../src/store/store';
+import { useTheme } from '../../../../src/theme/ThemeContext';
 
 type StatusFilter = 'all' | 'learning' | 'mastered' | 'paused';
 type SortOption = 'recent' | 'alphabetical' | 'confidence' | 'accuracy' | 'lastPracticed' | 'dueForReview';
@@ -76,6 +77,8 @@ function sortEntries(entries: BucketTermEntryLite[], sortBy: SortOption): Bucket
 }
 
 export default function BucketScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { miniAppId, name } = useLocalSearchParams<{ miniAppId: string; name?: string }>();
@@ -177,7 +180,8 @@ export default function BucketScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
   flex: {
     flex: 1,
   },
@@ -287,4 +291,5 @@ const styles = StyleSheet.create({
   separator: {
     height: spacing.sm,
   },
-});
+  });
+}

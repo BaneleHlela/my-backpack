@@ -6,11 +6,12 @@ import { useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
-import { colors, spacing } from '@my-backpack/shared';
+import { spacing } from '@my-backpack/shared';
 import type { AgeGroup, NodeItemWithProgress, RoadmapWithProgress } from '@my-backpack/shared';
 import RoadmapNodeCircle from './RoadmapNodeCircle';
 import RoadmapNodeCard from './RoadmapNodeCard';
 import NodeLessonsPanel, { type NodeForPanel } from './NodeLessonsPanel';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface RoadmapPathProps {
   roadmap: RoadmapWithProgress;
@@ -72,6 +73,7 @@ function toNodeForPanel(node: RoadmapWithProgress['nodes'][number]): NodeForPane
 }
 
 export default function RoadmapPath({ roadmap, ageGroup, subjectSlug, courseSlug }: RoadmapPathProps) {
+  const { colors } = useTheme();
   const [containerWidth, setContainerWidth] = useState(0);
   const [selectedNode, setSelectedNode] = useState<NodeForPanel | null>(null);
 

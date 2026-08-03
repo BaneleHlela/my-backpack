@@ -3,12 +3,13 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Check, Plus } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { colors, spacing, typography } from '@my-backpack/shared';
+import { spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
 import { PrimaryButton } from '../PrimaryButton';
 import { addDefinitionToBucket } from '../../features/vocab/vocabSlice';
 import type { DefinitionWithStatus } from '../../features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../store/store';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface DefinitionCardProps {
   termId: string;
@@ -18,6 +19,8 @@ interface DefinitionCardProps {
 }
 
 export function DefinitionCard({ termId, miniAppId, index, entry }: DefinitionCardProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const dispatch = useDispatch<AppDispatch>();
   const { addingDefinitionIds } = useSelector((state: RootState) => state.vocab);
   const { definition, inBucket } = entry;
@@ -62,42 +65,44 @@ export function DefinitionCard({ termId, miniAppId, index, entry }: DefinitionCa
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  textColumn: {
-    flex: 1,
-  },
-  partOfSpeech: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    color: colors.primary.DEFAULT,
-  },
-  definition: {
-    fontSize: typography.body,
-    color: colors.text.primary,
-    marginTop: spacing.xs,
-  },
-  example: {
-    fontSize: typography.small,
-    fontStyle: 'italic',
-    color: colors.text.muted,
-    marginTop: spacing.xs,
-  },
-  wordLists: {
-    marginTop: spacing.xs,
-    gap: 2,
-  },
-  wordListText: {
-    fontSize: 12,
-    color: colors.text.muted,
-  },
-  button: {
-    flexShrink: 0,
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+    },
+    textColumn: {
+      flex: 1,
+    },
+    partOfSpeech: {
+      fontSize: 11,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      color: colors.primary.DEFAULT,
+    },
+    definition: {
+      fontSize: typography.body,
+      color: colors.text.primary,
+      marginTop: spacing.xs,
+    },
+    example: {
+      fontSize: typography.small,
+      fontStyle: 'italic',
+      color: colors.text.muted,
+      marginTop: spacing.xs,
+    },
+    wordLists: {
+      marginTop: spacing.xs,
+      gap: 2,
+    },
+    wordListText: {
+      fontSize: 12,
+      color: colors.text.muted,
+    },
+    button: {
+      flexShrink: 0,
+    },
+  });
+}

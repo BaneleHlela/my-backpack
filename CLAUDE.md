@@ -450,7 +450,11 @@ IResource (one entry per resources[] element): { type: 'video' | 'pdf' |
 'image' | 'notes' | 'audio' | 'steps', position, url? (video/pdf/image/audio),
 caption? (video/image/audio), title? (pdf), markdown? (notes),
 steps? [{ title?, content }] (steps — a read-only stepped/sliding-notes
-viewer, not a quiz) }.
+viewer, not a quiz), thumbnailUrl? (video), description? (video) }.
+`thumbnailUrl`/`description` (added August 2026, Phase B of the Course & Topic redesign) are
+optional with no backfill and no authoring UI yet — Studio's resource-editing UI on apps/web
+doesn't set them; existing Lesson documents simply have neither field until something writes
+them.
 
 ### Roadmap
 A pure ordered container of nodes, referenced from `Course.roadmapId`. Carries no
@@ -464,7 +468,7 @@ isActive.
 A single step on a roadmap path — "Topic" in the UI/dashboard vocabulary. Fields: roadmapId,
 title, slug (unique per roadmapId), description, position, type
 ('lesson' | 'checkpoint' | 'practice'), curriculumTags 
-[{ curriculum, gradeLevel }], items [{ itemType: 'lesson' | 'quiz', itemId,
+[{ curriculum, gradeLevel }], items [{ itemType: 'lesson' | 'quiz' | 'project', itemId,
 position, passingScore? }], unlockRequires[], linkedCourseIds[] (reserved for the deferred
 multi-provider-course feature — always empty today), rewards { xp, peanuts, badge? },
 isActive.
@@ -475,7 +479,12 @@ document (pure study material). `itemType: 'quiz'` → itemId points to a
 Quiz document directly (no wrapper Lesson); `passingScore` (0–1) lives on
 the item ref itself, not on the Quiz (a Quiz can be reused outside
 roadmaps). `itemType` is a plain string union, extensible later to
-'resource' | 'notes' | 'chatbot' etc — not built yet. `itemId` has no
+'resource' | 'notes' | 'chatbot' etc — not built yet. `'project'` (added August 2026, Phase B
+of the Course & Topic redesign) is reserved only — no Project model, resolution, or progress
+logic exists yet, and no icon asset exists for it; it's assignable on both the TS type
+(`NodeItemType` in packages/shared/types/roadmap.ts) and the Mongoose `itemType` enum
+(`roadmapNode.model.ts`'s `nodeItemRefSchema` — the two are declared separately and both had to
+be updated) but nothing downstream handles it. `itemId` has no
 Mongoose `ref` (polymorphic) — resolved manually in roadmap.service.ts by
 splitting on itemType and querying Lesson/Quiz separately.
 
@@ -736,7 +745,10 @@ my-backpack-assets/
 ├── wallpapers/
 │   ├── 1x1/
 │   ├── portrait/
-│   └── landscape/
+│   └── landscape/            ← light/dark 9x16 wallpaper variants for apps/mobile's theme
+│                                system (ASSETS.wallpapers.portraitLight/portraitDark) are
+│                                designed in Figma but NOT yet exported/uploaded here — those
+│                                two constants are still placeholders, see mobile-architecture.md
 ├── ui/
 │   └── illustrations/
 │       └── bucket/          ← bucket/board UI illustrations (planned, not yet populated)
@@ -935,6 +947,8 @@ my-backpack/
 │       │   │                    # root over the real app/ dir if that name is used
 │       │   ├── lib/             # api.ts (axios + X-Client-Type: mobile), secureStore.ts, audio.ts
 │       │   ├── features/        # auth, content, vocab slices
+│       │   ├── theme/           # ThemeContext.tsx — ThemeProvider + useTheme(), light/dark
+│       │   │                    # (dark is the default, no persistence/toggle yet)
 │       │   └── components/      # GlassCard, PrimaryButton, ScreenBackground, TextField,
 │       │                        # ProtectedRoute, dictionary/ (mini-app-specific)
 │       └── metro.config.js      # watchFolders + nodeModulesPaths only — do not add
@@ -944,9 +958,13 @@ my-backpack/
 │   ├── shared/
 │   │   ├── constants/
 │   │   │   ├── assets.ts
-│   │   │   └── theme.ts        # colour/spacing/radius/typography — canonical design-token
-│   │   │                        # source for both apps/web and apps/mobile; keep in sync
-│   │   │                        # with docs/design/brand-guide.md
+│   │   │   └── theme.ts        # lightColors/darkColors (IThemeColors) + spacing/radius/
+│   │   │                        # typography — canonical design-token source for both
+│   │   │                        # apps/web and apps/mobile; keep in sync with
+│   │   │                        # docs/design/brand-guide.md. apps/mobile consumes both
+│   │   │                        # colour objects via src/theme/ThemeContext.tsx
+│   │   │                        # (dark is the default active theme); apps/web still
+│   │   │                        # hardcodes Tailwind classes, no theme system there yet
 │   │   └── types/
 │           ├── account.ts
 │           ├── profile.ts
@@ -987,7 +1005,9 @@ my-backpack/
 - [x] Question model unified content field (prompt/options/correctAnswer/explanation inside content)
 - [x] DnD question types added (dnd_single/select/count/sort/sequence/match/fill/build)
 - [x] Helpers system (IQuestionHelpers, defaultHelpers, node helperOverrides, resolveHelpers)
-- [x] INodeQuestionAssignment on RoadmapNode.assessment.questionAssignments
+- [x] INodeQuestionAssignment on RoadmapNode.assessment.questionAssignments — **stale**:
+      `RoadmapNode.assessment` no longer exists (superseded by the `items[]` restructure below);
+      `INodeQuestionAssignment` still exists in `question.types.ts` but is unwired/unused today
 - [x] Question generation system (auto + AI via Anthropic Haiku)
 - [x] Adaptive learning service (confidence scores, velocity, spaced repetition)
 - [x] Quiz session service (create, answer capture, complete, abandon)
@@ -1065,6 +1085,26 @@ my-backpack/
       question authoring is fully manual, no AI-assisted distractor/variant generation (a
       documented future direction, not built). See
       [docs/content/content-studio-design.md](docs/content/content-studio-design.md).
+- [x] Course & Topic redesign, Phase B — schema additions (August 2026) — two small, additive
+      changes ahead of a new Course page design in Figma; navigation/screens/roadmap rendering
+      is Phase C, not touched here. (1) `NodeItemType` gained `'project'` (`'lesson' | 'quiz' |
+      'project'`) in both `packages/shared/types/roadmap.ts` and the Mongoose `itemType` enum
+      on `roadmapNode.model.ts`'s `nodeItemRefSchema` — these are two separate declarations that
+      both needed the literal added, or a project-typed item ref would pass the TS type check but
+      fail Mongoose validation. Reserved only — no `Project` model, no `NodeItemWithProgress`
+      branch, no resolution/progress logic, no icon asset; nothing downstream handles it yet.
+      One unavoidable ripple: both `apps/web/src/components/roadmap/NodeLessonsPanel.tsx` and
+      its mobile counterpart keyed a `Record<NodeItemType, {...}>` display-label lookup table,
+      which TypeScript requires to be exhaustive — each gained a placeholder `project: { label:
+      'Project', ... }` entry purely to keep `tsc` green; no node ever has a `'project'` item
+      today so it's unreachable, and neither file's actual `itemType === 'lesson' ? ... : ...`
+      navigation branching was touched.
+      (2) `IResource` (Lesson `resources[]`) gained optional `thumbnailUrl`/`description`, primarily
+      meaningful for `type: 'video'` — added to the shared flat interface (not split into
+      type-specific sub-interfaces, matching the existing "flat, optional-fields schema" pattern)
+      and mirrored into `lesson.model.ts`'s `resourceSchema`. No backfill, no authoring UI yet —
+      existing Lesson documents simply have neither field until Studio's resource-editing UI is
+      extended to set them (not done here).
 - [ ] XP and peanuts reward system (deferred)
 - [ ] Test readiness scoring (deferred)
 - [ ] Book/PDF upload pipeline (deferred)
@@ -1259,6 +1299,25 @@ my-backpack/
       entry above and
       [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Lesson
       video: deferred buffering" section for full detail.
+- [x] Light/dark theme system, Phase A (August 2026) — `packages/shared/constants/theme.ts`'s
+      single `colors` export split into `lightColors`/`darkColors` (both typed against a new
+      explicit `IThemeColors` interface, since two separate `as const` objects would otherwise
+      infer incompatible literal-string types); new `apps/mobile/src/theme/ThemeContext.tsx`
+      (`ThemeProvider` + `useTheme()`) wraps the root `_layout.tsx` inside the Redux
+      `<Provider>` — **dark is the default and only active theme, no persistence or
+      user-facing toggle yet** (no Settings screen exists to host one). Every one of the ~40
+      mobile files that statically imported `colors` now calls `const { colors } = useTheme()`
+      instead; any `StyleSheet.create` referencing `colors` moved out of module scope into a
+      `createStyles(colors)` function called inside the component body (module-scope
+      `Record<Status, {...}>` colour lookup tables became `getXStyles(colors)` functions for
+      the same reason). `ScreenBackground.tsx` now picks its wallpaper by theme via two new
+      `ASSETS.wallpapers.portraitLight`/`portraitDark` constants — **both are placeholder
+      values today**, not real GCS URLs (the light/dark wallpapers are designed in Figma but
+      not yet exported/uploaded); `ImageBackground` fails silently on the bad `uri`, falling
+      back to a flat `colors.background` fill. This phase did not touch the Course/Roadmap
+      content model or navigation — purely the colour-token/theme-provider layer. See
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s
+      "Light/dark theme system" section for full detail.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens
@@ -1296,7 +1355,14 @@ my-backpack/
   JSON body (alongside the existing httpOnly cookie) and `/auth/refresh` accepts `{ refreshToken }`
   in the body ahead of the cookie — web's cookie-only flow is unchanged when the header is absent
 - `packages/shared/constants/theme.ts` is the canonical design-token source (colour/spacing/radius/
-  typography) for both apps/web and apps/mobile — keep it in sync with docs/design/brand-guide.md
+  typography) for both apps/web and apps/mobile — keep it in sync with docs/design/brand-guide.md.
+  `lightColors`/`darkColors` are the two colour objects (no plain `colors` export); apps/mobile
+  resolves the active one through `src/theme/ThemeContext.tsx`'s `useTheme()` — never import
+  `lightColors`/`darkColors` directly in a mobile component, always go through the hook
+- In `apps/mobile`, any `StyleSheet.create` that references theme `colors` must be built by a
+  `createStyles(colors)` function called inside the component body (colors come from
+  `useTheme()`, a hook, so the styles can't be computed at module scope anymore) — see any
+  component under `src/components/` for the pattern
 - In `apps/mobile`, never name a `src/` subfolder `app` — Expo Router silently prefers `src/app/`
   over the project's real `app/` directory as its routes root whenever a `src/` folder exists
 

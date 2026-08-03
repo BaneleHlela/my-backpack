@@ -10,7 +10,9 @@ export type NodeStatus = 'locked' | 'unlocked' | 'in_progress' | 'completed';
 export type ItemStatus = 'locked' | 'unlocked' | 'in_progress' | 'completed';
 export type CurriculumType = 'CAPS' | 'IEB' | 'Cambridge' | 'University' | 'Other';
 export type NodeType = 'lesson' | 'checkpoint' | 'practice';
-export type NodeItemType = 'lesson' | 'quiz'; // extensible later: 'resource' | 'notes' | 'chatbot'
+// 'project' is reserved — no Project model, resolution, or progress logic exists yet (no icon
+// asset either). Extensible later: 'resource' | 'notes' | 'chatbot'
+export type NodeItemType = 'lesson' | 'quiz' | 'project';
 export type ResourceType = 'video' | 'pdf' | 'image' | 'notes' | 'audio' | 'steps';
 
 export interface ICurriculumTag {
@@ -31,6 +33,8 @@ export interface IResource {
   title?: string;          // pdf
   markdown?: string;       // notes
   steps?: IResourceStep[]; // steps
+  thumbnailUrl?: string;   // video
+  description?: string;    // video
 }
 
 export interface INodeRewards {

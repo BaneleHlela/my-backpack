@@ -2,10 +2,11 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDistanceToNow } from 'date-fns';
 import { Volume2, Trash2, Brain, Clock3 } from 'lucide-react-native';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
 import { playAudioUrl } from '../../lib/audio';
 import type { BucketTermEntryLite } from '../../features/vocab/vocabSlice';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface BucketEntryCardProps {
   entry: BucketTermEntryLite;
@@ -14,26 +15,36 @@ interface BucketEntryCardProps {
   isRemoving: boolean;
 }
 
-const ENTRY_STATUS_BADGE: Record<string, { label: string; bg: string; text: string }> = {
-  learning: { label: 'Learning', bg: colors.primary.light, text: colors.primary.darker },
-  mastered: { label: 'Mastered', bg: colors.success.light, text: colors.success.dark },
-  paused: { label: 'Paused', bg: colors.surface.glassStrong, text: colors.text.muted },
-};
+type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
-const PROGRESS_STATUS_BADGE: Record<string, { label: string; bg: string; text: string }> = {
-  unseen: { label: 'Not started', bg: colors.surface.glassStrong, text: colors.text.muted },
-  learning: { label: 'In progress', bg: colors.primary.light, text: colors.primary.darker },
-  mastered: { label: 'Mastered', bg: colors.warning.light, text: colors.warning.dark },
-  reviewing: { label: 'Reviewing', bg: colors.primary.light, text: colors.primary.darker },
-};
+function getEntryStatusBadges(colors: ThemeColors): Record<string, { label: string; bg: string; text: string }> {
+  return {
+    learning: { label: 'Learning', bg: colors.primary.light, text: colors.primary.darker },
+    mastered: { label: 'Mastered', bg: colors.success.light, text: colors.success.dark },
+    paused: { label: 'Paused', bg: colors.surface.glassStrong, text: colors.text.muted },
+  };
+}
+
+function getProgressStatusBadges(colors: ThemeColors): Record<string, { label: string; bg: string; text: string }> {
+  return {
+    unseen: { label: 'Not started', bg: colors.surface.glassStrong, text: colors.text.muted },
+    learning: { label: 'In progress', bg: colors.primary.light, text: colors.primary.darker },
+    mastered: { label: 'Mastered', bg: colors.warning.light, text: colors.warning.dark },
+    reviewing: { label: 'Reviewing', bg: colors.primary.light, text: colors.primary.darker },
+  };
+}
 
 export function BucketEntryCard({ entry, onSelect, onRemove, isRemoving }: BucketEntryCardProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const entryStatusBadges = getEntryStatusBadges(colors);
+  const progressStatusBadges = getProgressStatusBadges(colors);
   const { entry: bucketEntry, term, definition, learningRecord } = entry;
 
-  const entryBadge = ENTRY_STATUS_BADGE[bucketEntry.status] ?? ENTRY_STATUS_BADGE.learning;
+  const entryBadge = entryStatusBadges[bucketEntry.status] ?? entryStatusBadges.learning;
   const progressBadge = learningRecord
-    ? PROGRESS_STATUS_BADGE[learningRecord.learningStatus] ?? PROGRESS_STATUS_BADGE.unseen
-    : PROGRESS_STATUS_BADGE.unseen;
+    ? progressStatusBadges[learningRecord.learningStatus] ?? progressStatusBadges.unseen
+    : progressStatusBadges.unseen;
 
   const confidencePct = learningRecord ? Math.round(learningRecord.confidenceScore * 100) : 0;
   const hasAnswers = !!learningRecord && learningRecord.totalAnswers > 0;
@@ -113,91 +124,93 @@ export function BucketEntryCard({ entry, onSelect, onRemove, isRemoving }: Bucke
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  main: {
-    flex: 1,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    flexWrap: 'wrap',
-  },
-  word: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  phonetic: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  badge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.full,
-  },
-  badgeWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  definition: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
-    marginTop: spacing.sm,
-  },
-  partOfSpeech: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    color: colors.primary.DEFAULT,
-  },
-  confidenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  confidenceTrack: {
-    flex: 1,
-    maxWidth: 140,
-    height: 6,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface.glassStrong,
-    overflow: 'hidden',
-  },
-  confidenceFill: {
-    height: '100%',
-    backgroundColor: colors.primary.light,
-    borderRadius: radii.full,
-  },
-  metaText: {
-    fontSize: 11,
-    color: colors.text.muted,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  removeButton: {
-    padding: spacing.xs,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+    },
+    main: {
+      flex: 1,
+    },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      flexWrap: 'wrap',
+    },
+    word: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    phonetic: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+    },
+    badgeRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.xs,
+      marginTop: spacing.xs,
+    },
+    badge: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: radii.full,
+    },
+    badgeWithIcon: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    badgeText: {
+      fontSize: 11,
+      fontWeight: '600',
+    },
+    definition: {
+      fontSize: typography.small,
+      color: colors.text.secondary,
+      marginTop: spacing.sm,
+    },
+    partOfSpeech: {
+      fontSize: 11,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      color: colors.primary.DEFAULT,
+    },
+    confidenceRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    confidenceTrack: {
+      flex: 1,
+      maxWidth: 140,
+      height: 6,
+      borderRadius: radii.full,
+      backgroundColor: colors.surface.glassStrong,
+      overflow: 'hidden',
+    },
+    confidenceFill: {
+      height: '100%',
+      backgroundColor: colors.primary.light,
+      borderRadius: radii.full,
+    },
+    metaText: {
+      fontSize: 11,
+      color: colors.text.muted,
+    },
+    footerRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    removeButton: {
+      padding: spacing.xs,
+    },
+  });
+}

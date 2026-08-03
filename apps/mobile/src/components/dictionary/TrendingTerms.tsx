@@ -4,10 +4,11 @@ import { useEffect } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { TrendingUp } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { colors, spacing, typography } from '@my-backpack/shared';
+import { spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
 import { fetchTrending, type TrendingTermResult } from '../../features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../store/store';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface TrendingTermsProps {
   miniAppId: string;
@@ -15,6 +16,8 @@ interface TrendingTermsProps {
 }
 
 export function TrendingTerms({ miniAppId, onSelectTerm }: TrendingTermsProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const dispatch = useDispatch<AppDispatch>();
   const { trending, trendingLoading } = useSelector((state: RootState) => state.vocab);
 
@@ -60,35 +63,37 @@ export function TrendingTerms({ miniAppId, onSelectTerm }: TrendingTermsProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  headingText: {
-    fontSize: typography.small,
-    fontWeight: '700',
-    color: colors.text.secondary,
-  },
-  loading: {
-    paddingVertical: spacing.md,
-  },
-  list: {
-    gap: spacing.sm,
-  },
-  card: {
-    maxWidth: 200,
-  },
-  word: {
-    fontSize: typography.small,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  definition: {
-    fontSize: 12,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      marginBottom: spacing.sm,
+    },
+    headingText: {
+      fontSize: typography.small,
+      fontWeight: '700',
+      color: colors.text.secondary,
+    },
+    loading: {
+      paddingVertical: spacing.md,
+    },
+    list: {
+      gap: spacing.sm,
+    },
+    card: {
+      maxWidth: 200,
+    },
+    word: {
+      fontSize: typography.small,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    definition: {
+      fontSize: 12,
+      color: colors.text.muted,
+      marginTop: 2,
+    },
+  });
+}

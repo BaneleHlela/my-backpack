@@ -9,9 +9,10 @@ import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Volume2 } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import { browseDictionary, type DictionaryTermPreview } from '../../features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../store/store';
+import { useTheme } from '../../theme/ThemeContext';
 
 export function useDictionaryBrowse(miniAppId: string, letter: string) {
   const dispatch = useDispatch<AppDispatch>();
@@ -36,6 +37,9 @@ export function BrowseResultRow({
   term: DictionaryTermPreview;
   onPress: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   return (
     <Pressable onPress={onPress} style={styles.row}>
       <View style={styles.wordGroup}>
@@ -47,34 +51,36 @@ export function BrowseResultRow({
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.xs,
-    backgroundColor: colors.surface.glassSoft,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    margin: spacing.xs / 2,
-  },
-  wordGroup: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: spacing.xs,
-    flexShrink: 1,
-  },
-  word: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  phonetic: {
-    fontSize: 12,
-    color: colors.text.muted,
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    row: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.xs,
+      backgroundColor: colors.surface.glassSoft,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
+      borderRadius: radii.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      margin: spacing.xs / 2,
+    },
+    wordGroup: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: spacing.xs,
+      flexShrink: 1,
+    },
+    word: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    phonetic: {
+      fontSize: 12,
+      color: colors.text.muted,
+    },
+  });
+}

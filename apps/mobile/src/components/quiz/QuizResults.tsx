@@ -5,9 +5,10 @@
 // was 'end', answeredQuestions carries a per-question breakdown withheld during the quiz.
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { BookOpen, CheckCircle2, RotateCcw, SkipForward, Trophy, XCircle } from 'lucide-react-native';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { SessionResults } from '@my-backpack/shared';
 import type { AnsweredQuestionSummary } from '../../features/quiz/quizSlice';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface QuizResultsProps {
   results: SessionResults;
@@ -24,6 +25,8 @@ export function QuizResults({
   onReturn,
   returnLabel = 'Back to roadmap',
 }: QuizResultsProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const seconds = Math.round(results.timeTakenMs / 1000);
   const timeLabel = seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
 
@@ -97,106 +100,108 @@ export function QuizResults({
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    padding: spacing.xl,
-    alignItems: 'center',
-  },
-  trophy: {
-    marginBottom: spacing.sm,
-  },
-  scoreText: {
-    fontSize: typography.headingLg,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  subText: {
-    fontSize: typography.body,
-    color: colors.text.muted,
-    marginTop: spacing.xs,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-    width: '100%',
-  },
-  statBox: {
-    flex: 1,
-    padding: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface.glassSoft,
-  },
-  statLabel: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-  },
-  statValue: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  breakdown: {
-    width: '100%',
-    gap: spacing.xs,
-    marginTop: spacing.lg,
-  },
-  breakdownRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface.glassSoft,
-  },
-  breakdownInfo: {
-    flex: 1,
-  },
-  breakdownPrompt: {
-    fontSize: typography.small,
-    color: colors.text.primary,
-  },
-  breakdownDetail: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-    width: '100%',
-  },
-  secondaryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface.glassSoft,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
-  },
-  secondaryButtonText: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.text.secondary,
-  },
-  primaryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary.DEFAULT,
-  },
-  primaryButtonText: {
-    fontSize: typography.small,
-    fontWeight: '700',
-    color: '#fff',
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    card: {
+      padding: spacing.xl,
+      alignItems: 'center',
+    },
+    trophy: {
+      marginBottom: spacing.sm,
+    },
+    scoreText: {
+      fontSize: typography.headingLg,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    subText: {
+      fontSize: typography.body,
+      color: colors.text.muted,
+      marginTop: spacing.xs,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.lg,
+      width: '100%',
+    },
+    statBox: {
+      flex: 1,
+      padding: spacing.sm,
+      borderRadius: radii.md,
+      backgroundColor: colors.surface.glassSoft,
+    },
+    statLabel: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+    },
+    statValue: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    breakdown: {
+      width: '100%',
+      gap: spacing.xs,
+      marginTop: spacing.lg,
+    },
+    breakdownRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      padding: spacing.sm,
+      borderRadius: radii.md,
+      backgroundColor: colors.surface.glassSoft,
+    },
+    breakdownInfo: {
+      flex: 1,
+    },
+    breakdownPrompt: {
+      fontSize: typography.small,
+      color: colors.text.primary,
+    },
+    breakdownDetail: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+      marginTop: 2,
+    },
+    actionsRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.lg,
+      width: '100%',
+    },
+    secondaryButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.md,
+      borderRadius: radii.md,
+      backgroundColor: colors.surface.glassSoft,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
+    },
+    secondaryButtonText: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.text.secondary,
+    },
+    primaryButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.md,
+      borderRadius: radii.md,
+      backgroundColor: colors.primary.DEFAULT,
+    },
+    primaryButtonText: {
+      fontSize: typography.small,
+      fontWeight: '700',
+      color: '#fff',
+    },
+  });
+}

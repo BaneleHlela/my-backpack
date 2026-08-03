@@ -4,7 +4,7 @@
 // for any of those 5 yet (see docs/technical/mobile-architecture.md), so building renderers
 // for them now would be speculative.
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, spacing, typography } from '@my-backpack/shared';
+import { spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IQuestion, IQuestionHelpers } from '@my-backpack/shared';
 import { McqPattern } from './patterns/McqPattern';
 import { TrueFalsePattern } from './patterns/TrueFalsePattern';
@@ -12,6 +12,7 @@ import { TypedInputPattern } from './patterns/TypedInputPattern';
 import { DndSinglePattern } from './patterns/DndSinglePattern';
 import { DndBuildPattern } from './patterns/DndBuildPattern';
 import { DndCountPattern } from './patterns/DndCountPattern';
+import { useTheme } from '../../theme/ThemeContext';
 
 const MCQ_TYPES = new Set<IQuestion['type']>([
   'mcq_term_to_def',
@@ -54,6 +55,8 @@ export function QuestionRenderer({
   isSubmitting,
   onAnswer,
 }: QuestionRendererProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const content = question.content;
 
   if (MCQ_TYPES.has(question.type)) {
@@ -148,23 +151,25 @@ export function QuestionRenderer({
   );
 }
 
-const styles = StyleSheet.create({
-  placeholder: {
-    padding: spacing.xl,
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  placeholderEmoji: {
-    fontSize: 32,
-  },
-  placeholderTitle: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text.secondary,
-  },
-  placeholderBody: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-    textAlign: 'center',
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    placeholder: {
+      padding: spacing.xl,
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    placeholderEmoji: {
+      fontSize: 32,
+    },
+    placeholderTitle: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text.secondary,
+    },
+    placeholderBody: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+      textAlign: 'center',
+    },
+  });
+}

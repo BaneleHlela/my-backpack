@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Search, Volume2 } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
 import { searchVocab, clearSearch } from '../../features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../store/store';
+import { useTheme } from '../../theme/ThemeContext';
 
 const DEBOUNCE_MS = 400;
 
@@ -17,6 +18,8 @@ interface SearchInputProps {
 }
 
 export function SearchInput({ miniAppId, onSelectTerm }: SearchInputProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const dispatch = useDispatch<AppDispatch>();
   const { searchResult, searchStatus, searchError } = useSelector((state: RootState) => state.vocab);
   const [query, setQuery] = useState('');
@@ -101,56 +104,58 @@ export function SearchInput({ miniAppId, onSelectTerm }: SearchInputProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface.glass,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
-    borderRadius: radii.lg,
-    paddingHorizontal: spacing.md,
-  },
-  searchIcon: {
-    marginRight: spacing.sm,
-  },
-  input: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    fontSize: typography.body,
-    color: colors.text.primary,
-  },
-  spinner: {
-    marginLeft: spacing.sm,
-  },
-  resultWrapper: {
-    marginTop: spacing.sm,
-  },
-  hintText: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
-  },
-  errorText: {
-    fontSize: typography.small,
-    color: colors.error.dark,
-  },
-  resultHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  resultWord: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  resultPhonetic: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-  },
-  resultDefinition: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    inputWrapper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface.glass,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
+      borderRadius: radii.lg,
+      paddingHorizontal: spacing.md,
+    },
+    searchIcon: {
+      marginRight: spacing.sm,
+    },
+    input: {
+      flex: 1,
+      paddingVertical: spacing.md,
+      fontSize: typography.body,
+      color: colors.text.primary,
+    },
+    spinner: {
+      marginLeft: spacing.sm,
+    },
+    resultWrapper: {
+      marginTop: spacing.sm,
+    },
+    hintText: {
+      fontSize: typography.small,
+      color: colors.text.secondary,
+    },
+    errorText: {
+      fontSize: typography.small,
+      color: colors.error.dark,
+    },
+    resultHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    resultWord: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    resultPhonetic: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+    },
+    resultDefinition: {
+      fontSize: typography.small,
+      color: colors.text.secondary,
+      marginTop: spacing.xs,
+    },
+  });
+}

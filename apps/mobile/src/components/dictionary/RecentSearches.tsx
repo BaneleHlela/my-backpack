@@ -4,9 +4,10 @@ import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { History } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import { fetchRecent } from '../../features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../store/store';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface RecentSearchesProps {
   miniAppId: string;
@@ -14,6 +15,8 @@ interface RecentSearchesProps {
 }
 
 export function RecentSearches({ miniAppId, onSelectTerm }: RecentSearchesProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const dispatch = useDispatch<AppDispatch>();
   const { recent, recentLoading } = useSelector((state: RootState) => state.vocab);
 
@@ -45,36 +48,38 @@ export function RecentSearches({ miniAppId, onSelectTerm }: RecentSearchesProps)
   );
 }
 
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  headingText: {
-    fontSize: typography.small,
-    fontWeight: '700',
-    color: colors.text.secondary,
-  },
-  loading: {
-    paddingVertical: spacing.md,
-  },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface.glassSoft,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
-  },
-  chipText: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      marginBottom: spacing.sm,
+    },
+    headingText: {
+      fontSize: typography.small,
+      fontWeight: '700',
+      color: colors.text.secondary,
+    },
+    loading: {
+      paddingVertical: spacing.md,
+    },
+    chips: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.xs,
+    },
+    chip: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: radii.full,
+      backgroundColor: colors.surface.glassSoft,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
+    },
+    chipText: {
+      fontSize: typography.small,
+      color: colors.text.secondary,
+    },
+  });
+}

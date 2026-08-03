@@ -9,12 +9,13 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { ChevronLeft } from 'lucide-react-native';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IMiniApp } from '@my-backpack/shared';
 import { fetchCourseDetail } from '../../../../../../src/features/content/contentSlice';
 import { fetchRoadmapByCourse } from '../../../../../../src/features/roadmap/roadmapSlice';
 import RoadmapPath from '../../../../../../src/components/roadmap/RoadmapPath';
 import type { AppDispatch, RootState } from '../../../../../../src/store/store';
+import { useTheme } from '../../../../../../src/theme/ThemeContext';
 
 const MINI_APP_EMOJI: Record<string, string> = {
   dictionary: '📖',
@@ -26,6 +27,8 @@ const MINI_APP_EMOJI: Record<string, string> = {
 type LinkedMiniApp = Pick<IMiniApp, '_id' | 'name' | 'slug' | 'type' | 'description'>;
 
 export default function CourseScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const { subjectSlug, courseSlug } = useLocalSearchParams<{ subjectSlug: string; courseSlug: string }>();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
@@ -152,7 +155,8 @@ export default function CourseScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
   content: {
     padding: spacing.lg,
     gap: spacing.md,
@@ -253,4 +257,5 @@ const styles = StyleSheet.create({
     color: colors.text.muted,
     paddingVertical: spacing.xl,
   },
-});
+  });
+}

@@ -34,9 +34,12 @@ interface NodeLessonsPanelProps {
   onClose: () => void;
 }
 
+// 'project' is a reserved NodeItemType (no Project model/content yet) — this placeholder entry
+// exists only to satisfy Record<NodeItemType, ...> exhaustiveness; no node ever has one today.
 const ITEM_TYPE_META: Record<NodeItemType, { label: string; classes: string }> = {
   lesson: { label: 'Study', classes: 'bg-blue-100/80 text-blue-700' },
   quiz: { label: 'Quiz', classes: 'bg-violet-100/80 text-violet-700' },
+  project: { label: 'Project', classes: 'bg-gray-100/80 text-gray-700' },
 };
 
 export default function NodeLessonsPanel({ node, subjectSlug, courseSlug, onClose }: NodeLessonsPanelProps) {

@@ -3,8 +3,9 @@
 // (Phase 4), which fold their Skip control up here instead of showing it below the question.
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup } from '@my-backpack/shared';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface QuizProgressProps {
   answered: number;
@@ -14,6 +15,8 @@ interface QuizProgressProps {
 }
 
 export function QuizProgress({ answered, total, ageGroup, rightSlot }: QuizProgressProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const isChild = ageGroup === 'child';
   const current = Math.min(answered + 1, total || 1);
   const pct = total > 0 ? Math.round((answered / total) * 100) : 0;
@@ -33,37 +36,39 @@ export function QuizProgress({ answered, total, ageGroup, rightSlot }: QuizProgr
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: {
-    marginBottom: spacing.md,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
-  },
-  label: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-  },
-  labelChild: {
-    fontSize: typography.body,
-    fontWeight: '600',
-    color: colors.text.secondary,
-  },
-  track: {
-    height: 6,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface.glassSoft,
-    overflow: 'hidden',
-  },
-  trackChild: {
-    height: 12,
-  },
-  fill: {
-    height: '100%',
-    borderRadius: radii.full,
-    backgroundColor: colors.primary.DEFAULT,
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    wrapper: {
+      marginBottom: spacing.md,
+    },
+    labelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: spacing.xs,
+    },
+    label: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+    },
+    labelChild: {
+      fontSize: typography.body,
+      fontWeight: '600',
+      color: colors.text.secondary,
+    },
+    track: {
+      height: 6,
+      borderRadius: radii.full,
+      backgroundColor: colors.surface.glassSoft,
+      overflow: 'hidden',
+    },
+    trackChild: {
+      height: 12,
+    },
+    fill: {
+      height: '100%',
+      borderRadius: radii.full,
+      backgroundColor: colors.primary.DEFAULT,
+    },
+  });
+}

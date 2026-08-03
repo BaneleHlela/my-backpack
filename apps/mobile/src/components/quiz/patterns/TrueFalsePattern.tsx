@@ -6,11 +6,12 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check, Volume2, X } from 'lucide-react-native';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { SpokenText } from '../SpokenText';
+import { useTheme } from '../../../theme/ThemeContext';
 
 interface TrueFalsePatternProps {
   content: IQuestionContent;
@@ -22,6 +23,8 @@ interface TrueFalsePatternProps {
 }
 
 export function TrueFalsePattern({ content, lang, disabled, isSubmitting, onAnswer }: TrueFalsePatternProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const [selected, setSelected] = useState<'True' | 'False' | null>(null);
 
   const submit = () => {
@@ -82,77 +85,79 @@ export function TrueFalsePattern({ content, lang, disabled, isSubmitting, onAnsw
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: {
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  promptRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  prompt: {
-    flex: 1,
-    fontSize: typography.body,
-    color: colors.text.primary,
-  },
-  spokenPrompt: {
-    flex: 1,
-  },
-  audioButton: {
-    width: 28,
-    height: 28,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface.glassSoft,
-  },
-  optionsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  optionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
-    backgroundColor: colors.surface.glassSoft,
-  },
-  optionTrueSelected: {
-    backgroundColor: colors.success.DEFAULT,
-    borderColor: colors.success.DEFAULT,
-  },
-  optionFalseSelected: {
-    backgroundColor: colors.error.DEFAULT,
-    borderColor: colors.error.DEFAULT,
-  },
-  optionButtonText: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  optionButtonTextSelected: {
-    color: '#fff',
-  },
-  submitButton: {
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary.DEFAULT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: '#fff',
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    wrapper: {
+      gap: spacing.md,
+      padding: spacing.md,
+    },
+    promptRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+    },
+    prompt: {
+      flex: 1,
+      fontSize: typography.body,
+      color: colors.text.primary,
+    },
+    spokenPrompt: {
+      flex: 1,
+    },
+    audioButton: {
+      width: 28,
+      height: 28,
+      borderRadius: radii.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface.glassSoft,
+    },
+    optionsRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    optionButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.md,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
+      backgroundColor: colors.surface.glassSoft,
+    },
+    optionTrueSelected: {
+      backgroundColor: colors.success.DEFAULT,
+      borderColor: colors.success.DEFAULT,
+    },
+    optionFalseSelected: {
+      backgroundColor: colors.error.DEFAULT,
+      borderColor: colors.error.DEFAULT,
+    },
+    optionButtonText: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    optionButtonTextSelected: {
+      color: '#fff',
+    },
+    submitButton: {
+      paddingVertical: spacing.md,
+      borderRadius: radii.md,
+      backgroundColor: colors.primary.DEFAULT,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    submitButtonDisabled: {
+      opacity: 0.5,
+    },
+    submitButtonText: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: '#fff',
+    },
+  });
+}

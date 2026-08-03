@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
+import { useTheme } from '../theme/ThemeContext';
 
 // Mirrors apps/web's DefinitionCard "Add to bucket" button states:
 // default (violet) / loading (spinner) / success (emerald, non-interactive).
@@ -22,6 +23,8 @@ export function PrimaryButton({
   icon,
   style,
 }: PrimaryButtonProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const isInteractive = !disabled && !loading && variant !== 'success';
 
   return (
@@ -54,39 +57,41 @@ export function PrimaryButton({
   );
 }
 
-const styles = StyleSheet.create({
-  base: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.md,
-  },
-  primary: {
-    backgroundColor: colors.primary.DEFAULT,
-  },
-  primaryPressed: {
-    backgroundColor: colors.primary.dark,
-  },
-  disabled: {
-    backgroundColor: colors.text.faint,
-  },
-  success: {
-    backgroundColor: colors.success.light,
-  },
-  text: {
-    fontSize: typography.body,
-    fontWeight: '600',
-  },
-  primaryText: {
-    color: '#fff',
-  },
-  disabledText: {
-    color: colors.text.secondary,
-  },
-  successText: {
-    color: colors.success.dark,
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    base: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radii.md,
+    },
+    primary: {
+      backgroundColor: colors.primary.DEFAULT,
+    },
+    primaryPressed: {
+      backgroundColor: colors.primary.dark,
+    },
+    disabled: {
+      backgroundColor: colors.text.faint,
+    },
+    success: {
+      backgroundColor: colors.success.light,
+    },
+    text: {
+      fontSize: typography.body,
+      fontWeight: '600',
+    },
+    primaryText: {
+      color: '#fff',
+    },
+    disabledText: {
+      color: colors.text.secondary,
+    },
+    successText: {
+      color: colors.success.dark,
+    },
+  });
+}

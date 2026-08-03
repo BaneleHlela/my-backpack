@@ -12,12 +12,13 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Volume2 } from 'lucide-react-native';
-import { colors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers, QuestionType } from '@my-backpack/shared';
 import api from '../../../lib/api';
 import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { SpokenText } from '../SpokenText';
+import { useTheme } from '../../../theme/ThemeContext';
 
 interface TypedInputPatternProps {
   type: QuestionType;
@@ -39,6 +40,8 @@ export function TypedInputPattern({
   isSubmitting,
   onAnswer,
 }: TypedInputPatternProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const [value, setValue] = useState('');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioLoading, setAudioLoading] = useState(false);
@@ -122,81 +125,83 @@ export function TypedInputPattern({
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: {
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  promptRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  prompt: {
-    flex: 1,
-    fontSize: typography.body,
-    color: colors.text.primary,
-  },
-  spokenPrompt: {
-    flex: 1,
-  },
-  audioButton: {
-    width: 28,
-    height: 28,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface.glassSoft,
-  },
-  audioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  playAudioButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary.DEFAULT,
-  },
-  playAudioButtonDisabled: {
-    opacity: 0.5,
-  },
-  playAudioButtonText: {
-    fontSize: typography.small,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  noAudioText: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-  },
-  input: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
-    backgroundColor: colors.surface.glassSoft,
-    fontSize: typography.body,
-    color: colors.text.primary,
-  },
-  submitButton: {
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary.DEFAULT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: '#fff',
-  },
-});
+function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+  return StyleSheet.create({
+    wrapper: {
+      gap: spacing.md,
+      padding: spacing.md,
+    },
+    promptRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+    },
+    prompt: {
+      flex: 1,
+      fontSize: typography.body,
+      color: colors.text.primary,
+    },
+    spokenPrompt: {
+      flex: 1,
+    },
+    audioButton: {
+      width: 28,
+      height: 28,
+      borderRadius: radii.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface.glassSoft,
+    },
+    audioRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    playAudioButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.md,
+      backgroundColor: colors.primary.DEFAULT,
+    },
+    playAudioButtonDisabled: {
+      opacity: 0.5,
+    },
+    playAudioButtonText: {
+      fontSize: typography.small,
+      fontWeight: '700',
+      color: '#fff',
+    },
+    noAudioText: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+    },
+    input: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
+      backgroundColor: colors.surface.glassSoft,
+      fontSize: typography.body,
+      color: colors.text.primary,
+    },
+    submitButton: {
+      paddingVertical: spacing.md,
+      borderRadius: radii.md,
+      backgroundColor: colors.primary.DEFAULT,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    submitButtonDisabled: {
+      opacity: 0.5,
+    },
+    submitButtonText: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: '#fff',
+    },
+  });
+}

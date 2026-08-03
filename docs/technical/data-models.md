@@ -295,7 +295,7 @@ These models track what learners have done. They are subject-agnostic — the sa
 
 | Field | Type | Description |
 |---|---|---|
-| `itemType` | Enum | `'lesson'` \| `'quiz'` — a plain string union, extensible later to `'resource'` \| `'notes'` \| `'chatbot'` etc. (not built yet) |
+| `itemType` | Enum | `'lesson'` \| `'quiz'` \| `'project'` — a plain string union, extensible later to `'resource'` \| `'notes'` \| `'chatbot'` etc. (not built yet). `'project'` is reserved (added August 2026 for the Course & Topic redesign) — no Project model, resolution, or progress logic exists yet, and no icon asset exists for it |
 | `itemId` | ObjectId | `Lesson._id` when `itemType: 'lesson'`, `Quiz._id` when `itemType: 'quiz'`. No static Mongoose `ref` — polymorphic, resolved manually in `roadmap.service.ts` by splitting on `itemType` |
 | `position` | Number | Order within the node |
 | `passingScore` | Number (optional) | Only meaningful when `itemType: 'quiz'` — the score ratio (0–1) required to pass. `0` reproduces "practice always passes"; a Quiz document itself has no `passingScore` since it can be reused outside roadmaps |
@@ -330,6 +330,8 @@ A `'quiz'` item references a `Quiz` document **directly** — there is no wrappe
 | `title` | String | pdf |
 | `markdown` | String | notes |
 | `steps` | `[{ title?, content }]` | steps — a read-only, sequentially-navigated slideshow ("sliding notes"), not a quiz |
+| `thumbnailUrl` | String | video — optional, no authoring UI yet (added August 2026) |
+| `description` | String | video — optional, no authoring UI yet (added August 2026) |
 
 **Business rules:**
 - A Lesson has no `lessonType`/`quizId`/`passingScore` — those concepts moved to the node's `items[]` ref (quizzes) or don't apply (a lesson is always "just study material" and unconditionally auto-completes when its resources are marked viewed via `POST /roadmap/lesson/:lessonId/study`)
@@ -500,4 +502,4 @@ All question data lives inside `content`. Always cast to `IQuestionContent` imme
 
 ---
 
-*Last updated: July 2026*
+*Last updated: August 2026*
