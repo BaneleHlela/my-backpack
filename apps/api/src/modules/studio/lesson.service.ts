@@ -1,7 +1,8 @@
 // Business logic for Content Studio Lesson CRUD. A Lesson is pure study material
 // (resources[]) — one 'lesson'-type item on its parent RoadmapNode.items[]. Resource
-// entries with a `url` are expected to already be GCS paths from the asset-upload
-// endpoint — this module doesn't handle file upload itself.
+// entries with a `url` (video/image/audio/pdf) store the full GCS URL directly — a
+// documented exception to the path convention used everywhere else — see
+// docs/design/asset-locations.md. This module doesn't handle file upload itself.
 import RoadmapNode from '../../models/learning/roadmapNode.model';
 import Lesson, { ILessonDocument, IResource } from '../../models/learning/lesson.model';
 import { AppError } from '../../utils/AppError';

@@ -88,8 +88,20 @@ where the filename is lowercased and every non-alphanumeric run (spaces, punctua
 extension's dot) is collapsed to a single hyphen — e.g. `My Cat Photo.PNG` becomes
 `question-media/images/1753267200000-my-cat-photo-png`. The upload response returns both `path`
 and `url`; per the existing convention (`IDraggable.imageUrl`, `IFeedback.audioUrl`, etc.),
-question/lesson content fields store the `path`, not the full URL — the frontend builds the
+question content fields store the `path`, not the full URL — the frontend builds the
 display URL the same way everywhere else does, `ASSETS.GCS_BASE + '/' + path`.
+
+**Exception — Lesson resources:** `IResource.url` (video/image/audio/pdf entries on
+`Lesson.resources[]`) stores the **full URL** instead, e.g.
+`https://storage.googleapis.com/my-backpack-assets/question-media/video/1234-clip.mp4`. This is
+deliberate: the Lesson Player on both web (`LessonPlayerPage.tsx`) and mobile (`LessonVideo.tsx`,
+`[lessonId].tsx`) reads `resource.url` as a ready-to-use URL and always has, with no
+path-resolution logic on the render side. Rather than duplicate `resolveAssetUrl()`-equivalent
+logic into those player components, `AssetPicker` (Studio) supports an opt-in
+`returnFullUrl` prop, set only on the two `AssetPicker` instances in `LessonEditorPage.tsx`
+that edit Lesson resources — every other `AssetPicker` caller (draggables, drop zones, avatar
+audio, feedback audio, course icons, question prompt audio/drag-area image) is unaffected and
+continues to store a path.
 
 ---
 
@@ -230,4 +242,4 @@ The bucket is configured for uniform access control with public read, so new upl
 
 ---
 
-*Last updated: July 2026*
+*Last updated: August 2026*

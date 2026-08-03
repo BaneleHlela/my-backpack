@@ -424,8 +424,10 @@ the `dnd_single` gesture work below.
 - `react-native-gesture-handler` — promoted from an incidental transitive
   dependency (pulled in via `expo-router`'s drawer component) to a direct,
   `expo install`-managed one, needed for `dnd_single`'s drag gestures.
-- `expo-video` — Lesson `video` resources (`VideoView`/`useVideoPlayer`);
-  every seeded Lesson today is a video intro. Not `expo-av` (deprecated).
+- `expo-video` (~57.0.2) — Lesson `video` resources (`VideoView`/`useVideoPlayer`);
+  every seeded Lesson today is a video intro. Not `expo-av` (deprecated). See
+  "Lesson video: deferred buffering" below for the tap-to-load/loading/error
+  treatment added later.
 - `react-native-markdown-display` — Lesson `notes` resources; nothing
   markdown-capable existed in the mobile dependency tree before this.
 - DnD library for `dnd_single` — see the DnD section below.
@@ -845,6 +847,40 @@ Computed once in `QuizSessionScreen.tsx`:
 
 ---
 
+## Lesson video: deferred buffering (Aug 2026)
+
+`LessonVideo.tsx` (`apps/mobile/src/components/lesson/`) no longer connects a source to the
+player on mount. Per Expo's own docs, a `VideoPlayer` connected to a `VideoView` starts
+buffering even while paused — silently spending mobile data on lessons the learner hasn't
+chosen to watch yet, a real cost given the target audience. `useVideoPlayer(null)` now creates
+the player with no source; a tappable placeholder card (play icon + caption, styled with
+`GlassCard` to match the rest of the app's glassmorphism) is rendered in its place until the
+learner taps it, at which point `player.replace(url)` + `player.play()` load the real source and
+the `VideoView` is swapped in.
+
+Status is tracked via `useEvent(player, 'statusChange', { status: player.status })` from
+`'expo'` (not `'expo-video'`). A spinner overlays the `VideoView` while `status` is `'loading'`;
+an inline retry affordance shows if `status` becomes `'error'`. Confirmed against the installed
+**expo-video ~57.0.2** type definitions before implementing —
+`VideoPlayerStatus` is `'idle' | 'loading' | 'readyToPlay' | 'error'`, and `StatusChangeEventPayload`
+carries `{ status, oldStatus?, error? }`; this API has shifted across recent SDK versions, so
+don't assume it holds on an upgrade without re-checking. There are also documented real-world
+cases (Expo SDK 53+) of `statusChange` getting stuck on `'loading'` and never transitioning to
+`'error'` for an unavailable/invalid source, so a 15s defensive timeout (`READY_TIMEOUT_MS`)
+after tapping play independently triggers the same retry state if playback hasn't become ready
+by then — cleared as soon as a terminal status (`'readyToPlay'` or `'error'`) arrives first.
+
+`resource.url` itself needs no path-resolution call here — Lesson resource urls are full GCS
+URLs by convention (see root `CLAUDE.md`'s Question model section and
+`docs/design/asset-locations.md`), a deliberate exception to how every other asset reference in
+the app stores a relative path.
+
+Web got a much smaller version of the same fix: `LessonPlayerPage.tsx`'s `<video>` element
+gained `preload="none"` — browsers already provide their own loading/buffering UI, so no custom
+loading/error state was needed there.
+
+---
+
 ## What's deliberately not here yet
 
 - **5 of the remaining 8 `dnd_*` question types** — `dnd_select`, `dnd_sort`,
@@ -868,4 +904,4 @@ Computed once in `QuizSessionScreen.tsx`:
 
 ---
 
-*Last updated: 2026-07-24.*
+*Last updated: 2026-08-03.*

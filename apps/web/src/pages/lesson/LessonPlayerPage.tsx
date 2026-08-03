@@ -109,7 +109,7 @@ export default function LessonPlayerPage() {
           switch (resource.type) {
             case 'video':
               return (
-                <video key={i} controls className="w-full rounded-xl">
+                <video key={i} controls preload="none" className="w-full rounded-xl">
                   <source src={resource.url} />
                 </video>
               );

@@ -1121,7 +1121,8 @@ my-backpack/
       learner-facing pages. `AssetPicker` (`features/studio/components/`) is the one
       upload-or-browse component used everywhere a GCS path is needed (question media, lesson
       resources, avatar/feedback audio) — Upload posts to `/api/dashboard/assets/upload`, Browse
-      reads `/api/dashboard/assets?type=&search=`, always stores a GCS **path**, never a full URL.
+      reads `/api/dashboard/assets?type=&search=`, and by default stores a GCS **path**, never a
+      full URL — except Lesson resources, an opt-in exception added later (see the entry below).
       Reads mostly reuse existing endpoints rather than adding new dashboard GETs (per the design
       doc's read/write split) — course list is aggregated client-side from
       `/content/fields` → `.../subjects` → `.../courses` (no "all courses" endpoint exists);
@@ -1132,6 +1133,36 @@ my-backpack/
       from `GET /dashboard/questions?courseId=` (same reasoning — `courseId` travels as a query
       param on every question-editor link specifically so this works). Divergences from the
       original build plan are noted in `docs/content/content-studio-design.md`.
+- [x] Lesson resource URLs + mobile video data-usage guardrails (August 2026) — `IResource.url`
+      (video/image/audio/pdf entries on `Lesson.resources[]`) now stores the **full GCS URL**
+      directly, a deliberate exception to the path convention every other asset reference follows
+      (`IDraggable.imageUrl`, `IFeedback.audioUrl`, question content fields, `Course.iconUrl`,
+      etc. — those are unchanged). Reason: the Lesson Player on both web
+      (`LessonPlayerPage.tsx`) and mobile (`LessonVideo.tsx`, `[lessonId].tsx`) already read
+      `resource.url` as ready-to-use and always have, with no path-resolution logic on the
+      render side — adding that there would mean duplicating `resolveAssetUrl()`-equivalent
+      logic into a page that doesn't have it, so the fix went on the authoring side instead.
+      `AssetPicker` gained an opt-in `returnFullUrl` prop (default unset/false — every other
+      caller is unaffected); only the two `AssetPicker` instances in `LessonEditorPage.tsx` that
+      edit Lesson resources pass it. See `docs/design/asset-locations.md` for the full
+      exception writeup. Also landed in this pass: `apps/mobile/src/components/lesson/
+      LessonVideo.tsx` no longer connects a video source on mount — `expo-video`'s player starts
+      buffering as soon as a source is connected, even while paused, which silently spent mobile
+      data before the learner chose to watch anything. The player now starts with a null source
+      and a tappable glassmorphism placeholder card; tapping calls `player.replace(url)` +
+      `player.play()`, with a loading spinner and a retry-capable error state driven by
+      `useEvent(player, 'statusChange', ...)` from `'expo'` plus a 15s defensive timeout (see
+      `docs/technical/mobile-architecture.md`'s "Lesson video: deferred buffering" section — the
+      timeout exists because `statusChange` has documented cases of never firing `'error'` for a
+      bad source). Web got the same fix in one attribute — `LessonPlayerPage.tsx`'s `<video>`
+      gained `preload="none"`. Backend guardrails added alongside: `POST
+      /api/dashboard/assets/upload` now caps uploads at 250MB (`multer`'s `limits.fileSize` in
+      `asset.routes.ts`, a single blanket cap across all four asset types for simplicity; an
+      error-handling middleware right after `upload.single()` turns multer's `LIMIT_FILE_SIZE`
+      into a normal 400 via `sendError()` instead of an unhandled 500), and every GCS upload now
+      sets `Cache-Control: public, max-age=31536000, immutable` (`asset.service.ts`) — safe
+      because every upload path embeds a `Date.now()` timestamp, so a given path's content never
+      changes.
 - [ ] Profile management screens
 
 ### Frontend Mobile (apps/mobile)
@@ -1221,6 +1252,13 @@ my-backpack/
       `DndCountPattern`, alongside the existing "N placed" text label. See
       [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s
       "Live TTS (Prompt 3)" section for full detail.
+- [x] Lesson video deferred buffering (August 2026) — `LessonVideo.tsx` no longer connects a
+      video source on mount (`useVideoPlayer(null)`); a tappable glassmorphism placeholder card
+      replaces the `VideoView` until the learner taps play, avoiding the mobile-data cost of
+      `expo-video` buffering a source it hasn't been asked to play yet. See the Content Studio
+      entry above and
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Lesson
+      video: deferred buffering" section for full detail.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens

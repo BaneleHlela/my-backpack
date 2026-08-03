@@ -4,6 +4,12 @@
 // *paths* (e.g. "question-media/images/172xxxx-cat.png"), not full URLs — matches how the rest
 // of the app already stores IDraggable.imageUrl/audioUrl etc. The caller builds display URLs
 // via ASSETS.GCS_BASE, same as everywhere else.
+//
+// Exception: pass `returnFullUrl` when the field being edited is a Lesson resource `url`
+// (IResource.url on video/image/audio/pdf types) — those store full GCS URLs directly, a
+// deliberate divergence from the rest of the app because the Lesson Player (web and mobile)
+// already reads resource.url as ready-to-use and has no path-resolution logic. Every other
+// caller must leave this prop unset.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import { Upload, Search, FileText, Image as ImageIcon, Music, Video, Loader2, X } from 'lucide-react';
@@ -25,6 +31,8 @@ interface AssetPickerProps {
   value: string | undefined;
   onChange: (path: string) => void;
   label?: string;
+  /** Hand back the full display URL instead of the GCS path — see the top-of-file exception note. */
+  returnFullUrl?: boolean;
 }
 
 const ACCEPT: Record<StudioAssetType, string> = {
@@ -42,14 +50,14 @@ const TYPE_ICON: Record<StudioAssetType, typeof ImageIcon> = {
 };
 
 function assetUrl(path: string): string {
-  return `${ASSETS.GCS_BASE}/${path}`;
+  return path.startsWith('http') ? path : `${ASSETS.GCS_BASE}/${path}`;
 }
 
 function filenameFromPath(path: string): string {
   return path.split('/').pop() ?? path;
 }
 
-export default function AssetPicker({ assetType, value, onChange, label }: AssetPickerProps) {
+export default function AssetPicker({ assetType, value, onChange, label, returnFullUrl }: AssetPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [tab, setTab] = useState<'upload' | 'browse'>('upload');
   const [isDragging, setIsDragging] = useState(false);
@@ -100,8 +108,8 @@ export default function AssetPicker({ assetType, value, onChange, label }: Asset
       const res = await api.post('/dashboard/assets/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const { path } = res.data.data as { path: string; url: string };
-      onChange(path);
+      const { path, url } = res.data.data as { path: string; url: string };
+      onChange(returnFullUrl ? url : path);
       setIsOpen(false);
     } catch (err) {
       const e = err as { response?: { data?: { message?: string } } };
@@ -248,7 +256,7 @@ export default function AssetPicker({ assetType, value, onChange, label }: Asset
                       key={asset.path}
                       type="button"
                       onClick={() => {
-                        onChange(asset.path);
+                        onChange(returnFullUrl ? asset.url : asset.path);
                         setIsOpen(false);
                       }}
                       title={asset.name}
@@ -268,7 +276,7 @@ export default function AssetPicker({ assetType, value, onChange, label }: Asset
                       <button
                         type="button"
                         onClick={() => {
-                          onChange(asset.path);
+                          onChange(returnFullUrl ? asset.url : asset.path);
                           setIsOpen(false);
                         }}
                         className="flex-1 flex items-center gap-2 text-left text-sm text-gray-700 truncate"

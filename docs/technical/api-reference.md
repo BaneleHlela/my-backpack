@@ -570,9 +570,9 @@ All `/api/dashboard/*` routes require `[requireProfile, requirePlatformAdmin]` �
 
 **Body:** multipart form — `file` + `type` (`'images' | 'audio' | 'video' | 'documents'`)
 
-**Response:** `{ path, url }` — `path` is the GCS-relative path to store on the referencing document (e.g. `IDraggable.imageUrl`); `url` is the full display URL.
+**Response:** `{ path, url }` — `path` is the GCS-relative path to store on the referencing document (e.g. `IDraggable.imageUrl`); `url` is the full display URL. **Exception:** Lesson resource fields (`IResource.url` on video/image/audio/pdf types) store `url` instead of `path` — see `docs/design/asset-locations.md`.
 
-Uploads land under `question-media/{type}/`. No tracking collection — GCS itself is the index.
+Uploads land under `question-media/{type}/`. No tracking collection — GCS itself is the index. Capped at 250MB per file (`multer`'s `limits.fileSize`, configured in `asset.routes.ts`) — exceeding it returns a 400 via the normal `sendError()` response shape, not an unhandled 500.
 
 ---
 
@@ -685,7 +685,7 @@ Soft-deletes the node and removes its entry from `Roadmap.nodes[]`, renumbering 
 }
 ```
 
-Creates a `Lesson` (`position` = current `node.items.length + 1`) and appends `{ itemType: 'lesson', itemId, position }` to `RoadmapNode.items[]`. `resources[]` entries with a `url` are expected to already be GCS paths from the asset-upload endpoint — this route doesn't handle file upload itself.
+Creates a `Lesson` (`position` = current `node.items.length + 1`) and appends `{ itemType: 'lesson', itemId, position }` to `RoadmapNode.items[]`. `resources[]` entries with a `url` are expected to already be full GCS URLs from the asset-upload endpoint (see the Lesson-resource exception noted above) — this route doesn't handle file upload itself.
 
 ---
 
@@ -800,4 +800,4 @@ Soft-deletes the question. If it's still referenced by an active `Quiz.questionI
 
 ---
 
-*Last updated: July 2026*
+*Last updated: August 2026*

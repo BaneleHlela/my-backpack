@@ -28,7 +28,12 @@ export async function uploadAsset(
 ): Promise<{ path: string; url: string }> {
   const path = `question-media/${type}/${Date.now()}-${sanitizeFilename(file.originalname)}`;
 
-  await bucket.file(path).save(file.buffer, { contentType: file.mimetype });
+  // Safe to cache for a full year — the Date.now() timestamp in every path means a given
+  // path's content never changes; re-uploading always produces a new path, never overwrites.
+  await bucket.file(path).save(file.buffer, {
+    contentType: file.mimetype,
+    metadata: { cacheControl: 'public, max-age=31536000, immutable' },
+  });
 
   return { path, url: `${ASSETS.GCS_BASE}/${path}` };
 }

@@ -82,6 +82,7 @@ function ResourceRow({
             assetType={resource.type === 'video' ? 'video' : resource.type === 'audio' ? 'audio' : 'images'}
             value={resource.url}
             onChange={(url) => onChange({ ...resource, url })}
+            returnFullUrl
           />
           <input
             value={resource.caption ?? ''}
@@ -94,7 +95,7 @@ function ResourceRow({
 
       {resource.type === 'pdf' && (
         <div className="flex flex-col gap-2">
-          <AssetPicker assetType="documents" value={resource.url} onChange={(url) => onChange({ ...resource, url })} />
+          <AssetPicker assetType="documents" value={resource.url} onChange={(url) => onChange({ ...resource, url })} returnFullUrl />
           <input
             value={resource.title ?? ''}
             onChange={(e) => onChange({ ...resource, title: e.target.value })}
