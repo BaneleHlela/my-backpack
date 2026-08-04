@@ -8,10 +8,11 @@ import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { ChevronLeft, Map } from 'lucide-react-native';
+import { Map } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IMiniApp } from '@my-backpack/shared';
 import { GlassCard } from '../../../../src/components/GlassCard';
+import { Menubar } from '../../../../src/components/Menubar';
 import { fetchCoursesBySubject, fetchSubjectMiniApps } from '../../../../src/features/content/contentSlice';
 import type { AppDispatch, RootState } from '../../../../src/store/store';
 import { useTheme } from '../../../../src/theme/ThemeContext';
@@ -67,10 +68,7 @@ export default function SubjectHomeScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Pressable onPress={() => router.back()} style={styles.backButton}>
-        <ChevronLeft size={18} color={colors.text.secondary} />
-        <Text style={styles.backText}>{fieldName || 'Back'}</Text>
-      </Pressable>
+      <Menubar label={fieldName || 'Back'} onBackPress={() => router.back()} />
 
       <Text style={styles.heading}>{subjectName || subjectSlug}</Text>
 
@@ -146,14 +144,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   content: {
     padding: spacing.lg,
     gap: spacing.md,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backText: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
   },
   heading: {
     fontSize: typography.headingLg,

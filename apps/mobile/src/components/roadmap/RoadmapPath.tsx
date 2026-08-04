@@ -1,184 +1,163 @@
-// Renders the full roadmap — winding circles for children, card list for adults/teens. Ports
-// apps/web's RoadmapPath.tsx: the winding-path math (buildWindingPath) is pure arithmetic with
-// no DOM APIs, so it's a 1:1 port using react-native-svg (already a dependency) instead of an
-// inline <svg>; container width comes from onLayout instead of a ResizeObserver.
-import { useState } from 'react';
+// Flattened Course path — Course & Topic redesign, Phase C. Renders one NodeButton per ITEM
+// across ALL nodes in position order (not one card/circle per node, as the pre-redesign
+// RoadmapNodeCard.tsx/RoadmapNodeCircle.tsx did), inserting each node's title as a non-tappable
+// section banner at the start of its run of items — ports the Figma course page (file
+// OaE5PxSOT5p8Fby7SUpoP7, node 22:27039) exactly: there is only one flat-path layout in that file
+// (Light and Dark theme variants, no separate Adult-mode frame), so this replaces both of the old
+// age-branched components rather than keeping one for adult/teen.
+//
+// The per-node "N stars" summary (Figma's "Topic Stars") is rendered once, after a completed
+// node's last item — it's node-level data (INodeProgressEntry.stars), not per-item, so it isn't
+// part of NodeButton itself. Figma's mockup has no connecting line/road between buttons (unlike
+// the pre-redesign winding SVG path), so none is drawn here — just the buttons and banners,
+// following the reference exactly.
+//
+// The existing progress header (X of Y items complete, % bar) lives in CourseScreen.tsx, above
+// this component, and is untouched by this rewrite.
+import { useState, type ReactNode } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
-import { StyleSheet, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
-import { spacing } from '@my-backpack/shared';
-import type { AgeGroup, NodeItemWithProgress, RoadmapWithProgress } from '@my-backpack/shared';
-import RoadmapNodeCircle from './RoadmapNodeCircle';
-import RoadmapNodeCard from './RoadmapNodeCard';
-import NodeLessonsPanel, { type NodeForPanel } from './NodeLessonsPanel';
+import { StyleSheet, Text, View } from 'react-native';
+import { Star } from 'lucide-react-native';
+import { radii, spacing, typography } from '@my-backpack/shared';
+import type { NodeItemWithProgress, RoadmapWithProgress } from '@my-backpack/shared';
+import NodeButton, { NODE_BUTTON_SIZE, type NodeButtonProgress } from './NodeButton';
 import { useTheme } from '../../theme/ThemeContext';
 
 interface RoadmapPathProps {
   roadmap: RoadmapWithProgress;
-  ageGroup: AgeGroup;
-  subjectSlug: string;
-  courseSlug: string;
+  onSelectLesson: (lessonId: string, nodeId: string, nodeTitle: string) => void;
+  onSelectQuiz: (itemId: string, nodeId: string) => void;
 }
 
-const NODE_SPACING = 140;
-const NODE_RADIUS = 40;
+const ITEM_SPACING = 110;
+const BANNER_HEIGHT = 60;
+const STARS_HEIGHT = 50;
+const LEFT_X_FRACTION = 0.3;
+const RIGHT_X_FRACTION = 0.58;
 
-function buildWindingPath(nodeCount: number, w: number): string {
-  if (nodeCount < 2 || w === 0) return '';
-  const leftX = w * 0.3;
-  const rightX = w * 0.7;
-  let d = '';
-
-  for (let i = 0; i < nodeCount - 1; i++) {
-    const fromX = i % 2 === 0 ? leftX : rightX;
-    const toX = i % 2 === 0 ? rightX : leftX;
-    const fromY = i * NODE_SPACING + NODE_RADIUS;
-    const toY = (i + 1) * NODE_SPACING + NODE_RADIUS;
-
-    if (i === 0) d += `M ${fromX} ${fromY}`;
-    const mid = (toY - fromY) * 0.5;
-    d += ` C ${fromX} ${fromY + mid} ${toX} ${toY - mid} ${toX} ${toY}`;
-  }
-  return d;
+function toProgress(status: NodeItemWithProgress['progressStatus'], isUnlocked: boolean): NodeButtonProgress {
+  if (!isUnlocked || status === 'locked') return 'locked';
+  if (status === 'completed') return 'completed';
+  return 'current';
 }
 
-// Coerce RoadmapWithProgress node to the panel-compatible shape.
-function toNodeForPanel(node: RoadmapWithProgress['nodes'][number]): NodeForPanel {
-  return {
-    _id: node._id,
-    title: node.title,
-    description: node.description,
-    stars: node.stars,
-    isUnlocked: node.isUnlocked,
-    progressStatus: node.progressStatus,
-    items: (node.items as unknown as NodeItemWithProgress[]).map((item) =>
-      item.itemType === 'lesson'
-        ? {
-            _id: item.lesson._id,
-            itemType: 'lesson' as const,
-            title: item.lesson.title,
-            progressStatus: item.progressStatus,
-            isUnlocked: item.isUnlocked,
-          }
-        : {
-            _id: item.quiz._id,
-            itemType: 'quiz' as const,
-            title: item.quiz.title,
-            questionCount: item.quiz.questionCount,
-            progressStatus: item.progressStatus,
-            isUnlocked: item.isUnlocked,
-          }
-    ),
-  };
-}
+type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
-export default function RoadmapPath({ roadmap, ageGroup, subjectSlug, courseSlug }: RoadmapPathProps) {
+export default function RoadmapPath({ roadmap, onSelectLesson, onSelectQuiz }: RoadmapPathProps) {
   const { colors } = useTheme();
+  const styles = createStyles(colors);
   const [containerWidth, setContainerWidth] = useState(0);
-  const [selectedNode, setSelectedNode] = useState<NodeForPanel | null>(null);
-
-  const nodes = roadmap.nodes;
 
   const handleLayout = (e: LayoutChangeEvent) => {
     setContainerWidth(e.nativeEvent.layout.width);
   };
 
-  const handleNodePress = (node: RoadmapWithProgress['nodes'][number]) => {
-    if (!node.isUnlocked) return;
-    setSelectedNode(toNodeForPanel(node));
-  };
+  // Flatten nodes -> banner + item rows, tracking a running item index for the x-wind and a
+  // running y offset for vertical placement (tighter within a node, extra room at node/stars
+  // boundaries).
+  let y = 0;
+  let itemIndex = 0;
+  const rows: ReactNode[] = [];
 
-  const panel = selectedNode && (
-    <NodeLessonsPanel
-      node={selectedNode}
-      subjectSlug={subjectSlug}
-      courseSlug={courseSlug}
-      onClose={() => setSelectedNode(null)}
-    />
-  );
-
-  if (ageGroup === 'child') {
-    const svgHeight = nodes.length * NODE_SPACING + NODE_RADIUS * 2;
-    const pathD = buildWindingPath(nodes.length, containerWidth);
-
-    return (
-      <View onLayout={handleLayout} style={{ height: svgHeight }}>
-        {containerWidth > 0 && (
-          <Svg style={StyleSheet.absoluteFill} width={containerWidth} height={svgHeight}>
-            <Defs>
-              <LinearGradient id="pathGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <Stop offset="0%" stopColor={colors.primary.light} />
-                <Stop offset="100%" stopColor={colors.success.DEFAULT} />
-              </LinearGradient>
-            </Defs>
-            <Path
-              d={pathD}
-              fill="none"
-              stroke="url(#pathGradient)"
-              strokeWidth={4}
-              strokeLinecap="round"
-              strokeDasharray="8 6"
-              opacity={0.6}
-            />
-          </Svg>
-        )}
-
-        {containerWidth > 0 &&
-          nodes.map((node, i) => {
-            const x = i % 2 === 0 ? containerWidth * 0.3 : containerWidth * 0.7;
-            const y = i * NODE_SPACING + NODE_RADIUS;
-            return (
-              <View key={node._id} style={[styles.circleWrapper, { left: x - NODE_RADIUS, top: y - NODE_RADIUS }]}>
-                <RoadmapNodeCircle
-                  title={node.title}
-                  status={node.progressStatus}
-                  stars={node.stars}
-                  onPress={() => handleNodePress(node)}
-                />
-              </View>
-            );
-          })}
-
-        {panel}
+  for (const node of roadmap.nodes) {
+    rows.push(
+      <View key={`banner-${node._id}`} style={[styles.banner, { top: y }]}>
+        <View style={styles.bannerLine} />
+        <Text style={styles.bannerText} numberOfLines={2}>
+          {node.title}
+        </Text>
+        <View style={styles.bannerLine} />
       </View>
     );
+    y += BANNER_HEIGHT;
+
+    const items = node.items as unknown as NodeItemWithProgress[];
+    items.forEach((item) => {
+      const x = itemIndex % 2 === 0 ? containerWidth * LEFT_X_FRACTION : containerWidth * RIGHT_X_FRACTION;
+      const progress = toProgress(item.progressStatus, item.isUnlocked);
+      const itemId = item.itemType === 'lesson' ? item.lesson._id : item.quiz._id;
+
+      rows.push(
+        <View key={itemId} style={[styles.itemWrapper, { left: x, top: y }]}>
+          <NodeButton
+            itemType={item.itemType}
+            progress={progress}
+            onPress={() => {
+              if (progress === 'locked') return;
+              if (item.itemType === 'lesson') {
+                onSelectLesson(item.lesson._id, node._id, node.title);
+              } else {
+                onSelectQuiz(item.quiz._id, node._id);
+              }
+            }}
+          />
+        </View>
+      );
+      y += ITEM_SPACING;
+      itemIndex += 1;
+    });
+
+    if (node.progressStatus === 'completed') {
+      rows.push(
+        <View key={`stars-${node._id}`} style={[styles.starsRow, { top: y }]}>
+          {[1, 2, 3].map((s) => (
+            <Star
+              key={s}
+              size={24}
+              color={s <= node.stars ? colors.warning.DEFAULT : colors.text.faint}
+              fill={s <= node.stars ? colors.warning.DEFAULT : 'transparent'}
+            />
+          ))}
+        </View>
+      );
+      y += STARS_HEIGHT;
+    }
   }
 
-  // Adult / teen: card list
   return (
-    <View>
-      <View style={styles.cardList}>
-        {nodes.map((node) => {
-          const panelNode = toNodeForPanel(node);
-          const completedItems = panelNode.items.filter((i) => i.progressStatus === 'completed').length;
-          return (
-            <RoadmapNodeCard
-              key={node._id}
-              title={node.title}
-              description={node.description}
-              status={node.progressStatus}
-              stars={node.stars}
-              itemCount={node.items.length}
-              completedItems={completedItems}
-              position={node.position}
-              onPress={() => handleNodePress(node)}
-            />
-          );
-        })}
-      </View>
-
-      {panel}
+    <View onLayout={handleLayout} style={{ height: y }}>
+      {containerWidth > 0 && rows}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  circleWrapper: {
-    position: 'absolute',
-    width: NODE_RADIUS * 2,
-    alignItems: 'center',
-  },
-  cardList: {
-    gap: spacing.sm,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    banner: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+    },
+    bannerLine: {
+      flex: 1,
+      height: 3,
+      borderRadius: radii.sm,
+      backgroundColor: colors.surface.border,
+      maxWidth: 87,
+    },
+    bannerText: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text.primary,
+      textAlign: 'center',
+    },
+    itemWrapper: {
+      position: 'absolute',
+      width: NODE_BUTTON_SIZE,
+      marginLeft: -NODE_BUTTON_SIZE / 2,
+    },
+    starsRow: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: spacing.xs,
+    },
+  });
+}

@@ -1219,7 +1219,11 @@ my-backpack/
       `NodeLessonsPanel` bottom sheet), Lesson player (all 6 resource types: video via
       `expo-video`, image, audio, notes/steps via `react-native-markdown-display`, pdf via
       `Linking.openURL`), roadmap/content slices (`roadmapSlice`, `contentSlice` extended
-      with `fetchCoursesBySubject`/`fetchCourseDetail`)
+      with `fetchCoursesBySubject`/`fetchCourseDetail`) — **superseded by the Course & Topic
+      redesign, Phase C entry below (August 2026)**: the child/adult split, `RoadmapNodeCard`/
+      `RoadmapNodeCircle`, `NodeLessonsPanel`, and the dedicated lesson player route are all
+      gone, replaced by one flattened per-item path + `LessonModal`. Left here for history;
+      don't reintroduce any of the file names in this bullet
 - [x] Quiz UI, 13 of 20 question types (July 2026) — full-screen `quiz/[itemId]` route
       (root layout converted `<Slot/>` -> `<Stack/>` for this one route's
       `presentation: 'fullScreenModal'`), `quizSlice` (scoped to what the roadmap quiz-item
@@ -1318,6 +1322,81 @@ my-backpack/
       content model or navigation — purely the colour-token/theme-provider layer. See
       [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s
       "Light/dark theme system" section for full detail.
+- [x] Course & Topic redesign, Phase C — flattened Course path + Lesson/Resources modals (August
+      2026) — implements the redesigned Course page from Figma (file OaE5PxSOT5p8Fby7SUpoP7,
+      node 22:27039), a pure rendering/navigation change (Roadmap → Nodes → Items was already
+      flat — see `packages/shared/types/roadmap.ts`). `RoadmapPath.tsx` now renders one
+      `NodeButton` (`src/components/roadmap/NodeButton.tsx`, new) per **item** across every node
+      in position order — not one card/circle per node — inserting each node's title as a
+      non-tappable section banner at the start of its run of items, and a node-level "N stars"
+      summary once after a completed node's last item (`INodeProgressEntry.stars` — node-level
+      data, not per-item; `NodeButton` itself has no star-count prop). Figma has only one flat
+      layout (Light/Dark theme variants, no separate Adult-mode frame), so **both**
+      `RoadmapNodeCard.tsx` (adult/teen card list) and `RoadmapNodeCircle.tsx` (child winding
+      path) are deleted, along with `NodeLessonsPanel.tsx` (the old node-tap bottom sheet) and
+      the dedicated `course/[courseSlug]/lesson/[lessonId].tsx` route — `RoadmapPath` no longer
+      takes an `ageGroup` prop. Tapping a lesson item now opens `LessonModal`
+      (`src/components/course/LessonModal.tsx`, new, ~90%-height sheet) instead of navigating to
+      a route; tapping a quiz item is unchanged (still navigates straight to `/quiz/[itemId]`).
+      `LessonModal`'s "Mark As Completed" (violet/`primary.dark`, exact Figma colour) posts to
+      the same `/roadmap/lesson/:lessonId/study` endpoint the old lesson screen used, then
+      **closes the modal and returns to the path** rather than auto-advancing into the next
+      item's modal — the whole path is visible now, so the learner taps the next unlocked node
+      themselves (a deliberate behavior change from the old auto-advance-with-a-1.5s-pause
+      flow). `ResourcesModal.tsx` (new, same file location/tab pattern) aggregates every
+      lesson's video resources across the **whole course**, grouped by node title as a section
+      header ("Lesson Content: {node title}") — reads straight off
+      `RoadmapWithProgress.nodes[].items[].lesson.resources` (already fully populated by
+      `GET /roadmap/course/:courseId`, confirmed by reading `roadmap.service.ts` directly), no
+      new API call. Both modals' Videos tabs reuse `LessonVideo.tsx` (extended with two new
+      optional props, `thumbnailUrl`/`description` — Phase B's `IResource` fields — rendered as
+      the deferred-buffering placeholder's background image and title/description text; the
+      placeholder itself was rebuilt on a plain `View` instead of `GlassCard`, since `GlassCard`'s
+      centering relies on its content shrink-wrapping, which doesn't hold once a full-bleed
+      thumbnail image is added as a child). Both modals' Notes tabs are a placeholder only —
+      "No available notes for this lesson." + a disabled "Add notes" button — Figma only
+      designed the Videos state; a real notes UI and its authoring path are out of scope here.
+      Three new floating action buttons (`CoursePathActions.tsx`, new) sit pinned to the
+      bottom of the Course screen: Resources (rose/`error` — opens `ResourcesModal`), Quizzes
+      and Mini-apps (violet/`primary` and a fixed dark/cream pair respectively — both open a
+      "Coming soon" placeholder, matching the Dictionary mini-app's existing pattern, since the
+      quiz-modes screen these will eventually open isn't built yet). **Note on Figma's own
+      variant naming**: the Resources button's underlying Figma component variant is literally
+      named `"Lesson"` (the component's default), not `"Resources"` — confirmed by its
+      position/icon (a monitor/video-content glyph) alongside the unambiguous `"Quiz"` and
+      `"MiniApp"` variants, not assumed from the name. No real Figma vector icon assets were
+      pulled in for `NodeButton`/`CoursePathActions` (Figma's icons are custom SVG
+      illustrations) — every other icon in this app's roadmap UI already comes from
+      `lucide-react-native`, so the closest lucide glyphs (`MonitorPlay`, `ClipboardCheck`,
+      `Gamepad2`, `Video`, `BookOpen`) are used instead of introducing a new bundled-illustration
+      pipeline for a handful of icons. `NodeButton`'s `locked`/`current` progress treatments
+      (dim + `Lock` icon; `primary.light` ring) are carried over from the retired
+      `RoadmapNodeCircle.tsx`'s own convention, not sampled from a Figma instance — the Figma
+      mockup has every item already completed, so no locked/current instance exists there to
+      pull exact values from. Verified via `tsc --noEmit` (clean) and a clean `expo export
+      --platform android` bundle (3912 modules) — **not yet confirmed on a real device or
+      emulator**, per this project's established "flag what's unverified" convention (see the
+      `dnd_single` entries above). See
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Course &
+      Topic redesign, Phase C" section for full detail.
+- [x] Shared `Menubar` + select-profile dark-mode fix (August 2026) — `src/components/Menubar.tsx`
+      (new) ports Figma's "Menubar" component (back chevron + caps label on the left, Peanuts/XP/
+      profile-avatar cluster on the right — the same Figma frame Phase C's research pulled) and
+      replaces the bespoke back-button row every screen was rolling on its own: Course screen,
+      Subject screen, Dictionary home, term detail, and Bucket. Peanuts/XP are fixed placeholders
+      (`'0'`, not wired to real data — the reward system is schema-only, see "XP and peanuts
+      reward system" above); the profile avatar is **not** a placeholder — it reads
+      `state.auth.activeProfile.displayName` directly (same initials helper as
+      `select-profile.tsx`'s `ProfileTile`), since that data already exists. Dictionary home's
+      "Take Quiz"/"My Bucket" buttons moved out of the old back-button row into their own row
+      below `Menubar` (`Menubar`'s right side is reserved for the Peanuts/XP/avatar cluster, not
+      arbitrary action buttons). Also fixed while in this area: `select-profile.tsx`'s PIN-entry
+      modal card and profile tiles had `backgroundColor: '#fff'` hardcoded from before the Phase A
+      theme conversion — invisible in dark mode, since `colors.text.primary` (cream, `#fcfded`) on
+      a hardcoded white card reads as washed-out near-white/pale-yellow text. Both now use
+      `colors.background`. See
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Shared
+      Menubar" section for full detail.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens

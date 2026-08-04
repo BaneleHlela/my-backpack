@@ -4,16 +4,19 @@
 // is the only navigation path in this build, no course deep-linking) — no fallback fetch for
 // missing course metadata. A separate fetchCourseDetail call still runs to populate
 // course.miniAppIds (the list endpoint only returns plain id strings — see contentSlice.ts).
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { ChevronLeft } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
-import type { AgeGroup, IMiniApp } from '@my-backpack/shared';
+import type { IMiniApp } from '@my-backpack/shared';
 import { fetchCourseDetail } from '../../../../../../src/features/content/contentSlice';
 import { fetchRoadmapByCourse } from '../../../../../../src/features/roadmap/roadmapSlice';
 import RoadmapPath from '../../../../../../src/components/roadmap/RoadmapPath';
+import CoursePathActions from '../../../../../../src/components/roadmap/CoursePathActions';
+import LessonModal from '../../../../../../src/components/course/LessonModal';
+import ResourcesModal from '../../../../../../src/components/course/ResourcesModal';
+import { Menubar } from '../../../../../../src/components/Menubar';
 import type { AppDispatch, RootState } from '../../../../../../src/store/store';
 import { useTheme } from '../../../../../../src/theme/ThemeContext';
 
@@ -37,7 +40,10 @@ export default function CourseScreen() {
     (state: RootState) => state.content
   );
   const { currentRoadmap, isLoading, error } = useSelector((state: RootState) => state.roadmap);
-  const activeProfile = useSelector((state: RootState) => state.auth.activeProfile);
+
+  const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
+  const [showResourcesModal, setShowResourcesModal] = useState(false);
+  const [comingSoon, setComingSoon] = useState<string | null>(null);
 
   let fieldSlug = '';
   let subjectName = '';
@@ -68,8 +74,6 @@ export default function CourseScreen() {
     dispatch(fetchCourseDetail({ fieldSlug, subjectSlug, courseSlug }));
   }, [dispatch, fieldSlug, subjectSlug, courseSlug]);
 
-  const ageGroup: AgeGroup = activeProfile?.ageGroup ?? 'adult';
-
   const pct = currentRoadmap
     ? Math.round((currentRoadmap.completedItems / (currentRoadmap.totalItems || 1)) * 100)
     : 0;
@@ -91,75 +95,131 @@ export default function CourseScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <Pressable onPress={() => router.back()} style={styles.backButton}>
-        <ChevronLeft size={18} color={colors.text.secondary} />
-        <Text style={styles.backText}>{subjectName || 'Back'}</Text>
-      </Pressable>
+    <View style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Menubar label={subjectName || 'Back'} onBackPress={() => router.back()} />
 
-      <Text style={styles.heading}>{course.name}</Text>
-      {course.description ? <Text style={styles.description}>{course.description}</Text> : null}
+        <Text style={styles.heading}>{course.name}</Text>
+        {course.description ? <Text style={styles.description}>{course.description}</Text> : null}
 
-      {currentRoadmap && (
-        <View style={styles.progressSection}>
-          <Text style={styles.progressLabel}>
-            {currentRoadmap.completedItems} of {currentRoadmap.totalItems} items complete ·{' '}
-            <Text style={styles.progressPercent}>{pct}% done</Text>
-          </Text>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${pct}%` }]} />
+        {currentRoadmap && (
+          <View style={styles.progressSection}>
+            <Text style={styles.progressLabel}>
+              {currentRoadmap.completedItems} of {currentRoadmap.totalItems} items complete ·{' '}
+              <Text style={styles.progressPercent}>{pct}% done</Text>
+            </Text>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${pct}%` }]} />
+            </View>
           </View>
-        </View>
-      )}
+        )}
 
-      {linkedMiniApps.length > 0 && (
-        <View style={styles.linksRow}>
-          {linkedMiniApps.map((app) => (
-            <Pressable
-              key={app._id}
-              onPress={() =>
+        {linkedMiniApps.length > 0 && (
+          <View style={styles.linksRow}>
+            {linkedMiniApps.map((app) => (
+              <Pressable
+                key={app._id}
+                onPress={() =>
+                  router.push({
+                    pathname: '/(app)/miniapp/[miniAppId]',
+                    params: { miniAppId: app._id, name: app.name, type: app.type },
+                  })
+                }
+                style={styles.linkChip}
+              >
+                <Text style={styles.linkChipEmoji}>{MINI_APP_EMOJI[app.type] ?? '📦'}</Text>
+                <Text style={styles.linkChipText}>{app.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.roadmapSection}>
+          {isLoading && !currentRoadmap ? (
+            <ActivityIndicator color={colors.primary.DEFAULT} style={styles.loading} />
+          ) : error ? (
+            <View style={styles.center}>
+              <Text style={styles.errorText}>Could not load roadmap.</Text>
+              <Text style={styles.errorDetail}>{error}</Text>
+            </View>
+          ) : currentRoadmap && currentRoadmap.nodes.length === 0 ? (
+            <Text style={styles.emptyText}>No lessons available yet.</Text>
+          ) : currentRoadmap && currentRoadmap.nodes.length > 0 ? (
+            <RoadmapPath
+              roadmap={currentRoadmap}
+              onSelectLesson={(lessonId) => setActiveLessonId(lessonId)}
+              onSelectQuiz={(itemId, nodeId) =>
                 router.push({
-                  pathname: '/(app)/miniapp/[miniAppId]',
-                  params: { miniAppId: app._id, name: app.name, type: app.type },
+                  pathname: '/quiz/[itemId]',
+                  params: { itemId, nodeId, subjectSlug, courseSlug },
                 })
               }
-              style={styles.linkChip}
-            >
-              <Text style={styles.linkChipEmoji}>{MINI_APP_EMOJI[app.type] ?? '📦'}</Text>
-              <Text style={styles.linkChipText}>{app.name}</Text>
-            </Pressable>
-          ))}
+            />
+          ) : null}
         </View>
+      </ScrollView>
+
+      {currentRoadmap && (
+        <CoursePathActions
+          onResourcesPress={() => setShowResourcesModal(true)}
+          onQuizzesPress={() => setComingSoon('Quizzes')}
+          onMiniAppsPress={() => setComingSoon('Mini-apps')}
+        />
       )}
 
-      <View style={styles.roadmapSection}>
-        {isLoading && !currentRoadmap ? (
-          <ActivityIndicator color={colors.primary.DEFAULT} style={styles.loading} />
-        ) : error ? (
-          <View style={styles.center}>
-            <Text style={styles.errorText}>Could not load roadmap.</Text>
-            <Text style={styles.errorDetail}>{error}</Text>
+      {activeLessonId && (
+        <LessonModal
+          lessonId={activeLessonId}
+          onClose={() => setActiveLessonId(null)}
+          onCompleted={() => dispatch(fetchRoadmapByCourse(course._id))}
+        />
+      )}
+
+      {showResourcesModal && currentRoadmap && (
+        <ResourcesModal roadmap={currentRoadmap} onClose={() => setShowResourcesModal(false)} />
+      )}
+
+      {comingSoon && (
+        <Pressable style={styles.comingSoonOverlay} onPress={() => setComingSoon(null)}>
+          <View style={styles.comingSoonCard}>
+            <Text style={styles.comingSoonText}>{comingSoon} coming soon.</Text>
           </View>
-        ) : currentRoadmap && currentRoadmap.nodes.length === 0 ? (
-          <Text style={styles.emptyText}>No lessons available yet.</Text>
-        ) : currentRoadmap && currentRoadmap.nodes.length > 0 ? (
-          <RoadmapPath
-            roadmap={currentRoadmap}
-            ageGroup={ageGroup}
-            subjectSlug={subjectSlug}
-            courseSlug={courseSlug}
-          />
-        ) : null}
-      </View>
-    </ScrollView>
+        </Pressable>
+      )}
+    </View>
   );
 }
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
   content: {
     padding: spacing.lg,
+    paddingBottom: 160,
     gap: spacing.md,
+  },
+  comingSoonOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  comingSoonCard: {
+    backgroundColor: colors.background,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+  },
+  comingSoonText: {
+    fontSize: typography.body,
+    fontWeight: '600',
+    color: colors.text.primary,
   },
   center: {
     flex: 1,
@@ -167,14 +227,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     justifyContent: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.xl,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backText: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
   },
   backLink: {
     fontSize: typography.body,

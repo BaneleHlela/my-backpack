@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { ChevronLeft, BookOpen } from 'lucide-react-native';
+import { BookOpen } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../../../../src/components/GlassCard';
 import { PrimaryButton } from '../../../../src/components/PrimaryButton';
+import { Menubar } from '../../../../src/components/Menubar';
 import { BucketEntryCard } from '../../../../src/components/dictionary/BucketEntryCard';
 import {
   fetchBucket,
@@ -99,13 +100,11 @@ export default function BucketScreen() {
   return (
     <View style={styles.flex}>
       <View style={styles.header}>
-        <Pressable
-          onPress={() => router.replace({ pathname: '/(app)/miniapp/[miniAppId]', params: { miniAppId, name } })}
-          style={styles.backButton}
-        >
-          <ChevronLeft size={18} color={colors.text.secondary} />
-          <Text style={styles.backText}>Back to {name ?? 'Dictionary'}</Text>
-        </Pressable>
+        <Menubar
+          label={`Back to ${name ?? 'Dictionary'}`}
+          onBackPress={() => router.replace({ pathname: '/(app)/miniapp/[miniAppId]', params: { miniAppId, name } })}
+          style={styles.menubar}
+        />
         <Text style={styles.title}>My Bucket</Text>
 
         <View style={styles.tabs}>
@@ -189,14 +188,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     padding: spacing.lg,
     paddingBottom: spacing.sm,
   },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  menubar: {
     marginBottom: spacing.sm,
-  },
-  backText: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
   },
   title: {
     fontSize: typography.headingLg,

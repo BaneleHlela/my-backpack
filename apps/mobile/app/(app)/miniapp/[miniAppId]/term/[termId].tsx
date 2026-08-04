@@ -5,10 +5,11 @@ import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { ChevronLeft, Volume2 } from 'lucide-react-native';
+import { Volume2 } from 'lucide-react-native';
 import { spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../../../../../src/components/GlassCard';
 import { DefinitionCard } from '../../../../../src/components/dictionary/DefinitionCard';
+import { Menubar } from '../../../../../src/components/Menubar';
 import { playAudioUrl } from '../../../../../src/lib/audio';
 import { clearActiveTerm, fetchTermDetail } from '../../../../../src/features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../../../../src/store/store';
@@ -31,10 +32,7 @@ export default function TermDetailScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Pressable onPress={() => router.back()} style={styles.backButton}>
-        <ChevronLeft size={18} color={colors.text.secondary} />
-        <Text style={styles.backText}>Back to search</Text>
-      </Pressable>
+      <Menubar label="Back to search" onBackPress={() => router.back()} />
 
       {activeTermLoading ? <ActivityIndicator color={colors.primary.light} style={styles.loading} /> : null}
 
@@ -84,14 +82,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   content: {
     padding: spacing.lg,
     gap: spacing.md,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backText: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
   },
   loading: {
     paddingVertical: spacing.xl,

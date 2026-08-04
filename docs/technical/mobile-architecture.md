@@ -49,9 +49,9 @@ apps/mobile/app/
         index.tsx           # Courses grid + Subject-level MiniApps
         course/
           [courseSlug]/
-            index.tsx       # Progress header + RoadmapPath + linked-MiniApps row
-            lesson/
-              [lessonId].tsx  # Lesson resource player
+            index.tsx       # Progress header + flattened RoadmapPath + linked-MiniApps row +
+                             # CoursePathActions + LessonModal/ResourcesModal (Phase C — see below;
+                             # the old lesson/[lessonId].tsx route is gone, replaced by LessonModal)
     miniapp/
       [miniAppId]/
         index.tsx           # Dictionary home: search, trending, A–Z browse, recent
@@ -414,9 +414,12 @@ apps/mobile/app/
       index.tsx                        # Courses grid + Subject-level MiniApps section
       course/[courseSlug]/
         index.tsx                      # Roadmap for one Course (progress header + path)
-        lesson/[lessonId].tsx          # Lesson resource player
   quiz/[itemId].tsx                    # Full-screen quiz-taking route — see below
 ```
+
+**As of the Course & Topic redesign, Phase C (August 2026)**, `course/[courseSlug]/lesson/
+[lessonId].tsx` no longer exists — a lesson is now opened as `LessonModal`, a modal rendered
+directly on the Course screen, not a route. See "Course & Topic redesign, Phase C" below.
 
 ### Why `quiz/[itemId]` is a root-level route, not nested in `(app)`
 
@@ -912,6 +915,166 @@ loading/error state was needed there.
 
 ---
 
+## Course & Topic redesign, Phase C (August 2026)
+
+Implements the redesigned Course page from Figma (file `OaE5PxSOT5p8Fby7SUpoP7`, node `22:27039`
+and its sibling "Resources Modal"/"Lesson Modal" frames). Phases A (dark-mode-as-default theming)
+and B (`NodeItemType` `'project'` reserved, `IResource.thumbnailUrl`/`description` added) are
+separate, already-shipped phases — see their own CLAUDE.md entries. This phase is a pure
+rendering/navigation change: `Roadmap → RoadmapNode → items[]` was already a flat, ordered
+structure (`packages/shared/types/roadmap.ts`) — there was no separate "topic roadmap" to merge,
+just a new way of drawing the existing data.
+
+### Flattened path, not one card/circle per node
+
+`RoadmapPath.tsx` was rewritten to render one `NodeButton` per **item** across every node in
+position order, instead of one `RoadmapNodeCard`/`RoadmapNodeCircle` per node (both deleted — see
+below). Each node's title is inserted as a non-tappable section banner at the start of its run of
+items, matching Figma's "Learn the Vowels: Introduction" banner style. A node-level "N stars"
+summary (three `Star` icons, filled 0–3) renders once after a completed node's last item —
+`INodeProgressEntry.stars` is node-level data, not per-item, so this lives in `RoadmapPath.tsx`
+itself, not in `NodeButton`. Figma's mockup has no connecting line/road between buttons (unlike
+the pre-redesign winding SVG path), so none is drawn — just floating buttons and banners. The
+buttons still wind gently left-right (alternating x-position by flat item index, not by node
+index), approximating Figma's gentler wiggle with the same two-offset alternation the old
+`buildWindingPath` used, just tuned to a smaller amplitude — Figma's own button placement looks
+hand-adjusted per instance, not derivable as an exact formula from 5 sample points, and the task
+this shipped from was explicit that "exact values" applied to the node-button's own geometry/
+colours, not the path's overall curve.
+
+**No separate Adult-mode Course page exists in Figma** — only Light/Dark theme variants of the
+one flat-path layout (`Landing Page / Plain / Light`, `Landing Page / Plain / Dark`). This settled
+a design question left open going in: both `RoadmapNodeCard.tsx` (the old adult/teen horizontal
+card list) and `RoadmapNodeCircle.tsx` (the old child-only winding circle) are deleted, not just
+one of them — `RoadmapPath` no longer takes an `ageGroup` prop at all.
+
+### `NodeButton.tsx` (`src/components/roadmap/`, new)
+
+Two independent variant axes, ported from Figma's "Node Button" component:
+
+- **Progress** (`'locked' | 'current' | 'completed'`) — drives dimming/ring, not colour. `locked`
+  dims the badge and shows a `Lock` icon; `current` (covers both `ItemStatus` `'unlocked'` and
+  `'in_progress'`) adds a `colors.primary.light` ring, carried over from the retired
+  `RoadmapNodeCircle.tsx`'s own convention; `completed` adds a small fixed 3-star sparkle
+  cluster (decorative flourish, not a 0–3 rating — see above). **Figma's mockup has every item
+  already completed** — no locked/current instance exists there to sample exact values from, so
+  those two treatments are inherited from the pre-existing app convention, not pulled from Figma.
+- **Content** (`'lesson' | 'quiz'` — no `'project'` branch; still reserved-only per Phase B) —
+  drives the badge's two-tone colour and icon glyph, confirmed against Figma: lesson uses
+  `colors.error.dark`/`colors.error.DEFAULT` (rose), quiz uses `colors.primary.dark`/
+  `colors.primary.DEFAULT` (violet) — these are exactly the theme's existing tokens, no new hex
+  values were needed.
+
+No real Figma vector icon assets were pulled in (Figma's icons are custom SVG illustrations, e.g.
+`board-svgrepo-com`/`quiz-svgrepo-com`) — every other icon in this app's roadmap UI already comes
+from `lucide-react-native` (`Lock`, `Star`, `ChevronRight`, `Play`, `CheckCircle`), so the closest
+lucide glyphs (`MonitorPlay` for lesson, `ClipboardCheck` for quiz) are used here too, instead of
+standing up a new bundled-illustration pipeline for two icons.
+
+### `LessonModal.tsx` and `ResourcesModal.tsx` (`src/components/course/`, new)
+
+Tapping a lesson item now opens `LessonModal` — a ~90%-height bottom sheet, not a route — instead
+of navigating to the old `lesson/[lessonId].tsx` player (deleted, along with `NodeLessonsPanel.tsx`,
+the old node-tap bottom sheet it replaced). Tapping a quiz item is **unchanged** — still navigates
+straight to `/quiz/[itemId]` exactly as before; this phase only changed how a quiz item is
+*reached*, not the quiz-taking experience itself.
+
+Both modals share the same Videos/Notes tab structure from Figma:
+
+- **Videos tab** reuses `LessonVideo.tsx` (extended with two new optional props,
+  `thumbnailUrl`/`description` — Phase B's `IResource` fields — shown as the deferred-buffering
+  placeholder's background image and title/description text). The placeholder itself was
+  rebuilt on a plain `View` instead of `GlassCard`: `GlassCard`'s centering relies on its
+  `content` wrapper shrink-wrapping its children, which breaks once a full-bleed thumbnail
+  `Image` is added as a child (the image would only cover the shrink-wrapped box, not the whole
+  card) — switching to a directly-sized `View` (matching `videoBox`'s existing aspectRatio+
+  overflow treatment) avoids fighting that layout assumption. This is a **behavior-preserving**
+  extension — the deferred-buffering/tap-to-load/retry logic that mobile-data-guards video
+  playback (see "Lesson video: deferred buffering" above) is completely untouched.
+- **Notes tab is a placeholder only** — "No available notes for this lesson." plus a disabled
+  "Add notes" button. Figma only designed the Videos state for this modal; a real notes UI and
+  its authoring path are out of scope here, not an oversight.
+
+`LessonModal`'s "Mark As Completed" button (violet/`colors.primary.dark`, the exact colour pulled
+from Figma's `Primary Button` component) posts to the same `/roadmap/lesson/:lessonId/study`
+endpoint the old lesson screen used. **On success it closes the modal and returns to the path**,
+rather than auto-advancing into the next item's modal the way the old lesson screen auto-advanced
+to the next route after a 1.5s pause — the whole path is visible on one screen now, so the learner
+taps the next unlocked node themselves. `CourseScreen` re-fetches the roadmap
+(`fetchRoadmapByCourse`) on completion so the just-completed item's `NodeButton` updates without
+a manual pull-to-refresh.
+
+`ResourcesModal` aggregates every lesson's video resources across the **whole course**, grouped by
+node title as a section header ("Lesson Content: {node title}"). This reads directly off
+`RoadmapWithProgress.nodes[].items[].lesson.resources` — already fully populated by
+`GET /roadmap/course/:courseId` (confirmed by reading `roadmap.service.ts`'s `resolveNodeItems`
+directly: it does an unfiltered `Lesson.find(...)`, not a `.select()`-restricted one) — so no new
+API call was needed. There is no teacher-added supplementary resource data yet; that (plus its
+Studio authoring UI) is separate, later, web-side work.
+
+### `CoursePathActions.tsx` (`src/components/roadmap/`, new)
+
+Three floating action buttons pinned to the bottom of the Course screen, ported from Figma's
+"Course Button" component: two stacked bottom-left, one bottom-right. **Resources** (rose/`error`
+colours) opens `ResourcesModal`. **Quizzes** (violet/`primary`) and **Mini-apps** (a fixed dark/
+cream pair, `#1f2937`/`#fcfded` — lifted directly from Figma rather than mapped onto a semantic
+theme pair, since neither swaps with light/dark theme in the reference) both open a "Coming soon"
+placeholder, matching the existing Dictionary mini-app placeholder pattern
+(`app/(app)/miniapp/[miniAppId]/index.tsx`) — the quiz-modes screen these will eventually open is
+a separate, not-yet-built design.
+
+**Note on Figma's own variant naming**: the Resources button's underlying component variant is
+literally named `"Lesson"` (the component's default variant, not `"Resources"`) — this was
+confirmed by its position and icon (a monitor/video-content glyph) sitting alongside the
+unambiguous `"Quiz"` and `"MiniApp"` variants, not assumed from the variant's name alone, per the
+explicit instruction to verify rather than guess which icon maps to which button.
+
+### Verification status
+
+Verified via `tsc --noEmit` (clean) and a clean `expo export --platform android` bundle (3912
+modules, no errors) — **not yet confirmed on a real device or emulator**, consistent with this
+doc's established practice of flagging what device/emulator testing hasn't covered yet (see the
+`dnd_single` gesture work above, which shipped the same way and was confirmed working one prompt
+later).
+
+---
+
+## Shared Menubar + select-profile dark-mode fix (August 2026)
+
+`src/components/Menubar.tsx` (new) ports Figma's "Menubar" component — the same frame pulled
+during Phase C's research (file `OaE5PxSOT5p8Fby7SUpoP7`, node `22:27039`'s `Stack > Menubar`):
+a back chevron + all-caps label on the left, and a Peanuts / XP / profile-avatar cluster on the
+right. It replaces the bespoke back-button row every one of these screens previously rolled on
+its own: Course screen, Subject screen, Dictionary home, term detail, and Bucket.
+
+Figma's back-button label ("SUBJECT") is set via a decorative font (Chewy) this app doesn't load —
+`textTransform: 'uppercase'` on the existing system-font style reproduces the visual effect
+without adding a new font asset, so every call site keeps passing its natural-case label
+(`subjectName`, `fieldName`, `"Home"`, `"Back to search"`, etc.) unchanged.
+
+**Peanuts and XP are fixed placeholders** (`'0'`, via `Nut`/`Gem` from `lucide-react-native`) —
+not wired to any real data, since the reward system is schema-only (no service layer yet — see
+root CLAUDE.md's "XP and peanuts reward system" note). **The profile avatar is not a
+placeholder** — it reads `state.auth.activeProfile.displayName` directly and renders initials,
+the same small helper `select-profile.tsx`'s `ProfileTile` already used, since that data already
+exists and showing a fake avatar there would be strictly worse than showing the real one.
+
+Dictionary home's "Take Quiz"/"My Bucket" buttons previously lived inside the same row as the old
+back button; they moved to their own row directly below `Menubar` — `Menubar`'s right side is
+reserved for the Peanuts/XP/avatar cluster, not arbitrary per-screen action buttons.
+
+### select-profile.tsx dark-mode fix
+
+Found while working in this area: the PIN-entry modal's card and the profile-tile grid both had
+`backgroundColor: '#fff'` hardcoded — left over from before the Phase A theme conversion (every
+other colour in that file already goes through `useTheme()`, these two literals were missed).
+In dark mode this rendered `colors.text.primary` (cream, `#fcfded` — a very slightly yellow-
+tinted white) against a hardcoded white card, which read as washed-out, barely-visible "white and
+yellow" text. Both now use `colors.background`, matching the rest of the app's solid-card
+convention.
+
+---
+
 ## What's deliberately not here yet
 
 - **5 of the remaining 8 `dnd_*` question types** — `dnd_select`, `dnd_sort`,
@@ -935,4 +1098,4 @@ loading/error state was needed there.
 
 ---
 
-*Last updated: 2026-08-03.*
+*Last updated: 2026-08-04.*

@@ -253,7 +253,7 @@ function createStyles(colors: ThemeColors) {
       width: '30%',
       alignItems: 'center',
       gap: spacing.xs,
-      backgroundColor: '#fff',
+      backgroundColor: colors.background,
       borderRadius: radii.md,
       paddingVertical: spacing.md,
     },
@@ -311,7 +311,7 @@ function createStyles(colors: ThemeColors) {
     modalCard: {
       width: '85%',
       maxWidth: 340,
-      backgroundColor: '#fff',
+      backgroundColor: colors.background,
       borderRadius: radii.lg,
       padding: spacing.lg,
       alignItems: 'center',

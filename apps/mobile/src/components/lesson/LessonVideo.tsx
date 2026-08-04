@@ -5,17 +5,22 @@
 // No autoplay beyond that tap, matching web's plain <video controls> with no autoPlay attribute;
 // VideoView shows native platform controls once playback starts.
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEvent } from 'expo';
 import { Play, RotateCcw } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
-import { GlassCard } from '../GlassCard';
 import { useTheme } from '../../theme/ThemeContext';
 
 interface LessonVideoProps {
   url: string;
   caption?: string;
+  // Phase B (Course & Topic redesign) fields — optional, no backfill on existing Lesson
+  // documents. When present, the not-yet-playing placeholder shows the real thumbnail behind
+  // the play button, with caption/description rendered below as title/description text
+  // (Figma's video-card look); when absent, the placeholder falls back to a flat tinted box.
+  thumbnailUrl?: string;
+  description?: string;
 }
 
 // There are documented real-world cases (Expo SDK 53+) of `statusChange` getting stuck on
@@ -23,7 +28,7 @@ interface LessonVideoProps {
 // is a fallback so the learner isn't stuck on a spinner forever even if that event never fires.
 const READY_TIMEOUT_MS = 15000;
 
-export function LessonVideo({ url, caption }: LessonVideoProps) {
+export function LessonVideo({ url, caption, thumbnailUrl, description }: LessonVideoProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const player = useVideoPlayer(null);
@@ -61,12 +66,16 @@ export function LessonVideo({ url, caption }: LessonVideoProps) {
     <View style={styles.wrapper}>
       {!hasStarted ? (
         <Pressable onPress={startPlayback}>
-          <GlassCard style={styles.placeholder}>
+          <View style={styles.placeholder}>
+            {thumbnailUrl ? (
+              <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            ) : null}
             <View style={styles.playCircle}>
               <Play size={28} color={colors.primary.DEFAULT} />
             </View>
-            {caption ? <Text style={styles.placeholderCaption}>{caption}</Text> : null}
-          </GlassCard>
+          </View>
+          {caption ? <Text style={styles.placeholderCaption}>{caption}</Text> : null}
+          {description ? <Text style={styles.placeholderDescription}>{description}</Text> : null}
         </Pressable>
       ) : (
         <View style={styles.videoBox}>
@@ -99,9 +108,11 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     placeholder: {
       aspectRatio: 16 / 9,
+      borderRadius: radii.md,
+      overflow: 'hidden',
+      backgroundColor: colors.surface.glassSoft,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: spacing.sm,
     },
     playCircle: {
       width: 56,
@@ -112,6 +123,12 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       justifyContent: 'center',
     },
     placeholderCaption: {
+      marginTop: spacing.xs,
+      fontSize: typography.body,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    placeholderDescription: {
       fontSize: typography.small,
       color: colors.text.secondary,
     },

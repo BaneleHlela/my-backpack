@@ -5,7 +5,7 @@
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { ChevronLeft, Bookmark, Sparkles } from 'lucide-react-native';
+import { Bookmark, Sparkles } from 'lucide-react-native';
 import { spacing, typography } from '@my-backpack/shared';
 import { SearchInput } from '../../../../src/components/dictionary/SearchInput';
 import { TrendingTerms } from '../../../../src/components/dictionary/TrendingTerms';
@@ -13,6 +13,7 @@ import { AlphabetPicker } from '../../../../src/components/dictionary/AlphabetPi
 import { RecentSearches } from '../../../../src/components/dictionary/RecentSearches';
 import { useDictionaryBrowse, BrowseResultRow } from '../../../../src/components/dictionary/DictionaryBrowseList';
 import { setBrowseLetter, type DictionaryTermPreview } from '../../../../src/features/vocab/vocabSlice';
+import { Menubar } from '../../../../src/components/Menubar';
 import type { AppDispatch, RootState } from '../../../../src/store/store';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 
@@ -51,27 +52,23 @@ export default function DictionaryHomeScreen() {
       renderItem={({ item }) => <BrowseResultRow term={item} onPress={() => goToTerm(item._id)} />}
       ListHeaderComponent={
         <View style={styles.header}>
-          <View style={styles.topBar}>
-            <Pressable onPress={() => router.replace('/(app)/home')} style={styles.backButton}>
-              <ChevronLeft size={18} color={colors.text.secondary} />
-              <Text style={styles.backText}>Home</Text>
+          <Menubar label="Home" onBackPress={() => router.replace('/(app)/home')} />
+
+          <View style={styles.topBarActions}>
+            <Pressable
+              onPress={() => router.push({ pathname: '/quiz/dictionary/[miniAppId]', params: { miniAppId, name } })}
+              style={styles.bucketButton}
+            >
+              <Sparkles size={14} color={colors.primary.DEFAULT} />
+              <Text style={styles.bucketButtonText}>Take Quiz</Text>
             </Pressable>
-            <View style={styles.topBarActions}>
-              <Pressable
-                onPress={() => router.push({ pathname: '/quiz/dictionary/[miniAppId]', params: { miniAppId, name } })}
-                style={styles.bucketButton}
-              >
-                <Sparkles size={14} color={colors.primary.DEFAULT} />
-                <Text style={styles.bucketButtonText}>Take Quiz</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => router.push({ pathname: '/(app)/miniapp/[miniAppId]/bucket', params: { miniAppId, name } })}
-                style={styles.bucketButton}
-              >
-                <Bookmark size={14} color={colors.primary.DEFAULT} />
-                <Text style={styles.bucketButtonText}>My Bucket</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              onPress={() => router.push({ pathname: '/(app)/miniapp/[miniAppId]/bucket', params: { miniAppId, name } })}
+              style={styles.bucketButton}
+            >
+              <Bookmark size={14} color={colors.primary.DEFAULT} />
+              <Text style={styles.bucketButtonText}>My Bucket</Text>
+            </Pressable>
           </View>
 
           <Text style={styles.title}>{name ?? 'Dictionary'}</Text>
@@ -135,23 +132,12 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   header: {
     marginBottom: spacing.sm,
   },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backText: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
-  },
   topBarActions: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
     gap: spacing.xs,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
   },
   bucketButton: {
     flexDirection: 'row',
