@@ -8,6 +8,7 @@ import roadmapReducer from '../features/roadmap/roadmapSlice';
 import vocabReducer from '../features/vocab/vocabSlice';
 import quizReducer from '../features/quiz/quizSlice';
 import studioReducer from '../features/studio/studioSlice';
+import aiChatReducer from '../features/aiChat/aiChatSlice';
 
 export const store = configureStore({
   reducer: {
@@ -20,6 +21,7 @@ export const store = configureStore({
     vocab: vocabReducer,
     quiz: quizReducer,
     studio: studioReducer,
+    aiChat: aiChatReducer,
   },
 });
 

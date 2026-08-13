@@ -6,12 +6,19 @@
 //
 // mode: 'dynamic' quizzes (e.g. "General Dictionary Quiz") select questions live from the
 // profile's bucket each session. mode: 'fixed' quizzes (e.g. a roadmap lesson's practice
-// set) use a pinned questionIds list. Lessons reference a Quiz via Lesson.quizId instead
-// of storing questionIds directly.
+// set) use a pinned questionIds list — RoadmapNode.items[] references these Quiz docs
+// directly by _id (itemType: 'quiz'), there is no Lesson.quizId wrapper. mode: 'pool'
+// quizzes (added for mobile's Quiz Modes feature) select a random slice of every active
+// Question scoped to the quiz's miniAppId (a Course, for roadmap content) — questionIds
+// stays empty, and sourceMiniAppIds/bucketFilter are unused for this mode. One
+// isDefault:true, mode:'pool' Quiz is auto-created per Course (see
+// studio/course.service.ts's createCourse and seed/migrations/2026-08-quiz-modes-pool.ts
+// for the backfill) so `POST /api/quiz/session { miniAppId: courseId }` resolves to it the
+// same way it already does for Dictionary's dynamic quiz.
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
 import { BucketFilter } from './quizSession.model';
 
-export type QuizMode = 'dynamic' | 'fixed';
+export type QuizMode = 'dynamic' | 'fixed' | 'pool';
 
 // 'immediate' shows correctness/points right after each question (a submit-per-question
 // flow); 'end' defers all feedback to a single breakdown on the results screen.
@@ -67,7 +74,7 @@ const quizSchema = new Schema<IQuizDocument>(
     miniAppId: { type: Schema.Types.ObjectId, ref: 'MiniApp', required: true },
     sourceMiniAppIds: { type: [Schema.Types.ObjectId], ref: 'MiniApp', default: [] },
     title: { type: String, required: true },
-    mode: { type: String, enum: ['dynamic', 'fixed'], required: true },
+    mode: { type: String, enum: ['dynamic', 'fixed', 'pool'], required: true },
     questionIds: { type: [Schema.Types.ObjectId], ref: 'Question', default: [] },
     settings: { type: quizSettingsSchema, required: true },
     isUserAdjustable: { type: Boolean, default: false },

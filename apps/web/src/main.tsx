@@ -22,6 +22,8 @@ import ProfileSetupPage from './pages/ProfileSetupPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import SubjectHomePage from './pages/subject/SubjectHomePage';
 import CoursePage from './pages/course/CoursePage';
+import CourseChatPage from './pages/course/CourseChatPage';
+import CourseChatAiHelperPage from './pages/course/CourseChatAiHelperPage';
 import LessonPlayerPage from './pages/lesson/LessonPlayerPage';
 import QuizItemPlayerPage from './pages/lesson/QuizItemPlayerPage';
 import MiniAppPage from './pages/miniapp/MiniAppPage';
@@ -94,6 +96,14 @@ function AppRoutes() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/subject/:subjectSlug" element={<SubjectHomePage />} />
           <Route path="/subject/:subjectSlug/course/:courseSlug" element={<CoursePage />} />
+          <Route
+            path="/subject/:subjectSlug/course/:courseSlug/chat"
+            element={<CourseChatPage />}
+          />
+          <Route
+            path="/subject/:subjectSlug/course/:courseSlug/chat/ai-helper"
+            element={<CourseChatAiHelperPage />}
+          />
           <Route
             path="/subject/:subjectSlug/course/:courseSlug/lesson/:lessonId"
             element={<LessonPlayerPage />}

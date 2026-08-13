@@ -36,8 +36,24 @@ export async function searchVocab(
   miniAppId: string,
   profileId: string
 ): Promise<SearchResult> {
-  const entries = await searchWord(word);
-  const { term, definitions, isNew } = await parseAndStoreTerm(entries, miniAppId);
+  // Skip the external Dictionary API entirely if this word is already stored — avoids
+  // re-exposing every repeat search to a flaky third-party API for no benefit (parseAndStoreTerm
+  // was already treating it as idempotent, just after paying for the external round-trip).
+  const normalisedWord = word.toLowerCase().trim();
+  const existingTerm = await Term.findOne({ word: normalisedWord });
+
+  let term: ITermDocument;
+  let definitions: IDefinitionDocument[];
+  let isNew: boolean;
+
+  if (existingTerm) {
+    term = existingTerm;
+    definitions = await Definition.find({ termId: existingTerm._id }).sort({ order: 1 });
+    isNew = false;
+  } else {
+    const entries = await searchWord(word);
+    ({ term, definitions, isNew } = await parseAndStoreTerm(entries, miniAppId));
+  }
 
   const bucket = await TermBucket.findOne({ profileId, miniAppId });
   let isInBucket = false;

@@ -1,21 +1,24 @@
 // Ports apps/web's CoursePage.tsx: progress header + RoadmapPath + a quick-links row for the
-// Course's linked MiniApps. Per Decision 9 in the mobile roadmap/quiz plan, the course is
-// always already loaded in `coursesByKey` from the Subject screen (Home -> Subject -> Course
-// is the only navigation path in this build, no course deep-linking) — no fallback fetch for
-// missing course metadata. A separate fetchCourseDetail call still runs to populate
-// course.miniAppIds (the list endpoint only returns plain id strings — see contentSlice.ts).
+// Course's linked MiniApps. Per Decision 9 in the mobile roadmap/quiz plan, the course used to
+// always already be loaded in `coursesByKey` from the Subject screen (Home -> Subject -> Course
+// was the only navigation path). Per-profile last-route resume (see (app)/_layout.tsx's
+// RouteTracker) can now land here directly, so this screen also fetches `coursesByKey` itself
+// when missing, same as the Subject screen does — see the fetchCoursesBySubject effect below.
+// A separate fetchCourseDetail call still runs to populate course.miniAppIds (the list endpoint
+// only returns plain id strings — see contentSlice.ts).
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IMiniApp } from '@my-backpack/shared';
-import { fetchCourseDetail } from '../../../../../../src/features/content/contentSlice';
+import { fetchCourseDetail, fetchCoursesBySubject } from '../../../../../../src/features/content/contentSlice';
 import { fetchRoadmapByCourse } from '../../../../../../src/features/roadmap/roadmapSlice';
 import RoadmapPath from '../../../../../../src/components/roadmap/RoadmapPath';
 import CoursePathActions from '../../../../../../src/components/roadmap/CoursePathActions';
 import LessonModal from '../../../../../../src/components/course/LessonModal';
 import ResourcesModal from '../../../../../../src/components/course/ResourcesModal';
+import QuizPickerModal from '../../../../../../src/components/course/QuizPickerModal';
 import { Menubar } from '../../../../../../src/components/Menubar';
 import type { AppDispatch, RootState } from '../../../../../../src/store/store';
 import { useTheme } from '../../../../../../src/theme/ThemeContext';
@@ -43,6 +46,7 @@ export default function CourseScreen() {
 
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
   const [showResourcesModal, setShowResourcesModal] = useState(false);
+  const [showQuizPicker, setShowQuizPicker] = useState(false);
   const [comingSoon, setComingSoon] = useState<string | null>(null);
 
   let fieldSlug = '';
@@ -73,6 +77,13 @@ export default function CourseScreen() {
     if (!fieldSlug || !subjectSlug || !courseSlug) return;
     dispatch(fetchCourseDetail({ fieldSlug, subjectSlug, courseSlug }));
   }, [dispatch, fieldSlug, subjectSlug, courseSlug]);
+
+  // Self-sufficient fallback for when this screen is entered directly (resumed last route)
+  // rather than via the Subject screen, which is normally what populates coursesByKey.
+  useEffect(() => {
+    if (!fieldSlug || !subjectSlug || coursesByKey[subjectKey]) return;
+    dispatch(fetchCoursesBySubject({ fieldSlug, subjectSlug }));
+  }, [dispatch, fieldSlug, subjectSlug, subjectKey, coursesByKey]);
 
   const pct = currentRoadmap
     ? Math.round((currentRoadmap.completedItems / (currentRoadmap.totalItems || 1)) * 100)
@@ -150,7 +161,7 @@ export default function CourseScreen() {
               onSelectLesson={(lessonId) => setActiveLessonId(lessonId)}
               onSelectQuiz={(itemId, nodeId) =>
                 router.push({
-                  pathname: '/quiz/[itemId]',
+                  pathname: '/quiz/modes/[itemId]',
                   params: { itemId, nodeId, subjectSlug, courseSlug },
                 })
               }
@@ -162,8 +173,14 @@ export default function CourseScreen() {
       {currentRoadmap && (
         <CoursePathActions
           onResourcesPress={() => setShowResourcesModal(true)}
-          onQuizzesPress={() => setComingSoon('Quizzes')}
+          onQuizzesPress={() => setShowQuizPicker(true)}
           onMiniAppsPress={() => setComingSoon('Mini-apps')}
+          onChatPress={() =>
+            router.push({
+              pathname: '/(app)/subject/[subjectSlug]/course/[courseSlug]/chat',
+              params: { subjectSlug, courseSlug, courseId: course._id, courseName: course.name },
+            })
+          }
         />
       )}
 
@@ -177,6 +194,17 @@ export default function CourseScreen() {
 
       {showResourcesModal && currentRoadmap && (
         <ResourcesModal roadmap={currentRoadmap} onClose={() => setShowResourcesModal(false)} />
+      )}
+
+      {showQuizPicker && currentRoadmap && (
+        <QuizPickerModal
+          roadmap={currentRoadmap}
+          courseId={course._id}
+          courseName={course.name}
+          subjectSlug={subjectSlug}
+          courseSlug={courseSlug}
+          onClose={() => setShowQuizPicker(false)}
+        />
       )}
 
       {comingSoon && (

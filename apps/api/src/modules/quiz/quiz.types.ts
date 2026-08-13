@@ -10,6 +10,7 @@ export interface CreateSessionDto {
     questionTypes?: string[];
     bucketFilter?: BucketFilter;
     feedbackMode?: FeedbackMode;
+    shuffleQuestions?: boolean;
   };
 }
 

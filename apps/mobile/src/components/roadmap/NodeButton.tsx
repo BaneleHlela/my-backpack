@@ -98,7 +98,7 @@ function createStyles(colors: ThemeColors) {
     },
     outer: {
       width: NODE_BUTTON_SIZE,
-      height: NODE_BUTTON_SIZE,
+      height: NODE_BUTTON_SIZE * 0.9,
       borderRadius: radii.full,
       alignItems: 'center',
       justifyContent: 'center',

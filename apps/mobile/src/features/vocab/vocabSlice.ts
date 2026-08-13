@@ -86,6 +86,11 @@ interface VocabState {
   searchResult: VocabSearchResult | null;
   searchStatus: 'idle' | 'loading' | 'success' | 'not_found' | 'error';
   searchError: string | null;
+  // requestId of the most recently *dispatched* searchVocab thunk. A fulfilled/rejected whose
+  // requestId doesn't match this is a stale response (e.g. a paused-mid-word search like "sear"
+  // resolving after the user finished typing "search") and must be ignored, or it can silently
+  // overwrite a correct result with an outdated one.
+  searchRequestId: string | null;
 
   activeTerm: TermDetailResult | null;
   activeTermLoading: boolean;
@@ -120,6 +125,7 @@ const initialState: VocabState = {
   searchResult: null,
   searchStatus: 'idle',
   searchError: null,
+  searchRequestId: null,
 
   activeTerm: null,
   activeTermLoading: false,
@@ -307,6 +313,9 @@ const vocabSlice = createSlice({
       state.searchResult = null;
       state.searchStatus = 'idle';
       state.searchError = null;
+      // No requestId will ever match null, so any in-flight response for the query the user
+      // just cleared is guaranteed to be dropped as stale when it arrives.
+      state.searchRequestId = null;
     },
     clearActiveTerm(state) {
       state.activeTerm = null;
@@ -325,15 +334,18 @@ const vocabSlice = createSlice({
   extraReducers: (builder) => {
     builder
       // search
-      .addCase(searchVocab.pending, (state) => {
+      .addCase(searchVocab.pending, (state, action) => {
         state.searchStatus = 'loading';
         state.searchError = null;
+        state.searchRequestId = action.meta.requestId;
       })
       .addCase(searchVocab.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.searchRequestId) return; // stale — a newer search has since been dispatched
         state.searchStatus = 'success';
         state.searchResult = action.payload;
       })
       .addCase(searchVocab.rejected, (state, action) => {
+        if (action.meta.requestId !== state.searchRequestId) return; // stale — a newer search has since been dispatched
         const payload = action.payload as { notFound?: boolean; message?: string } | undefined;
         state.searchResult = null;
         if (payload?.notFound) {

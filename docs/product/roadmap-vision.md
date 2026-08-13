@@ -60,6 +60,9 @@ Phase 3 transforms My Backpack from a consumer app into a platform.
 - Question builder — write MCQ, DnD, and audio questions through a guided UI
 - Class management — assign content to a class, monitor individual learner progress
 - Content review workflow — AI drafts questions, teacher approves or edits
+- Also unlocks Course Chat's Classmates & Teacher tab (AI Helper already ships in Phase 2 — see
+  `course-chat-vision.md` for why the peer/teacher half needs real teacher accounts and a
+  class/cohort model first)
 
 **AI-powered content from books:**
 - Teachers upload PDF textbooks or lesson plans

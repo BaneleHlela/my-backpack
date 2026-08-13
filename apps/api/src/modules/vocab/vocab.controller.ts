@@ -36,7 +36,11 @@ export const searchHandler = catchAsync(async (req: Request, res: Response): Pro
     sendSuccess(res, result);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Search failed';
-    const status = message.startsWith('Word not found') ? 404 : 500;
+    const status = message.startsWith('Word not found')
+      ? 404
+      : message.includes('timed out')
+        ? 504
+        : 500;
     throw new AppError(message, status);
   }
 });

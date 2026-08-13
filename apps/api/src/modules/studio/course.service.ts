@@ -1,10 +1,16 @@
 // Business logic for Content Studio Course CRUD. Creating a course also creates its
-// (empty) Roadmap in the same request — a Course always wraps exactly one Roadmap.
+// (empty) Roadmap and its default practice-pool Quiz in the same request — a Course always
+// wraps exactly one Roadmap, and (for mobile's Quiz Modes feature) always has exactly one
+// mode:'pool', isDefault:true Quiz so `POST /api/quiz/session { miniAppId: course._id }`
+// resolves the same way it already does for Dictionary's dynamic quiz. Existing courses
+// (created before this) are backfilled by seed/migrations/2026-08-quiz-modes-pool.ts, not
+// by this function.
 // All deletes are soft (isActive: false) — real learner progress can already be attached.
 import { Types } from 'mongoose';
 import Course, { ICourseDocument, ICourseCurriculumTag } from '../../models/core/course.model';
 import Roadmap from '../../models/learning/roadmap.model';
 import Subject from '../../models/core/subject.model';
+import Quiz from '../../models/learning/quiz.model';
 import { AppError } from '../../utils/AppError';
 import { isDuplicateKeyError } from './studio.utils';
 
@@ -22,8 +28,9 @@ export async function createCourse(input: CreateCourseInput): Promise<ICourseDoc
 
   const roadmap = await Roadmap.create({ title: `${input.name} Roadmap`, nodes: [] });
 
+  let course: ICourseDocument;
   try {
-    return await Course.create({
+    course = await Course.create({
       subjectId: subject._id,
       name: input.name,
       slug: input.slug,
@@ -39,6 +46,34 @@ export async function createCourse(input: CreateCourseInput): Promise<ICourseDoc
     }
     throw err;
   }
+
+  try {
+    await Quiz.create({
+      miniAppId: course._id,
+      sourceMiniAppIds: [course._id],
+      title: `${input.name} Practice Pool`,
+      mode: 'pool',
+      questionIds: [],
+      settings: {
+        questionCount: 200, // deliberate v1 sentinel — see quiz.model.ts's mode:'pool' comment
+        questionTypes: [],
+        bucketFilter: 'all', // unused by pool-mode sourcing, kept for schema completeness
+        feedbackMode: 'immediate',
+        shuffleQuestions: false,
+      },
+      isUserAdjustable: true,
+      isDefault: true,
+      isActive: true,
+    });
+  } catch (err) {
+    // Roll back the Course + Roadmap so a failed pool-quiz creation doesn't leave a course
+    // with no way to ever start a Quiz Modes session.
+    await Course.findByIdAndDelete(course._id);
+    await Roadmap.findByIdAndDelete(roadmap._id);
+    throw err;
+  }
+
+  return course;
 }
 
 export interface UpdateCourseInput {

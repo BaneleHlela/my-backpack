@@ -206,6 +206,36 @@ These models track what learners have done. They are subject-agnostic — the sa
 
 ---
 
+### Quiz
+
+**Purpose:** Defines a configurable set of questions a profile can be quizzed on, decoupled from which MiniApp surfaces it. A `QuizSession` (below) is created from one of these.
+
+**Key fields:**
+
+| Field | Type | Description |
+|---|---|---|
+| `miniAppId` | ObjectId | The mini-app (or, for roadmap content, the Course) this quiz surfaces under |
+| `sourceMiniAppIds` | ObjectId[] | Which mini-app(s)' Terms/Questions/BucketEntries a `'dynamic'` quiz pulls from — unused by `'fixed'`/`'pool'` |
+| `mode` | Enum | `dynamic` \| `fixed` \| `pool` — see below |
+| `questionIds` | ObjectId[] | Pinned, authored order — only meaningful for `mode: 'fixed'` |
+| `settings` | Object | `questionCount`, `timeLimit`, `questionTypes`, `bucketFilter`, `feedbackMode`, `shuffleQuestions` |
+| `isUserAdjustable` | Boolean | Whether a profile can override `settings` at session-create time |
+| `isDefault` | Boolean | The quiz `POST /api/quiz/session { miniAppId }` resolves to for that mini-app |
+| `isActive` | Boolean | Soft-delete flag |
+
+**`mode` — three question-sourcing strategies:**
+- `'dynamic'` — selects live from the profile's bucket each session, scoped to `sourceMiniAppIds` (e.g. "General Dictionary Quiz").
+- `'fixed'` — uses the pinned `questionIds` list, in authored order (e.g. a roadmap lesson's practice/assessment set; `RoadmapNode.items[]` references these `Quiz` docs directly by `_id`, no wrapper).
+- `'pool'` (added August 2026, for mobile's Quiz Modes) — selects a random slice of every active `Question` scoped to the quiz's own `miniAppId`, no bucket, no pinned list. One `isDefault: true, mode: 'pool'` Quiz is auto-created per Course (`studio/course.service.ts`'s `createCourse`) so every game mode can draw from one flat pool of course questions, authored directly in Content Studio (no `Quiz`/node attachment required to create a question — see the `Question` entry below).
+
+**Naming note:** don't confuse `QuizMode` (this field) with `QuizPlayMode`
+(`src/components/quiz/quizPlayModes.ts` in `apps/mobile`) — the player-facing "Classic/Hearts/
+Time Run/…" game-mode concept added August 2026. Different axis (which questions vs. how you
+play them), deliberately different name — see `docs/technical/mobile-architecture.md`'s "Quiz
+Modes" section for the full writeup, including how the two axes compose.
+
+---
+
 ### QuizSession
 
 **Purpose:** Groups a set of answers into a single learning session. Created when a learner starts a quiz; completed or abandoned when they finish.
@@ -222,6 +252,11 @@ These models track what learners have done. They are subject-agnostic — the sa
 | `results` | Object | `totalQuestions`, `answered`, `skipped`, `correct`, `totalPointsAvailable`, `totalPointsAwarded`, `percentageScore`, `timeTakenMs` |
 | `startedAt` | Date | Session start time |
 | `completedAt` | Date | Session completion time |
+
+**Note on early completion:** `completeSession` computes `results` from actually-answered
+`AnswerRecord`s, not from `questionIds.length`, and doesn't require every question to be
+answered first — a session can be completed early (e.g. mobile's Quiz Modes ending a Hearts run
+at 0 lives) and still gets a correct, real results breakdown.
 
 ---
 
@@ -365,6 +400,43 @@ A `'quiz'` item references a `Quiz` document **directly** — there is no wrappe
 
 ---
 
+### AiChatMessage (added August 2026)
+
+**Purpose:** One turn in a learner's Course Chat "AI Helper" conversation — a 1:1, course-scoped
+chat with an AI tutor (Claude Haiku). Backs Course Chat's AI Helper; see
+[docs/product/course-chat-vision.md](../product/course-chat-vision.md) for the full feature and
+why the other half (Classmates & Teacher) isn't built yet.
+
+**Key fields:**
+
+| Field | Type | Description |
+|---|---|---|
+| `profileId` | ObjectId | The learner |
+| `courseId` | ObjectId | The course this thread is scoped to |
+| `role` | Enum | `'user'` \| `'assistant'` |
+| `content` | String | The message text |
+| `createdAt` | Date | Via `{ timestamps: true }` — the ordering field for a thread |
+
+**Relationships:** Many per profile per course — every message is its own document, never
+wrapped in a session. History persists indefinitely (no reset, no TTL); a learner can leave and
+return to the same thread.
+
+**Indexes:**
+- `{ profileId: 1, courseId: 1, createdAt: 1 }` — ordered history fetch for one profile's thread.
+- `{ profileId: 1, role: 1, createdAt: -1 }` — backs both rate-limit checks below, across all of
+  a profile's courses.
+
+**Business rules:**
+- **Rate limiting** — both derived directly from this collection, no separate counter/Redis:
+  a 5-second cooldown since the profile's last `role: 'user'` message, and a 50-message/day
+  rolling-24h cap per profile.
+- A send-message turn only persists the user's message and the AI's reply **together**, after
+  the Anthropic call succeeds — never a user message with no reply.
+- Only the last 20 messages of a thread are sent to Claude as conversation context per turn,
+  independent of how long the full persisted history grows (cost/latency control).
+
+---
+
 ## Vocabulary App Models
 
 These models are specific to the vocabulary mini-app and live in `models/apps/language/vocabulary/`.
@@ -476,6 +548,12 @@ These models are specific to the vocabulary mini-app and live in `models/apps/la
 | `profileId` | ObjectId | Null for generic questions |
 | `isActive` | Boolean | Whether this question is in use |
 | `seedKey` | String (optional) | Idempotent upsert key for hand-authored seed content — indexed, sparse, not unique. Lets seed scripts distinguish variants that `termId + type` can't (e.g. six dnd_single quiz variants per vowel across the vowels roadmap sequence). Not used anywhere in application logic. |
+
+**No `Quiz`/node attachment required:** `miniAppId` alone is enough to create a Question —
+`nodeId` and every `Quiz.questionIds` reference are optional/separate. A question scoped to a
+Course (`miniAppId: course._id`) but attached to no Quiz and no node is exactly what Content
+Studio's "Question Bank" section authors, and exactly what a `mode: 'pool'` Quiz (see above)
+draws its random slice from for mobile's Quiz Modes.
 
 **The `content` field (Schema.Types.Mixed):**
 

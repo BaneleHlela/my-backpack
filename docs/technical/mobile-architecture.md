@@ -1098,4 +1098,342 @@ convention.
 
 ---
 
-*Last updated: 2026-08-04.*
+## Quiz Modes (mobile + backend + Content Studio) (August 2026)
+
+A pre-quiz flow: tapping "Take Quiz" (Dictionary), a quiz item on the Course path, or the Course
+screen's "Quizzes" FAB opens a **Quiz Mode Select** screen (a grid of 7 mode cards — Classic/
+Hearts/Time Run/Streak/Perfect/Endless/Survival) before the existing quiz-taking flow. Shipped in
+two passes:
+
+1. **UI/UX only** — the grid, settings modal, and navigation wiring, with zero gameplay effect
+   (every mode started the same unmodified session).
+2. **Real gameplay + question sourcing** — this entry now describes the finished feature. Two
+   independent, orthogonal changes made it real:
+   - **Where questions come from** (backend): a new `Quiz.mode: 'pool'` so every game mode can
+     draw from one flat pool of course questions, authored directly in Content Studio.
+   - **How the session plays out** (mobile-only, universal): hearts/timer/streak/mistake-limit/
+     perfect-run rules, applying the same way whether the underlying quiz is a curated roadmap
+     lesson or a course's pool.
+
+### Naming: `QuizPlayMode`, not `QuizMode`
+
+`QuizMode` already exists (`packages/shared/types/quiz.ts`, `'dynamic' | 'fixed'`) and describes
+how a Quiz's *content* is sourced — a different axis entirely from "which game the player wants
+to play." The new catalog type is **`QuizPlayModeId`** (`src/components/quiz/quizPlayModes.ts`,
+mobile-local — see below) specifically to avoid colliding with it. See
+`docs/technical/data-models.md`'s `QuizSession` entry for the cross-reference on the backend
+side.
+
+### New files
+
+- `src/components/quiz/quizPlayModes.ts` — the mode catalog (id, label, blurb, icon, which
+  mode-specific setting it exposes, default settings) and `QuizPlayModeSettings`. Mobile-local
+  rather than `packages/shared` because it carries `lucide-react-native` icon components, which
+  the shared package (plain TS, no JSX/RN deps) can't hold. Purely additive — doesn't touch
+  `IQuiz`/`QuizSettings`/`IQuizSession`.
+- `src/components/quiz/QuizModeSelectScreen.tsx` — the grid screen. Reuses `Menubar` for the
+  back button + peanuts/XP/avatar cluster (this already existed as of the Shared Menubar entry
+  above — an earlier version of this task's brief assumed no stats header existed anywhere in
+  mobile yet and asked for one to be built fresh; that assumption was stale by the time this
+  landed, so `Menubar` is reused as-is, unmodified).
+- `src/components/quiz/QuizModeCard.tsx` — one grid card, built on `GlassCard`. Shows a settings
+  pill when the mode has an adjustable setting.
+- `src/components/quiz/QuizSettingsModal.tsx` — centered dialog (adapts `LessonModal`/
+  `ResourcesModal`'s `Modal` + backdrop-`Pressable` interaction pattern to `animationType:
+  'fade'` and a centered layout instead of their bottom-sheet `'slide'`). Local component state
+  only. "Start Quiz" both saves the draft settings back to the card (so the pill updates) and
+  starts the session in one action.
+- `src/components/course/QuizPickerModal.tsx` — opened from the Course screen's "Quizzes" FAB
+  (`CoursePathActions`), which previously had no real destination ("Coming soon" — see the
+  Course & Topic redesign, Phase C entry above). Two tabs, same Videos/Notes structure as
+  `ResourcesModal`: **Course Quizzes** lists every quiz-type item across the course's nodes
+  (same course-wide aggregation shape as `ResourcesModal`'s video grouping) and hands off to the
+  *same* Quiz Mode Select route a direct on-path quiz-item tap would; **Game Quizzes** embeds
+  the mode grid directly in the tab, targeting `{source:'miniApp', miniAppId: courseId}` — the
+  course's own auto-created pool quiz (see "Question sourcing" below), the same shape
+  Dictionary's "Take Quiz" already used, just pointed at the course. Since the grid *is* already
+  the mode-select step, starting from here goes straight to `/quiz/dictionary/[miniAppId]` (the
+  session route), not back through `/quiz/modes/[itemId]`. An earlier version of this tab
+  quick-played the course's first roadmap quiz item (`findFirstQuizItem`) as a workaround before
+  the pool existed — deleted once there was a real target to point at.
+- `src/components/quiz/QuizModeGrid.tsx` — the 7-card grid + `QuizSettingsModal` wiring,
+  extracted out of `QuizModeSelectScreen` so both it and `QuizPickerModal`'s Game Quizzes tab
+  share one implementation. Plain `flexWrap` layout, not `FlatList` — nesting a `FlatList`
+  inside `QuizPickerModal`'s `ScrollView` would be the classic "VirtualizedList inside a
+  ScrollView of the same orientation" RN anti-pattern, and virtualizing 7 fixed items buys
+  nothing anyway.
+- `app/quiz/modes/[itemId].tsx`, `app/quiz/modes/dictionary/[miniAppId].tsx` — new root-level
+  sibling routes, registered in `app/_layout.tsx`'s `<Stack>` exactly like the two existing quiz
+  routes (`presentation: 'fullScreenModal'`). **Deliberately additive, not a restructure** — the
+  existing `quiz/[itemId]` / `quiz/dictionary/[miniAppId]` routes and their registrations are
+  untouched, given this doc's own documented fragility around `initialRouteName` and
+  `fullScreenModal` (§1.7 of `mobile-screens-and-navigation.md`). Mode-select simply sits ahead
+  of them in the flow and `router.replace()`s into the unchanged session route on start.
+
+### Question sourcing: `Quiz.mode: 'pool'`
+
+A new third `QuizMode` (alongside `'dynamic'`/`'fixed'` — `packages/shared/types/quiz.ts` +
+`quiz.model.ts`'s Mongoose enum, both updated, same "two declarations" pattern as `NodeItemType`
+gaining `'project'` in Phase B). `createQuizSession`'s branch in `quizSession.service.ts` gained
+a `selectPoolQuestions(miniAppId, settings)` helper: `Question.find({ miniAppId, isActive: true,
+...(questionTypes filter) })`, shuffled, then sliced to `settings.questionCount` — mirrors
+`studio/question.service.ts`'s `listQuestions` query shape exactly (same index-backed
+`{miniAppId, isActive}` filter). No bucket, no pinned list.
+
+One `isDefault: true, mode: 'pool'` Quiz (titled `"{Course} Practice Pool"`,
+`isUserAdjustable: true`, `settings.questionCount: 200`) is auto-created per Course —
+`studio/course.service.ts`'s `createCourse` already created the Course's empty Roadmap in the
+same request, so the pool quiz is created right alongside it (rolled back together on failure).
+Existing courses (created before this shipped) are backfilled by
+`apps/api/src/seed/migrations/2026-08-quiz-modes-pool.ts` (`pnpm --filter api
+migrate:quiz-modes-pool`) — check-before-write, safe to re-run.
+
+This is what makes "every game mode draws from one pool of course questions, added by the
+teacher in Content Studio" real end-to-end: `POST /api/dashboard/questions { courseId, ... }`
+(no `nodeId`/`quizId`) already supported creating a question scoped to a course without
+attaching it to any Quiz — the missing pieces were a session-sourcing mode that could actually
+*serve* those unattached questions, and a Studio UI to reach question creation without going
+through a specific Quiz's "+ Add Question" modal (now the Question Bank section on
+`CourseDetailPage.tsx` — see the Content Studio design doc). `quiz.service.ts`'s
+`hasQuizContent` needed an explicit third branch too — it previously treated any non-`'fixed'`
+mode as `'dynamic'` (a bucket check), which would have silently reported `false` for every pool
+quiz once that mode existed.
+
+Mobile's Game Quizzes tab (`QuizPickerModal`) now targets this pool directly
+(`{source:'miniApp', miniAppId: courseId}`) instead of quick-playing a roadmap item — see its
+entry above.
+
+**v1 simplification, not a bug**: there's no "give me the whole pool" query — count-bound modes
+(Classic, Perfect) request their chosen count; open-ended modes (Hearts, Streak, Endless,
+Survival, Time Run) request a large sentinel (`OPEN_ENDED_QUESTION_COUNT = 200` in
+`quizPlayModes.ts`, matching the pool quiz's own default `questionCount`), which naturally caps
+at however many questions actually exist. A course with a small pool just runs out of questions
+(the existing `sessionComplete` flag fires) rather than cycling — a real future improvement once
+pools are large enough for it to matter.
+
+### Gameplay mechanics — universal, client-side only
+
+Hearts/Time Run/Streak/Perfect/Endless/Survival's rules live entirely in
+`QuizSessionScreen.tsx`, applying the same way regardless of `session.source` — a curated
+roadmap-lesson quiz played in Hearts mode really does end at 0 lives, not just a course's pool
+quiz. This works because `completeSession` (`quizSession.service.ts`) already supported ending a
+session early: `SessionResults` are computed from actually-answered `AnswerRecord`s, not from the
+originally-planned `questionIds.length`, and nothing requires every question to be answered
+first. **No backend model change was needed for the mechanics themselves** — only for sourcing
+(above).
+
+The chosen mode + its settings cross the mode-select → session-route navigation boundary as one
+JSON-encoded `play` param (Expo Router params are strings only) —
+`quizPlayModes.ts`'s `encodePlayModeParam`/`parsePlayModeParam`, read by both route wrapper files
+(`app/quiz/[itemId].tsx`, `app/quiz/dictionary/[miniAppId].tsx`) into a new optional `playMode`
+prop on `QuizSessionScreen`, separate from `session` (which quiz/questions) since play-mode is
+orthogonal to sourcing. `toSessionSettingsOverride` maps the subset of `QuizPlayModeSettings`
+the backend actually understands (`questionCount`/`timeLimit`/`feedbackMode`/`shuffleQuestions`
+— all real `QuizSettings` fields) into the session-create override; **`hearts`/`mistakeLimit`
+never reach the API** — they stay purely client-side state, matching the "local-state-only"
+principle `quizPlayModes.ts` already established.
+
+Implementation, inside `QuizSessionScreen`:
+
+- A new effect watches `quiz.lastAnswer` and applies the active mode's per-answer rule exactly
+  once per answer — hearts/mistakes/streak must update for `feedbackMode:'immediate'` sessions
+  too, not just `'end'` ones, so this can't live inside the existing `feedbackMode==='end'`
+  auto-advance effect alone. Treats a skip the same as a wrong answer (`!isCorrect`) for
+  Hearts/Perfect/Endless/Streak purposes.
+- **The race this design deliberately avoids**: this new effect and the pre-existing
+  `feedbackMode==='end'` auto-advance effect both depend on `quiz.lastAnswer`, so both fire in
+  the *same* React commit whenever a new answer arrives. If the mode-rule effect (which runs
+  first — React fires a component's effects in declaration order) decides the run is over and
+  dispatches `completeSession`, the second effect's own closure still holds the pre-dispatch
+  `quiz.status`/`quiz.lastAnswer` values (both effects were scheduled from the same render,
+  before either ran) — so without a guard, it would *also* fire, dispatching a conflicting
+  `advanceQuestion()`/`completeSession()` and potentially undoing the early-end decision. A
+  plain state flag can't fix this (same stale-closure problem), so the mode-rule effect writes a
+  ref (`endedEarlyRef`, read fresh at call time, not closure-creation time) synchronously before
+  dispatching; the second effect checks it first and bails. `handleAdvance` (the immediate-
+  feedback manual tap) checks the same ref defensively, though in practice the mode-rule effect
+  already moves `quiz.status` away from `'awaiting_advance'` before the user can tap it.
+- Time Run runs an independent `setInterval` countdown (via `setTimeLeftMs`'s updater form, so
+  the ticking effect never needs to restart on a stale closure), ending the session the instant
+  it hits 0 regardless of what question is mid-flight.
+- A small in-session HUD (hearts remaining / mistakes so far / streak / time left) renders above
+  `QuizProgress` — omitted entirely for Classic/Perfect, which have nothing worth showing
+  mid-run.
+- `QuizResults.tsx` gained an optional `banner` prop (a single string — "Out of hearts!",
+  "Time's up!", "Too many mistakes!", "Perfect run ended.", or Streak's "Best streak: N") —
+  `QuizResults` just renders whatever it's given; all the "why did this end" logic stays in
+  `QuizSessionScreen`.
+- `handleQuizAgain` resets every mode counter (hearts/mistakes/streak/bestStreak/timeLeftMs/
+  `endedEarlyRef`) before restarting — otherwise a second playthrough would start already at 0
+  hearts.
+- Two knock-on fixes in the same file, both real bugs this pass would have shipped otherwise:
+  the results screen's `returnLabel` fallback was hardcoded `'Back to Dictionary'` for every
+  `source:'miniApp'` session — now `` `Back to ${title}` `` (or `'Back'`), since `miniApp` now
+  also means a course's pool quiz. The empty-state copy ("No words to quiz yet… Add a few words
+  to your bucket from the Dictionary…") was Dictionary-specific for the same reason — now
+  generic ("No questions to quiz yet… Check back once more questions have been added.").
+
+### Settings-pill gating without a new API call
+
+`Quiz.isUserAdjustable` is what the pill's interactivity should follow, per the product
+decision: the mode grid always shows regardless of this flag, but the *settings pill* is only
+interactive for adjustable quizzes — a fixed roadmap/course quiz's card shows its default value
+as a static, non-pressable label instead. Rather than adding a new field to
+`IQuizItemSummary`/a new API call, `QuizModeSelectScreen` derives this from which entry point
+was used: `target.source === 'miniApp'` stands in for `isUserAdjustable: true`;
+`target.source === 'roadmapItem'` stands in for `false`. This now correctly covers **both**
+adjustable quizzes seeded today — Dictionary's "General Dictionary Quiz" and every course's
+auto-created pool quiz (both seeded `isUserAdjustable: true`) — while every roadmap-item quiz
+stays non-adjustable. Still a simplification, not a real flag read — revisit if a roadmap-item
+quiz is ever seeded `isUserAdjustable: true`.
+
+### Fonts: Chewy + Fredoka (new screens only)
+
+Neither font was loaded anywhere in the app before this. `expo-font` +
+`@expo-google-fonts/chewy` + `@expo-google-fonts/fredoka` were added and wired into
+`app/_layout.tsx`'s existing splash-hold logic: `useFonts()`'s `[loaded, error]` now gates the
+native-splash-to-`LaunchScreen` hand-off alongside `isCheckingAuth`, so the app doesn't render
+text in the wrong font for one frame. Chewy (`Chewy_400Regular`) is used sparingly, for the one
+big page-level heading per new screen ("Quiz Modes"); Fredoka (400/500/600) covers card titles,
+blurbs, pills, and modal body text. This is scoped to the Quiz Modes screens only — not an
+app-wide font sweep.
+
+### Theme: dark (the app's current shipped default)
+
+Built against `darkColors` — the theme every other mobile screen actually renders in today (see
+"Light/dark theme system" above). `docs/design/brand-guide.md` still states a light-only design
+intent ("avoid dark backgrounds"); that's a pre-existing tension between the brand guide and the
+shipped Phase A default, not something introduced or resolved here — flagged to Banele rather
+than picked silently, since the two docs actively disagree.
+
+### Figma
+
+No node reference was available for the mode-select grid frame at build time — the only
+"Landing Page" frame this repo had on record (file `OaE5PxSOT5p8Fby7SUpoP7`, node `22:27039`) is
+the unrelated Course-screen path, confirmed by pulling its metadata directly rather than assumed
+from the name. `get_metadata` on the file's one listed page (`0:1`, "Cover") returned an empty
+canvas with no enumerable children, so there was no safe way to discover a quiz-mode-select node
+id without guessing — which the design-to-code skill explicitly disallows. Built instead from
+the mechanics table (mode mechanic → suggested setting) plus `theme.ts` tokens. **Revisit the
+visual pass once a real node id/link is available** — spacing, colours, and copy here are a
+reasonable baseline, not a pulled design.
+
+### A bug found while tracing this flow, not fixed here
+
+`QuizSessionScreen.tsx`'s post-quiz auto-advance still `router.replace()`s to
+`.../course/[courseSlug]/lesson/[lessonId]` when the next roadmap item is a lesson. That route
+was removed by the Course & Topic redesign, Phase C, in favour of `LessonModal` (a modal over
+the Course screen, not a route) — so this specific auto-advance branch is dead code today,
+pre-existing and unrelated to Quiz Modes. Not fixed here because the right fix depends on a
+product decision this task wasn't scoped to make (e.g. does auto-advance-into-a-lesson still
+make sense now that lessons open in a modal rather than a full screen?).
+
+### Verification status
+
+`tsc --noEmit` clean across all three workspaces (`apps/api`, `apps/web`, `apps/mobile`); mobile
+`expo export --platform android` clean. **Not yet confirmed on a real device or emulator**, nor
+against a real Atlas database — the migration script and the new pool-mode session-creation path
+have only been read-reviewed and type-checked, not run end-to-end. Consistent with this doc's
+established practice of flagging what hasn't been device/data-tested yet (see the `dnd_single`
+and Phase C entries above).
+
+---
+
+## Course Chat (mobile + backend) (August 2026)
+
+A new entry point on the Course screen — a fourth floating action button added to
+`CoursePathActions.tsx`'s existing bottom-right FAB stack, directly above the Mini-apps FAB
+(same two-tone outer/inner styling as the other three; an emerald/success colour pairing, since
+there's no Figma source for this button to match the way the original three came from Figma's
+"Course Button" component — see that file's module comment). **Not** placed inline in the Course
+screen's header/progress area, where an earlier draft of this feature briefly put it — moved
+into the FAB stack per direct feedback once the feature was live. Tapping it opens a hub with two
+destinations: **AI Helper** (a 1:1, course-scoped chat with an AI tutor, built fully this pass)
+and **Classmates & Teacher** (a visibly-present, disabled placeholder — no teacher accounts or
+class/cohort model exist yet; see
+[docs/product/course-chat-vision.md](../product/course-chat-vision.md) for the full product
+reasoning, including why that half wasn't improvised around the gap).
+
+### Why two ordinary nested routes, not a root-level full-screen modal
+
+Unlike the quiz routes (`quiz/[itemId].tsx` etc.), which are registered at the app root with
+`presentation: 'fullScreenModal'` specifically because Expo Router requires modal screens to
+live outside the group whose transition they're overriding, Course Chat's two new screens —
+`(app)/subject/[subjectSlug]/course/[courseSlug]/chat/index.tsx` (hub) and
+`.../chat/ai-helper.tsx` (the chat itself) — are ordinary nested routes inside the `(app)` group.
+Being a distinct routed screen (rather than an in-place `<Modal>` like `LessonModal`/
+`QuizPickerModal`) already satisfies "full screen, not a modal" without touching the root
+`_layout.tsx`'s `<Stack/>` config, which a comment there already flags as fragile around
+`initialRouteName`. This is also the first real nested dynamic sub-route under
+`course/[courseSlug]/` — everything else at that level (`LessonModal`, `ResourcesModal`,
+`QuizPickerModal`) is a modal, not a route, since the Course & Topic redesign, Phase C removed
+the one dedicated sub-route (`lesson/[lessonId].tsx`) that used to exist there.
+
+`courseId`/`courseName` are passed as router params directly from the course screen's button
+(the same values already in scope there) rather than re-derived from Redux on the hub/chat
+screens — simpler than replicating the course screen's `fieldSlug`/`subjectKey`/`course`
+derivation chain a second and third time.
+
+### New files
+
+- `src/features/aiChat/aiChatSlice.ts` — mirrors `quizSlice.ts`'s conventions
+  (`rejectWithValue` + shared `extractErrorMessage`, string-union status fields). State is keyed
+  by `courseId` (`messagesByCourseId: Record<string, IAiChatMessage[]>`) so switching between
+  courses never clobbers another course's thread in memory. Two thunks: `fetchChatHistory` (GET)
+  and `sendChatMessage` (POST, returns both the persisted user message and the AI's reply in one
+  response — see the backend section below for why).
+- `src/components/course/CourseChatHubScreen.tsx` — the two-tile hub. The AI Helper tile is a
+  live `Pressable` → `GlassCard`; the Classmates & Teacher tile is deliberately **not**
+  interactive at all (no `onPress`) — its "🔜 Coming soon" badge and explanatory line are already
+  visible on the tile, so there's nothing a tap would reveal that isn't already shown.
+- `src/components/course/AiHelperChatScreen.tsx` — the chat itself. Optimistic send: the
+  learner's message renders immediately from local `pendingText` state (not Redux) while the
+  request is in flight; on success it's cleared and the real `{userMessage, assistantMessage}`
+  pair from Redux takes over, on failure it stays with an inline "tap to retry" chip. Threads
+  `ageGroup` down from `state.auth.activeProfile` the same way `QuizSessionScreen.tsx` does
+  (`isChild = ageGroup === 'child'` → bigger touch targets, `typography.bodyChild` for bubble/
+  input text).
+- `src/components/course/ChatBubble.tsx` — one message bubble (`GlassCard`-wrapped, aligned by
+  `role`), shared by `AiHelperChatScreen`.
+- Web mirrors: `apps/web/src/features/aiChat/aiChatSlice.ts`,
+  `apps/web/src/pages/course/CourseChatPage.tsx` (hub),
+  `apps/web/src/pages/course/CourseChatAiHelperPage.tsx`,
+  `apps/web/src/components/chat/ChatBubble.tsx` — same slice shape, same optimistic-send pattern,
+  new routes `/subject/:subjectSlug/course/:courseSlug/chat` and `.../chat/ai-helper` in
+  `main.tsx`. Unlike mobile, the web pages re-derive `course` from Redux (`coursesByKey`/
+  `currentCourse`, with the same direct-link fallback fetch `CoursePage.tsx` already uses) rather
+  than receiving it via route params — React Router's `:courseSlug` segment doesn't carry
+  arbitrary extra params the way Expo Router's `router.push({ params })` does, and nothing else
+  in this app's web routing passes data via `location.state`, so re-deriving keeps this
+  consistent with the existing convention rather than introducing a new one.
+
+### Backend (`apps/api`)
+
+- New model `models/learning/aiChatMessage.model.ts` (`profileId`, `courseId`, `role: 'user' |
+  'assistant'`, `content`, timestamps) — see the `AiChatMessage` entry in
+  [data-models.md](data-models.md) for the full field/index writeup.
+- New module `modules/aiChat/` (routes/controller/service/types, same thin-controller pattern as
+  `modules/vocab/`), mounted at `/api/ai-chat` in `app.ts`.
+- New `services/aiChatHelper.service.ts` — reuses the exact `@anthropic-ai/sdk` /
+  `claude-haiku-4-5-20251001` setup from `questionGeneration/aiGenerator.ts`, but wraps the API
+  call in a try/catch mapping any failure to a 503 (that call is synchronous/user-facing here,
+  unlike `aiGenerator.ts`'s fire-and-forget usage) and uses the SDK's `system` parameter for a
+  proper multi-turn shape instead of `aiGenerator.ts`'s single-shot embedded-instructions style.
+- **Rate limiting** — a 5s cooldown + 50 messages/day cap, both per-profile (not per-course) and
+  derived directly from the `AiChatMessage` collection's own timestamps — no new Redis/counter
+  infra, since neither Upstash Redis (configured in `config/redis.ts` but unused anywhere else in
+  this codebase) nor a per-user rate limiter had any existing precedent here to build on.
+- A send-message turn only persists the user's message and the AI's reply **together**, after
+  the Anthropic call succeeds — never a saved user message with no reply, so a failed send can
+  just be retried client-side with no orphaned-message cleanup needed.
+
+### Verification status
+
+`tsc --noEmit` clean across `apps/api`/`apps/web`/`apps/mobile`, plus a clean mobile `expo
+export --platform android`. **Not yet exercised against a live Anthropic call, a real Atlas
+database, or a real device/emulator** — consistent with this doc's established practice of
+flagging what hasn't been run end-to-end yet.
+
+---
+
+*Last updated: 2026-08-12.*

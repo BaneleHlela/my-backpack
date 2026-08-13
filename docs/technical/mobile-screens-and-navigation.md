@@ -60,6 +60,8 @@ Worth knowing before a restyle: two screens use `replace()` for what *reads* lik
 
 `quiz/[itemId].tsx` and `quiz/dictionary/[miniAppId].tsx` sit at the root of `app/`, siblings of `(app)` and `(auth)`, not nested inside `(app)`. Two reasons: nothing links to them except from already-guarded `(app)` screens, so they don't need their own guard; and sitting outside `(app)` is what lets them declare `presentation: 'fullScreenModal'` on the root `<Stack>` without that option leaking onto anything else. There's no tab bar yet for them to hide behind, which is why root-level was the cleanest option.
 
+Quiz Modes (see §3/§8) added two more root-level siblings the same way: `quiz/modes/[itemId].tsx` and `quiz/modes/dictionary/[miniAppId].tsx`. These are new routes, not a restructure of the two above — both existing routes and their `<Stack.Screen>` registrations are untouched; the new pair sits ahead of them in the flow (mode-select → the existing session route), registered identically in the root `<Stack>` for the same `fullScreenModal` reason.
+
 ### 1.7 Two gotchas already paid for once — worth not re-discovering
 
 - **`initialRouteName` is required on the root `<Stack>`.** `quiz/[itemId]` is the only route with an *explicit* `<Stack.Screen>` entry (everything else is auto-discovered from disk) — without `initialRouteName="index"` set explicitly, Expo Router defaults to treating that explicit entry as the first route, and a cold start launches straight into the quiz screen instead of `index.tsx`'s auth redirect. This looked like a crash the first time it happened.
@@ -86,18 +88,32 @@ flowchart TD
     Home --> Subject
     Subject --> Course
     Subject --> Dictionary["Dictionary mini-app"]
-    Course --> NodePanel["NodeLessonsPanel\n(today's 'topic' — a bottom sheet, see §5)"]
-    NodePanel --> Lesson
-    NodePanel --> Quiz
-    Lesson -->|auto-advance| Lesson
-    Lesson -->|auto-advance| Quiz
-    Lesson -->|node finished| Course
-    Quiz -->|auto-advance| Lesson
-    Quiz -->|auto-advance| Course
+    Course -->|tap lesson item| Lesson["LessonModal\n(bottom sheet, see §5)"]
+    Course -->|tap quiz item| QuizModes["Quiz Mode Select\n/quiz/modes/[itemId]"]
+    Course -->|Quizzes FAB| QuizPicker["QuizPickerModal\n(course-wide quiz list)"]
+    QuizPicker -->|pick a quiz| QuizModes
+    Course -->|Course Chat button| ChatHub["Course Chat hub\n/chat"]
+    ChatHub -->|AI Helper| AiHelper["AI Helper chat\n/chat/ai-helper"]
+    ChatHub -.->|Classmates & Teacher\n(disabled, coming soon)| ChatHub
+    QuizModes -->|start a mode| Quiz
+    Lesson -->|Mark Completed| Course
+    Quiz -->|auto-advance, next item is a lesson| Lesson
+    Quiz -->|auto-advance, next item is a quiz| Quiz
+    Quiz -->|node finished / no next item| Course
     Dictionary --> TermDetail["Term detail"]
     Dictionary --> Bucket
-    Dictionary --> Quiz
+    Dictionary -->|Take Quiz| DictModes["Quiz Mode Select\n/quiz/modes/dictionary/[miniAppId]"]
+    DictModes --> Quiz
 ```
+
+**Note on the "auto-advance, next item is a lesson" edge**: this is the code's actual current
+behaviour, not a design endorsement — `QuizSessionScreen.tsx`'s post-quiz auto-advance still
+`router.replace()`s to `.../course/[courseSlug]/lesson/[lessonId]`, a dedicated lesson-player
+route the Course & Topic redesign Phase C removed in favour of `LessonModal`. That route no
+longer exists, so this specific auto-advance path is dead code today (pre-existing, found while
+tracing this diagram for the Quiz Modes work below — not touched here, since fixing it means
+deciding what "auto-advance into a lesson" should even mean now that lessons open in a modal
+over the Course screen rather than a route of their own).
 
 The diagram above is the happy path. The literal file tree, annotated:
 
@@ -126,8 +142,13 @@ apps/mobile/app/
 │   │               ├── index.tsx   Progress header + RoadmapPath (opens
 │   │               │                NodeLessonsPanel as a bottom sheet on tap —
 │   │               │                see §5, "A note on Topic")
-│   │               └── lesson/
-│   │                   └── [lessonId].tsx    Lesson resource player
+│   │               ├── lesson/
+│   │               │   └── [lessonId].tsx    Lesson resource player
+│   │               └── chat/                 Course Chat (Aug 2026) — ordinary
+│   │                   ├── index.tsx          nested routes, not root-level
+│   │                   │                      fullScreenModal like quiz/ below
+│   │                   └── ai-helper.tsx      (see mobile-architecture.md's
+│   │                                          "Course Chat" section for why)
 │   └── miniapp/
 │       └── [miniAppId]/
 │           ├── index.tsx           Dictionary home: search/trending/A–Z/recent
@@ -225,6 +246,27 @@ Tapping any unlocked node, either mode, opens **`NodeLessonsPanel`** — a botto
 **Data:** `content` slice (`fetchCourseDetail`) + `roadmap` slice (`fetchRoadmapByCourse`).
 **Goes to:** a lesson row → `.../lesson/[lessonId]`; a quiz row → `/quiz/[itemId]`; a linked mini-app chip → `/(app)/miniapp/[miniAppId]`. **Comes from:** Subject only.
 
+A fourth FAB ("Chat") sits in `CoursePathActions`' bottom-right stack, directly above the
+Mini-apps FAB — see the entry immediately below.
+
+### Course Chat (August 2026)
+
+**Route:** `.../course/[courseSlug]/chat` · **File:** `course/[courseSlug]/chat/index.tsx`
+Hub with two tiles: **AI Helper** (enabled) and **Classmates & Teacher** (muted, non-interactive,
+badged "🔜 Coming soon" — no teacher accounts or class/cohort model exist yet, see
+[docs/product/course-chat-vision.md](../product/course-chat-vision.md)). `courseId`/`courseName`
+arrive as router params from the Course screen's button rather than being re-derived from Redux.
+**Goes to:** AI Helper tile → `.../chat/ai-helper`. **Comes from:** Course screen only.
+
+**Route:** `.../course/[courseSlug]/chat/ai-helper` · **File:** `course/[courseSlug]/chat/ai-helper.tsx`
+1:1 chat with a course-scoped AI tutor — message history + text input, optimistic send (the
+learner's bubble renders from local state immediately, replaced by the confirmed pair from Redux
+once the server responds). History persists indefinitely per profile+course.
+**Data:** `aiChat` slice — `fetchChatHistory`, `sendChatMessage`.
+**Goes to:** back → Course Chat hub. **Comes from:** Course Chat hub only.
+**Worth knowing:** unlike `/quiz/[itemId]`, this is an ordinary nested route inside `(app)`, not
+a root-level `fullScreenModal` — see mobile-architecture.md's "Course Chat" section for why.
+
 ### Lesson player
 
 **Route:** `.../course/[courseSlug]/lesson/[lessonId]`
@@ -305,7 +347,9 @@ One axios instance (`lib/api.ts`): `X-Client-Type: mobile` header on every reque
 
 Worth being precise here, because the terminology shifted recently: **the `Topic` model was removed from the schema in July 2026.** The hierarchy today is `Field → Subject → Course (wraps a Roadmap) → RoadmapNode → (Lesson | Quiz item)`, with Mini-Apps (Dictionary) attached directly to a Subject rather than routed through anything Topic-shaped.
 
-The word survives in one place: the Subject screen's course cards say "X topics," and that number is `course.roadmap.nodeCount` — a count of `RoadmapNode`s. So **"RoadmapNode" is almost certainly what "topic" means in your Figma plans.** A RoadmapNode has no screen of its own today — tapping one, child or adult mode, opens `NodeLessonsPanel`, a bottom-sheet `Modal` layered over the Course screen, listing that node's lessons/quiz items. "Moving the topic to a separate screen" would mean promoting that panel to a real route — something like `.../course/[courseSlug]/node/[nodeId].tsx` — same content (title, description, stars, item list), presented as a push/pop screen instead of a sheet.
+The word survives in one place: the Subject screen's course cards say "X topics," and that number is `course.roadmap.nodeCount` — a count of `RoadmapNode`s. So **"RoadmapNode" is almost certainly what "topic" means in your Figma plans.** A RoadmapNode has no screen of its own today.
+
+**Updated (Course & Topic redesign, Phase C, August 2026):** `NodeLessonsPanel` — the node-tap bottom sheet this section originally described — no longer exists. `RoadmapPath` now renders one button per *item* (not per node) directly on the Course screen, with each node's title as a non-tappable banner rather than a separate tap target. Tapping a lesson item opens `LessonModal` (still a bottom-sheet `Modal`, same interaction shape `NodeLessonsPanel` used, just scoped to one lesson instead of a whole node); tapping a quiz item now opens the Quiz Mode Select screen (a real route, `/quiz/modes/[itemId]`) ahead of the quiz session — see §8 and `mobile-architecture.md`'s "Quiz Modes" section. "Moving the topic to a separate screen" is therefore no longer a single clean lift from one panel — lesson and quiz items now have two different presentations (modal vs. route).
 
 If you meant something else by "topic," flag it — otherwise I'd plan around RoadmapNode.
 
@@ -356,7 +400,7 @@ Not a missing screen so much as missing navigation structure — `mobile-archite
 - `ScreenBackground` is applied once for all of `(app)` but individually on the four auth-adjacent screens outside it — a background change touches one file for most of the app, four files for the rest.
 - `typography.bodyChild` (18px, the brand guide's stated child minimum) is defined but unreferenced anywhere in mobile — every screen currently uses the same body size regardless of `ageGroup`.
 - Only a handful of screens/components branch on `ageGroup` at all (§4.4) — Home, Subject, the Lesson player, and all three Dictionary screens are age-agnostic today.
-- `NodeLessonsPanel` ("the topic," §5) is the one piece of roadmap UI that's a `Modal` rather than a route — Lesson and Quiz, the two things it links to, are both real screens.
+- Updated: `NodeLessonsPanel` ("the topic," §5) is gone as of Phase C. Its modal-not-route pattern lives on in `LessonModal`/`ResourcesModal`/`QuizPickerModal` (`src/components/course/`) — lessons stay a `Modal`, but a quiz item now opens a real route (`/quiz/modes/[itemId]`) instead of the old bottom sheet.
 - Two screens use `replace()` for what reads as an ordinary back action (Dictionary home's "Home" button, Bucket's "Back to Dictionary") where every other back button in the app uses `back()` (§1.5).
 - No `(app)` screen has header/back-chrome supplied by a shared layout — each screen builds its own back button inline, so a consistent header treatment touches every screen file individually, not one layout.
 - Live TTS (`expo-speech`, tap-to-read, no word highlighting) is already shipped and wired into `AnswerFeedback` — some docs elsewhere in this repo (including the mobile CLAUDE.md checklist copy) still list it as "not yet built." Worth a docs pass alongside whatever Claude Code prompt eventually implements the restyle.
@@ -377,7 +421,9 @@ Not a missing screen so much as missing navigation structure — `mobile-archite
 | Home | `/(app)/home` | `app/(app)/home.tsx` |
 | Subject | `/(app)/subject/[subjectSlug]` | `.../subject/[subjectSlug]/index.tsx` |
 | Course | `/(app)/subject/[subjectSlug]/course/[courseSlug]` | `.../course/[courseSlug]/index.tsx` |
-| Lesson player | `.../course/[courseSlug]/lesson/[lessonId]` | `.../lesson/[lessonId].tsx` |
+| Lesson player | *(removed, Phase C — see §5)* | now `LessonModal`, not a route |
+| Quiz Mode Select (roadmap) | `/quiz/modes/[itemId]` | `app/quiz/modes/[itemId].tsx` |
+| Quiz Mode Select (Dictionary) | `/quiz/modes/dictionary/[miniAppId]` | `app/quiz/modes/dictionary/[miniAppId].tsx` |
 | Quiz (roadmap) | `/quiz/[itemId]` | `app/quiz/[itemId].tsx` |
 | Quiz (Dictionary) | `/quiz/dictionary/[miniAppId]` | `app/quiz/dictionary/[miniAppId].tsx` |
 | Dictionary home | `/(app)/miniapp/[miniAppId]` | `.../miniapp/[miniAppId]/index.tsx` |

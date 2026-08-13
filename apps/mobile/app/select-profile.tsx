@@ -8,6 +8,7 @@ import { GlassCard } from '../src/components/GlassCard';
 import { ScreenBackground } from '../src/components/ScreenBackground';
 import { ProtectedRoute } from '../src/components/ProtectedRoute';
 import { selectProfile, fetchActiveProfile, logoutAsync, clearError } from '../src/features/auth/authSlice';
+import { getLastRoute } from '../src/lib/secureStore';
 import type { AppDispatch, RootState } from '../src/store/store';
 import { useTheme } from '../src/theme/ThemeContext';
 
@@ -139,7 +140,12 @@ function SelectProfileScreen() {
 
     const profileResult = await dispatch(fetchActiveProfile());
     if (fetchActiveProfile.fulfilled.match(profileResult)) {
-      router.replace(profileResult.payload.isSetupComplete ? '/(app)/home' : '/profile-setup');
+      if (!profileResult.payload.isSetupComplete) {
+        router.replace('/profile-setup');
+        return;
+      }
+      const lastRoute = await getLastRoute(profileResult.payload._id);
+      router.replace(lastRoute ?? '/(app)/home');
     }
   };
 

@@ -3,8 +3,8 @@
 // (already-public read, reused per the design doc's read/write split) rather than a new
 // dashboard GET.
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronLeft, Loader2, Plus, Check } from 'lucide-react';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
+import { ChevronLeft, Loader2, Plus, Check, Search, Trash2 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../../app/store';
 import {
@@ -13,20 +13,31 @@ import {
   fetchCourseNodes,
   updateCourse,
   reorderNodes,
+  searchCourseQuestions,
+  deleteQuestion,
 } from '../../features/studio/studioSlice';
 import AssetPicker from '../../features/studio/components/AssetPicker';
 import CurriculumTagsEditor from '../../features/studio/components/CurriculumTagsEditor';
 import AddNodeModal from '../../features/studio/components/AddNodeModal';
 import SortableList, { DragHandle } from '../../features/studio/components/SortableList';
+import { formatQuestionPreview } from '../../features/studio/utils/questionPreview';
 import type { ICurriculumTag } from '@my-backpack/shared';
 
 export default function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>();
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const { allCourses, allCoursesLoaded, subjectMiniApps, currentRoadmapNodes, isLoading, isMutating } =
-    useSelector((state: RootState) => state.studio);
+  const {
+    allCourses,
+    allCoursesLoaded,
+    subjectMiniApps,
+    currentRoadmapNodes,
+    questionSearchResults,
+    isLoading,
+    isMutating,
+  } = useSelector((state: RootState) => state.studio);
 
   const course = allCourses.find((c) => c._id === courseId);
 
@@ -38,6 +49,7 @@ export default function CourseDetailPage() {
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [localNodeOrder, setLocalNodeOrder] = useState<string[] | null>(null);
+  const [questionSearch, setQuestionSearch] = useState('');
 
   useEffect(() => {
     if (!allCoursesLoaded) void dispatch(fetchAllCourses());
@@ -60,6 +72,10 @@ export default function CourseDetailPage() {
 
   useEffect(() => {
     if (courseId) void dispatch(fetchCourseNodes(courseId));
+  }, [dispatch, courseId]);
+
+  useEffect(() => {
+    if (courseId) void dispatch(searchCourseQuestions({ courseId }));
   }, [dispatch, courseId]);
 
   useEffect(() => {
@@ -121,6 +137,15 @@ export default function CourseDetailPage() {
     void dispatch(reorderNodes({ courseId: course._id, nodeIds })).then((result) => {
       if (!reorderNodes.fulfilled.match(result)) void dispatch(fetchCourseNodes(course._id));
     });
+  };
+
+  const handleAddQuestion = () => {
+    navigate(`/studio/questions/new?courseId=${course._id}&returnTo=${encodeURIComponent(location.pathname)}`);
+  };
+
+  const handleDeleteQuestion = (questionId: string) => {
+    if (!window.confirm('Delete this question? This only removes it from the course question bank — it is a soft delete, so it stays intact if it is still used elsewhere.')) return;
+    void dispatch(deleteQuestion(questionId));
   };
 
   return (
@@ -254,6 +279,82 @@ export default function CourseDetailPage() {
 
       {isAddNodeOpen && (
         <AddNodeModal courseId={course._id} onClose={() => setIsAddNodeOpen(false)} />
+      )}
+
+      {/* Question Bank — every question scoped to this course (miniAppId === courseId),
+          regardless of whether it's attached to a specific Topic's quiz. This is the same
+          Question collection/search endpoint QuizEditorPage's "Pick existing" tab already
+          reads (searchCourseQuestions) — this section is the first UI to reach question
+          creation/browsing without going through a specific Quiz's "+ Add Question" modal
+          (no addToQuiz param on the create link below), which is also what mobile's Quiz
+          Modes "Game Quizzes" pool draws from. See docs/content/content-studio-design.md. */}
+      <div className="flex items-center justify-between mb-3 mt-8">
+        <h2 className="text-lg font-bold text-gray-800">Question Bank</h2>
+        <button
+          type="button"
+          onClick={handleAddQuestion}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-violet-100/80 text-violet-700 hover:bg-violet-200/80 transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" /> Add Question
+        </button>
+      </div>
+
+      <p className="text-xs text-gray-400 mb-3">
+        Every question here is available to mobile's Game Quizzes mode grid, whether or not it's
+        also attached to a Topic's quiz.
+      </p>
+
+      <div className="flex items-center gap-2 bg-white/40 border border-white/50 rounded-lg px-2.5 py-1.5 mb-3">
+        <Search className="w-3.5 h-3.5 text-gray-400" />
+        <input
+          value={questionSearch}
+          onChange={(e) => setQuestionSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void dispatch(searchCourseQuestions({ courseId: course._id, search: questionSearch }));
+          }}
+          placeholder="Search this course's questions…"
+          className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400"
+        />
+      </div>
+
+      {isLoading && questionSearchResults.length === 0 && (
+        <div className="flex justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-violet-400" />
+        </div>
+      )}
+
+      {!isLoading && questionSearchResults.length === 0 && (
+        <p className="text-sm text-gray-400 py-6 text-center bg-white/20 rounded-2xl border border-white/30">
+          No questions in this course's bank yet.
+        </p>
+      )}
+
+      {questionSearchResults.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {questionSearchResults.map((q) => (
+            <div
+              key={q._id}
+              className="flex items-center gap-3 bg-white/30 backdrop-blur-sm rounded-2xl border border-white/40 p-3.5"
+            >
+              <button
+                type="button"
+                onClick={() => navigate(`/studio/questions/${q._id}?courseId=${course._id}`)}
+                className="flex-1 text-left min-w-0"
+              >
+                <p className="font-semibold text-gray-800 text-sm truncate">{formatQuestionPreview(q)}</p>
+                <p className="text-xs text-gray-400">{q.type}</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteQuestion(q._id)}
+                className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                title="Delete question"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

@@ -56,7 +56,7 @@ export default function DictionaryHomeScreen() {
 
           <View style={styles.topBarActions}>
             <Pressable
-              onPress={() => router.push({ pathname: '/quiz/dictionary/[miniAppId]', params: { miniAppId, name } })}
+              onPress={() => router.push({ pathname: '/quiz/modes/dictionary/[miniAppId]', params: { miniAppId, name } })}
               style={styles.bucketButton}
             >
               <Sparkles size={14} color={colors.primary.DEFAULT} />

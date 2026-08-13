@@ -10,7 +10,7 @@ import { searchVocab, clearSearch } from '../../features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../store/store';
 import { useTheme } from '../../theme/ThemeContext';
 
-const DEBOUNCE_MS = 400;
+const DEBOUNCE_MS = 600;
 
 interface SearchInputProps {
   miniAppId: string;

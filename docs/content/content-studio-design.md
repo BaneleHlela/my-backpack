@@ -106,3 +106,17 @@ state, or ran into gaps this pass had to route around rather than expand the bac
   list) uses `@dnd-kit/core` + `@dnd-kit/sortable`, already a dependency (used by
   `DndSinglePattern` for the learner-facing DnD quiz renderer), via a shared
   `SortableList`/`DragHandle` component rather than a new drag library.
+- **Course-wide "Question Bank" section, added later (August 2026, for mobile's Quiz Modes).**
+  Not in the original v1 plan above — `CourseDetailPage.tsx` gained a "Question Bank" list
+  (search + "+ Add Question") reading `searchCourseQuestions({courseId})`, the same thunk
+  `QuizEditorPage`'s "Pick existing" tab already used. No new thunks/routes/backend endpoints:
+  `POST /api/dashboard/questions` and `GET /api/dashboard/questions?courseId=` already supported
+  a question scoped to a course with no `nodeId`/`quizId` (§"Data flow, end to end" above shows
+  every `Question` hanging off a `Quiz`, but that was never actually enforced by the API — this
+  section corrects that impression). The only real gap was a UI path to reach question
+  creation/browsing without going through a specific Quiz's "+ Add Question" modal (which always
+  passes `addToQuiz`, wiring the new question into that quiz). This is what backs mobile's Quiz
+  Modes "Game Quizzes" — every question in a course's bank, attached to a node quiz or not, is
+  eligible for the course's auto-created `mode: 'pool'` Quiz. See
+  `docs/technical/mobile-architecture.md`'s "Quiz Modes" section and
+  `docs/technical/data-models.md`'s `Quiz`/`Question` entries.

@@ -43,7 +43,13 @@ export interface ParsedTerm {
   isNew: boolean;
 }
 
-// Fetches a word from the Free Dictionary API. Throws on 404 (word not found) or API errors.
+// Requests to the Free Dictionary API give up after this long — a hang here previously had
+// nothing else to catch it (no server or client timeout either), so the request would sit open
+// until Render's proxy (or Cloudflare, on a fronted domain) killed it, surfacing as an opaque
+// 502/522 to the browser instead of a clean, fast error.
+const DICTIONARY_API_TIMEOUT_MS = 8000;
+
+// Fetches a word from the Free Dictionary API. Throws on 404 (word not found), API errors, or timeout.
 export function searchWord(word: string): Promise<ApiEntry[]> {
   const normalised = word.toLowerCase().trim();
   const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(normalised)}`;
@@ -73,6 +79,9 @@ export function searchWord(word: string): Promise<ApiEntry[]> {
       res.on('error', (err: Error) => reject(err));
     });
     req.on('error', (err: Error) => reject(err));
+    req.setTimeout(DICTIONARY_API_TIMEOUT_MS, () => {
+      req.destroy(new Error('Dictionary API request timed out'));
+    });
   });
 }
 

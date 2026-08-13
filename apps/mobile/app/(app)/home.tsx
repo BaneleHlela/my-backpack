@@ -7,6 +7,7 @@ import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AvailableSubject } from '@my-backpack/shared';
 import { GlassCard } from '../../src/components/GlassCard';
 import { PrimaryButton } from '../../src/components/PrimaryButton';
+import { LaunchScreenBody } from '../../src/components/LaunchScreen';
 import {
   fetchEnrolledSubjects,
   fetchAvailableSubjects,
@@ -100,11 +101,7 @@ export default function HomeScreen() {
   const hasEnrollments = (enrolledSubjects?.fields.length ?? 0) > 0;
 
   if (isLoading && !enrolledSubjects) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.primary.DEFAULT} />
-      </View>
-    );
+    return <LaunchScreenBody />;
   }
 
   if (!hasEnrollments) {

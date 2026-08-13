@@ -11,7 +11,7 @@
 // `questions[] + currentIndex` pair.
 import { createAsyncThunk, createSlice, isAnyOf } from '@reduxjs/toolkit';
 import type { AxiosError } from 'axios';
-import type { ApiResponse, FeedbackMode, IQuestion, ResponseType, SessionResults } from '@my-backpack/shared';
+import type { ApiResponse, FeedbackMode, IQuestion, QuizSettings, ResponseType, SessionResults } from '@my-backpack/shared';
 import api from '../../lib/api';
 
 function extractErrorMessage(error: unknown, fallback: string): string {
@@ -113,14 +113,20 @@ export const startQuizItemSession = createAsyncThunk(
 );
 
 // Starts a quiz session for a mini-app's default Quiz (e.g. Dictionary's "General Dictionary
-// Quiz") — the generic miniAppId-scoped endpoint, sibling to startQuizItemSession above. No
-// settings are passed: the session snapshots the Quiz's own authored settings, same as tapping
-// web's "Start Quiz" default button (mobile doesn't port QuizStartScreen's customize flow).
+// Quiz", or a Course's auto-created mode:'pool' practice quiz for Quiz Modes' "Game Quizzes") —
+// the generic miniAppId-scoped endpoint, sibling to startQuizItemSession above. `settings` is
+// optional and, when passed, overrides the quiz's own authored settings for this session only
+// (see quizPlayModes.ts's toSessionSettingsOverride) — omitted entirely, the session just
+// snapshots the Quiz's authored settings, same as tapping web's "Start Quiz" default button
+// (mobile doesn't port QuizStartScreen's customize flow).
 export const startMiniAppQuizSession = createAsyncThunk(
   'quiz/startMiniAppQuizSession',
-  async ({ miniAppId }: { miniAppId: string }, { rejectWithValue }) => {
+  async (
+    { miniAppId, settings }: { miniAppId: string; settings?: Partial<QuizSettings> },
+    { rejectWithValue }
+  ) => {
     try {
-      const res = await api.post<ApiResponse<StartSessionResult>>('/quiz/session', { miniAppId });
+      const res = await api.post<ApiResponse<StartSessionResult>>('/quiz/session', { miniAppId, settings });
       return res.data.data;
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error, 'Failed to start quiz'));

@@ -9,6 +9,7 @@ export * from './types/quiz';
 export * from './types/learning';
 export * from './types/roadmap';
 export * from './types/enrollment';
+export * from './types/aiChat';
 export * from './constants/assets';
 export * from './constants/theme';
 export * from './utils/resolveHelpers';

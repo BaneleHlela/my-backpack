@@ -5,7 +5,10 @@ export type SessionStatus = 'active' | 'completed' | 'abandoned';
 export type BucketFilter = 'all' | 'learning' | 'mastered';
 export type ResponseType = 'mcq_selection' | 'text_input' | 'voice_transcript' | 'true_false';
 export type GradingMethod = 'exact_match' | 'keyword_match' | 'ai_graded' | 'pending';
-export type QuizMode = 'dynamic' | 'fixed';
+// 'pool' selects a random slice of every active Question scoped to the quiz's miniAppId
+// (a Course, for roadmap content) — no pinned questionIds, no bucket. Added for mobile's
+// Quiz Modes feature; see apps/api/src/models/learning/quiz.model.ts for the full writeup.
+export type QuizMode = 'dynamic' | 'fixed' | 'pool';
 // 'immediate' shows correctness/points right after each question; 'end' defers all
 // feedback to a single breakdown on the results screen.
 export type FeedbackMode = 'immediate' | 'end';

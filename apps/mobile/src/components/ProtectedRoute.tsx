@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Redirect } from 'expo-router';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../store/store';
+import { LaunchScreen } from './LaunchScreen';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -20,12 +21,17 @@ export function ProtectedRoute({
     (state: RootState) => state.auth
   );
 
-  if (isCheckingAuth) return null;
+  // Both blocking states below render <LaunchScreen/> (logo + spinner) rather than null,
+  // so every "waiting on auth state" moment looks the same as the app's cold-start launch
+  // screen instead of flashing blank. isCheckingAuth is normally already handled at the root
+  // layout (app/_layout.tsx swaps in <LaunchScreen/> before this component ever mounts) — kept
+  // here too since ProtectedRoute is reused standalone on several routes (see index.tsx).
+  if (isCheckingAuth) return <LaunchScreen />;
 
   if (requireFullToken) {
     if (!partialToken && !accessToken) return <Redirect href="/(auth)/login" />;
     if (partialToken && !accessToken) return <Redirect href="/select-profile" />;
-    if (isLoadingProfile) return null;
+    if (isLoadingProfile) return <LaunchScreen />;
     if (!allowIncompleteProfile && accessToken && activeProfile && !activeProfile.isSetupComplete) {
       return <Redirect href="/profile-setup" />;
     }

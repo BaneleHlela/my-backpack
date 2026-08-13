@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Loader2 } from 'lucide-react';
+import { ChevronLeft, Loader2, MessagesSquare } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../../app/store';
 import { fetchCourseBySlug } from '../../features/courses/coursesSlice';
@@ -105,6 +105,15 @@ export default function CoursePage() {
             </div>
           </div>
         )}
+
+        <button
+          type="button"
+          onClick={() => navigate(`/subject/${subjectSlug}/course/${courseSlug}/chat`)}
+          className="flex items-center justify-center gap-2 mt-4 w-full px-4 py-2.5 rounded-2xl bg-gradient-to-r from-violet-400 to-teal-400 text-white font-semibold text-sm shadow-sm hover:opacity-90 transition-opacity"
+        >
+          <MessagesSquare className="w-4 h-4" />
+          Course Chat
+        </button>
 
         {linkedMiniApps.length > 0 && (
           <div className="flex items-center gap-2 mt-4 flex-wrap">

@@ -1,15 +1,21 @@
-// Three floating action buttons pinned to the bottom of the Course path — Course & Topic
-// redesign, Phase C. Ports Figma's "Course Button" component (file OaE5PxSOT5p8Fby7SUpoP7,
-// node 22:27039): two stacked bottom-left (Resources, Quizzes), one bottom-right (Mini-apps).
-// Colours/icons pulled directly from the component's three `type` variants — note the variant
-// literally named "Lesson" (the component's default) is the Resources button, not a lesson
-// shortcut; confirmed by its position/icon (a monitor/video-content glyph) alongside "Quiz" and
-// "MiniApp", the two unambiguous variants. Quizzes and Mini-apps have no real destination yet
-// (a separate quiz-modes screen isn't built) — both open a placeholder, matching the existing
-// Dictionary mini-app "Coming soon." pattern (app/(app)/miniapp/[miniAppId]/index.tsx).
+// Floating action buttons pinned to the bottom of the Course path — Course & Topic redesign,
+// Phase C. Ports Figma's "Course Button" component (file OaE5PxSOT5p8Fby7SUpoP7, node
+// 22:27039): two stacked bottom-left (Resources, Quizzes), originally one bottom-right
+// (Mini-apps). Colours/icons pulled directly from the component's three `type` variants — note
+// the variant literally named "Lesson" (the component's default) is the Resources button, not a
+// lesson shortcut; confirmed by its position/icon (a monitor/video-content glyph) alongside
+// "Quiz" and "MiniApp", the two unambiguous variants. Quizzes has a real destination
+// (QuizPickerModal, see Quiz Modes); Mini-apps still has no real destination yet — opens a
+// placeholder, matching the existing Dictionary mini-app "Coming soon." pattern
+// (app/(app)/miniapp/[miniAppId]/index.tsx).
+//
+// Chat (added August 2026, Course Chat) is stacked bottom-right above Mini-apps, same two-tone
+// FAB styling as the rest of this component — not a Figma-sourced variant (no Course Chat
+// design exists yet, see docs/product/course-chat-vision.md), so its own emerald/success colour
+// pairing was picked simply to stay visually distinct from the other three.
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { ClipboardCheck, Gamepad2, MonitorPlay } from 'lucide-react-native';
+import { ClipboardCheck, Gamepad2, MessagesSquare, MonitorPlay } from 'lucide-react-native';
 import { radii, spacing } from '@my-backpack/shared';
 import { useTheme } from '../../theme/ThemeContext';
 
@@ -17,12 +23,18 @@ interface CoursePathActionsProps {
   onResourcesPress: () => void;
   onQuizzesPress: () => void;
   onMiniAppsPress: () => void;
+  onChatPress: () => void;
 }
 
 const MINI_APP_DARK = '#1f2937';
 const MINI_APP_CREAM = '#fcfded';
 
-export default function CoursePathActions({ onResourcesPress, onQuizzesPress, onMiniAppsPress }: CoursePathActionsProps) {
+export default function CoursePathActions({
+  onResourcesPress,
+  onQuizzesPress,
+  onMiniAppsPress,
+  onChatPress,
+}: CoursePathActionsProps) {
   const { colors } = useTheme();
 
   return (
@@ -35,9 +47,14 @@ export default function CoursePathActions({ onResourcesPress, onQuizzesPress, on
           <ClipboardCheck size={26} color="#fff" />
         </ActionButton>
       </View>
-      <ActionButton outer={MINI_APP_DARK} inner={MINI_APP_CREAM} onPress={onMiniAppsPress}>
-        <Gamepad2 size={26} color={MINI_APP_DARK} />
-      </ActionButton>
+      <View style={styles.column}>
+        <ActionButton outer={colors.success.dark} inner={colors.success.DEFAULT} onPress={onChatPress}>
+          <MessagesSquare size={26} color="#fff" />
+        </ActionButton>
+        <ActionButton outer={MINI_APP_DARK} inner={MINI_APP_CREAM} onPress={onMiniAppsPress}>
+          <Gamepad2 size={26} color={MINI_APP_DARK} />
+        </ActionButton>
+      </View>
     </View>
   );
 }

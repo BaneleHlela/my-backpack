@@ -16,6 +16,10 @@ interface QuizResultsProps {
   onQuizAgain: () => void;
   onReturn: () => void;
   returnLabel?: string;
+  // Optional Quiz Modes context line ("Out of hearts!", "Time's up!", "Best streak: 4") — the
+  // "why did this run end" business logic lives entirely in QuizSessionScreen (see its
+  // gameplay-mechanics section); this component just renders whatever string it's given.
+  banner?: string;
 }
 
 export function QuizResults({
@@ -24,6 +28,7 @@ export function QuizResults({
   onQuizAgain,
   onReturn,
   returnLabel = 'Back to roadmap',
+  banner,
 }: QuizResultsProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -37,6 +42,7 @@ export function QuizResults({
       <Text style={styles.subText}>
         {results.correct} of {results.totalQuestions} correct
       </Text>
+      {banner ? <Text style={styles.banner}>{banner}</Text> : null}
 
       <View style={styles.statsRow}>
         <View style={styles.statBox}>
@@ -118,6 +124,16 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontSize: typography.body,
       color: colors.text.muted,
       marginTop: spacing.xs,
+    },
+    banner: {
+      fontSize: typography.small,
+      fontWeight: '700',
+      color: colors.primary.dark,
+      marginTop: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: radii.full,
+      backgroundColor: colors.surface.glassSoft,
     },
     statsRow: {
       flexDirection: 'row',

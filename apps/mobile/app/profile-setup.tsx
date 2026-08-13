@@ -8,6 +8,7 @@ import { GlassCard } from '../src/components/GlassCard';
 import { PrimaryButton } from '../src/components/PrimaryButton';
 import { ScreenBackground } from '../src/components/ScreenBackground';
 import { ProtectedRoute } from '../src/components/ProtectedRoute';
+import { LaunchScreen } from '../src/components/LaunchScreen';
 import { completeProfileSetup } from '../src/features/auth/authSlice';
 import type { AppDispatch, RootState } from '../src/store/store';
 import { useTheme } from '../src/theme/ThemeContext';
@@ -130,7 +131,7 @@ function ProfileSetupScreen() {
   };
 
   if (!activeProfile) {
-    return <ScreenBackground style={styles.center} />;
+    return <LaunchScreen />;
   }
 
   return (
@@ -182,9 +183,6 @@ export default function ProfileSetupRoute() {
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
-    center: {
-      flex: 1,
-    },
     scrollContent: {
       alignItems: 'center',
       padding: spacing.lg,

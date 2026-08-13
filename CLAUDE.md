@@ -219,7 +219,8 @@ apps/api/src/models/
 │   ├── roadmapNode.model.ts
 │   ├── lesson.model.ts
 │   ├── profileRoadmapProgress.model.ts
-│   └── profileSubjectEnrollment.model.ts
+│   ├── profileSubjectEnrollment.model.ts
+│   └── aiChatMessage.model.ts
 └── apps/
     └── language/
         └── vocabulary/
@@ -518,6 +519,20 @@ more than one), not a single roadmap — `enrollment.service.ts`'s `enrollInSubj
 `updateProgressSummary` both iterate `Course.find({ subjectId })` and sum totals/completions
 across each course's Roadmap/ProfileRoadmapProgress.
 
+### AiChatMessage
+One turn in Course Chat's AI Helper — a 1:1, course-scoped chat between a profile and Claude
+Haiku (added August 2026). Fields: profileId, courseId, role ('user' | 'assistant'), content,
+createdAt/updatedAt.
+
+Never wrapped in a session — every message is its own document, ordered by createdAt. History
+persists indefinitely per profile+course (no reset, no TTL). Two indexes:
+`{ profileId, courseId, createdAt: 1 }` (ordered history fetch) and
+`{ profileId, role, createdAt: -1 }` (backs a 5s-cooldown + 50-messages/day rate limit, both
+per-profile and derived directly from this collection — no separate counter/Redis). See
+[docs/product/course-chat-vision.md](docs/product/course-chat-vision.md) for the full feature,
+including why Course Chat's other half (Classmates & Teacher) is UI-only pending Phase 3 teacher
+accounts + a class/cohort model.
+
 ---
 
 ## Adaptive Learning Algorithm
@@ -685,6 +700,16 @@ GET    /api/enrollment/fields/:fieldSlug/subjects
 PATCH  /api/enrollment/subjects/:subjectId/accessed
 ```
 
+### AI Chat (Course Chat's AI Helper)
+```
+GET  /api/ai-chat/course/:courseId/history
+POST /api/ai-chat/course/:courseId/message   — { message }
+```
+Both require `requireProfile`; `POST` also runs `attachContentPrefs` (reads
+`ageGroup`/`simplifiedLanguage` for the system prompt). Rate-limited per-profile: 5s cooldown
+between messages, 50 messages/day. See the `AiChatMessage` entry above and
+[docs/product/course-chat-vision.md](docs/product/course-chat-vision.md).
+
 ### Admin
 ```
 POST /api/admin/generate-questions
@@ -849,6 +874,8 @@ my-backpack/
 │   │       │   ├── studio/     # /api/dashboard/{courses,nodes,lessons,quizzes,questions} —
 │   │       │   │               # Content Studio course-flow CRUD; one routes/controller/service
 │   │       │   │               # file per resource
+│   │       │   ├── aiChat/     # /api/ai-chat — Course Chat's AI Helper (routes/controller/
+│   │       │   │               # service/types)
 │   │       │   └── question/
 │   │       │       └── question.types.ts  # IDraggable, IDropZone, IBlank,
 │   │       │                              # IFeedback, IAvatarConfig,
@@ -863,7 +890,8 @@ my-backpack/
 │   │       │   │   └── distractorHelper.ts
 │   │       │   ├── adaptiveLearning.service.ts
 │   │       │   ├── dictionaryApi.service.ts
-│   │       │   └── quizSession.service.ts
+│   │       │   ├── quizSession.service.ts
+│   │       │   └── aiChatHelper.service.ts  # Anthropic Haiku wrapper for Course Chat's AI Helper
 │   │       ├── utils/
 │   │       │   ├── jwt.ts
 │   │       │   ├── response.ts
@@ -903,6 +931,7 @@ my-backpack/
 │   │       │   ├── roadmap/    # roadmapSlice (currentRoadmap/currentNode/currentLesson only)
 │   │       │   ├── vocab/      # vocabSlice
 │   │       │   ├── quiz/       # quizSlice
+│   │       │   ├── aiChat/     # aiChatSlice (Course Chat's AI Helper — messagesByCourseId)
 │   │       │   └── studio/     # studioSlice (course/node/lesson/quiz/question CRUD state —
 │   │       │                   # one slice, since Content Studio is a single connected
 │   │       │                   # authoring flow always navigated course->node->lesson/quiz->
@@ -925,6 +954,9 @@ my-backpack/
 │   │           ├── subject/SubjectHomePage    # Course grid (main) + Mini-Apps panel (side) —
 │   │           │                              # a Subject can have multiple Courses now
 │   │           ├── course/CoursePage          # roadmap for one Course (progress header + RoadmapPath)
+│   │           │   ├── CourseChatPage          # Course Chat hub (AI Helper + coming-soon
+│   │           │   │                            # Classmates & Teacher tile)
+│   │           │   └── CourseChatAiHelperPage  # AI Helper chat
 │   │           ├── lesson/LessonPlayerPage, QuizItemPlayerPage
 │   │           ├── miniapp/MiniAppPage         # Dictionary sub-routes: term/:termId, bucket, quiz
 │   │           └── studio/                    # Content Studio (platform-admin only) — StudioLayout
@@ -940,17 +972,21 @@ my-backpack/
 │       │   ├── profile-setup.tsx
 │       │   └── (app)/           # guarded post-auth group (ScreenBackground + ProtectedRoute)
 │       │       ├── home.tsx     # enrolled-subjects list, no roadmap UI
-│       │       └── miniapp/[miniAppId]/  # Dictionary: index, term/[termId], bucket
+│       │       ├── miniapp/[miniAppId]/  # Dictionary: index, term/[termId], bucket
+│       │       └── subject/[subjectSlug]/course/[courseSlug]/chat/  # Course Chat
+│       │           ├── index.tsx      # hub (ordinary nested route, not fullScreenModal)
+│       │           └── ai-helper.tsx  # AI Helper chat
 │       ├── src/
 │       │   ├── store/store.ts   # Redux store — NEVER rename this dir to src/app/,
 │       │   │                    # Expo Router silently prefers src/app/ as its routes
 │       │   │                    # root over the real app/ dir if that name is used
 │       │   ├── lib/             # api.ts (axios + X-Client-Type: mobile), secureStore.ts, audio.ts
-│       │   ├── features/        # auth, content, vocab slices
+│       │   ├── features/        # auth, content, vocab, quiz, aiChat slices
 │       │   ├── theme/           # ThemeContext.tsx — ThemeProvider + useTheme(), light/dark
 │       │   │                    # (dark is the default, no persistence/toggle yet)
 │       │   └── components/      # GlassCard, PrimaryButton, ScreenBackground, TextField,
-│       │                        # ProtectedRoute, dictionary/ (mini-app-specific)
+│       │                        # ProtectedRoute, dictionary/ (mini-app-specific),
+│       │                        # course/ (CourseChatHubScreen, AiHelperChatScreen, ChatBubble)
 │       └── metro.config.js      # watchFolders + nodeModulesPaths only — do not add
 │                                # resolver.unstable_enableSymlinks / disableHierarchicalLookup,
 │                                # both break pnpm's nested transitive-dep resolution on this SDK
@@ -979,7 +1015,8 @@ my-backpack/
 │           ├── learning.ts     # ILearningRecord, IAdaptiveProfile
 │           ├── roadmap.ts      # IRoadmap (no subjectId/miniAppId), IRoadmapNode (slug,
 │           │                   # linkedCourseIds), INodeItemRef, ILesson, IResource, IProgress
-│           └── enrollment.ts   # IProfileSubjectEnrollment, IProgressSummary
+│           ├── enrollment.ts   # IProfileSubjectEnrollment, IProgressSummary
+│           └── aiChat.ts       # IAiChatMessage, IAiChatSendMessageResponse (Course Chat)
 │       └── utils/
 │           └── resolveHelpers.ts  # resolveHelpers(questionDefaults, nodeOverrides)
 │   └── ui/                     # empty placeholder — reserved for a future cross-platform
@@ -1105,6 +1142,29 @@ my-backpack/
       and mirrored into `lesson.model.ts`'s `resourceSchema`. No backfill, no authoring UI yet —
       existing Lesson documents simply have neither field until Studio's resource-editing UI is
       extended to set them (not done here).
+- [x] Quiz Modes backend — `Quiz.mode: 'pool'` (August 2026) — a third `Quiz.mode` alongside
+      `'dynamic'`/`'fixed'`: selects a random slice of every active `Question` scoped to the
+      quiz's `miniAppId`, no bucket, no pinned list (`selectPoolQuestions` in
+      `quizSession.service.ts`). One `isDefault:true, mode:'pool'` Quiz is now auto-created per
+      Course (`studio/course.service.ts`'s `createCourse`); existing courses backfilled via
+      `seed/migrations/2026-08-quiz-modes-pool.ts`. Backs mobile's Quiz Modes "Game Quizzes" —
+      full detail under Frontend Mobile's "Quiz Modes" entry below.
+- [x] Course Chat — AI Helper backend (August 2026) — new `AiChatMessage` model
+      (`models/learning/`) and `modules/aiChat/` (routes/controller/service/types, mounted at
+      `/api/ai-chat`, same thin-controller pattern as `modules/vocab/`). New
+      `services/aiChatHelper.service.ts` reuses the exact `@anthropic-ai/sdk` /
+      `claude-haiku-4-5-20251001` setup from `questionGeneration/aiGenerator.ts`, but — since
+      this call is synchronous/user-facing rather than fire-and-forget — wraps it in a try/catch
+      mapping any failure to a 503, and uses the SDK's `system` parameter for a proper multi-turn
+      shape instead of `aiGenerator.ts`'s single-shot embedded-instructions style. Rate limiting
+      (5s cooldown + 50 messages/day, both per-profile) is derived directly from the
+      `AiChatMessage` collection's own timestamps rather than a new Redis/counter — neither
+      Upstash Redis (configured in `config/redis.ts` but unused anywhere else in this codebase)
+      nor a per-user rate limiter had any existing precedent here to build on. A send-message
+      turn only persists the user's message and the AI's reply together, after the Anthropic
+      call succeeds — never an orphaned user message with no reply. This is the AI Helper half
+      of Course Chat; the Classmates & Teacher half is UI-only (no backend) — see
+      [docs/product/course-chat-vision.md](docs/product/course-chat-vision.md) for why.
 - [ ] XP and peanuts reward system (deferred)
 - [ ] Test readiness scoring (deferred)
 - [ ] Book/PDF upload pipeline (deferred)
@@ -1203,6 +1263,32 @@ my-backpack/
       sets `Cache-Control: public, max-age=31536000, immutable` (`asset.service.ts`) — safe
       because every upload path embeds a `Date.now()` timestamp, so a given path's content never
       changes.
+- [x] Content Studio — course-wide Question Bank (August 2026) — new "Question Bank" section on
+      `CourseDetailPage.tsx`: lists/searches every question scoped to the course
+      (`searchCourseQuestions`, already existed) with a "+ Add Question" link to
+      `/studio/questions/new?courseId=` **with no `addToQuiz` param** — `QuestionEditorPage.tsx`
+      already skipped the quiz-attach step when that param was absent, but until now nothing in
+      the app linked to it that way; every other question-creation link goes through a specific
+      Quiz's "+ Add Question" modal, which always passes `addToQuiz`. First real "Delete
+      question" button too (`deleteQuestion` existed in `studioSlice.ts`, previously unwired to
+      any button anywhere). No new thunks/routes/backend endpoints — purely wiring an existing
+      capability into a reachable screen. Backs mobile's Quiz Modes "Game Quizzes" pool — see
+      Frontend Mobile's "Quiz Modes" entry below and
+      [docs/content/content-studio-design.md](docs/content/content-studio-design.md).
+- [x] Course Chat (August 2026) — new "Course Chat" button on `CoursePage.tsx` (between the
+      progress bar and the linked-MiniApps row), new routes
+      `/subject/:subjectSlug/course/:courseSlug/chat` (`CourseChatPage`, hub — AI Helper tile
+      enabled, Classmates & Teacher tile visibly disabled with a "🔜 Coming soon" badge — no
+      backend, model, or real-time infra built for that half; see
+      [docs/product/course-chat-vision.md](docs/product/course-chat-vision.md)) and `.../chat/
+      ai-helper` (`CourseChatAiHelperPage`). New `aiChatSlice.ts` mirrors `quizSlice.ts`'s
+      conventions, state keyed by `courseId`. Optimistic send: the learner's message renders
+      from local `pendingText` state immediately, replaced by the confirmed
+      `{userMessage, assistantMessage}` pair from Redux on success, left with an inline retry
+      chip on failure. Both new pages re-derive `course` from Redux (`coursesByKey`/
+      `currentCourse`, with the same direct-link fallback fetch `CoursePage.tsx` already uses)
+      rather than receiving it via route params, since React Router's `:courseSlug` segment
+      doesn't carry extra data the way Expo Router's `router.push({ params })` does.
 - [ ] Profile management screens
 
 ### Frontend Mobile (apps/mobile)
@@ -1397,6 +1483,109 @@ my-backpack/
       `colors.background`. See
       [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Shared
       Menubar" section for full detail.
+- [x] Quiz Modes (August 2026) — a Quiz Mode Select screen (grid of 7 mode cards: Classic/
+      Hearts/Time Run/Streak/Perfect/Endless/Survival) sits ahead of the existing quiz-taking
+      flow for all three entry points: Dictionary's "Take Quiz", a roadmap quiz item, and the
+      Course screen's "Quizzes" FAB (previously "Coming soon" — now opens a `QuizPickerModal`
+      course-wide picker with two tabs: "Course Quizzes", the original per-node quiz list, and
+      "Game Quizzes", the mode grid embedded directly in the tab). Shipped in two passes — the
+      first was UI/component structure only (mode grid, settings modal, navigation wiring, no
+      gameplay); this entry now covers the second pass, which made it real: **question
+      sourcing** and **gameplay mechanics** are two independent, orthogonal changes.
+      - **Sourcing** — new `Quiz.mode: 'pool'` (alongside `'dynamic'`/`'fixed'`,
+        `packages/shared/types/quiz.ts` + `quiz.model.ts`'s enum, both updated) selects a
+        random slice of every active `Question` scoped to the quiz's `miniAppId` — no bucket,
+        no pinned list (`selectPoolQuestions` in `quizSession.service.ts`, mirroring
+        `studio/question.service.ts`'s `listQuestions` query shape). One `isDefault:true,
+        mode:'pool'` Quiz (`"{Course} Practice Pool"`, `isUserAdjustable:true`,
+        `settings.questionCount:200` — a deliberate v1 "request more than any real pool has"
+        sentinel, not a real "give me everything" query) is now auto-created per Course
+        (`studio/course.service.ts`'s `createCourse`, alongside the existing auto-created empty
+        Roadmap) — existing courses backfilled via
+        `seed/migrations/2026-08-quiz-modes-pool.ts` (`pnpm --filter api
+        migrate:quiz-modes-pool`). This is what makes "the questions for every game come from
+        one pool of course questions, added by the teacher in Studio" real:
+        `POST /api/dashboard/questions { courseId, ... }` (no `nodeId`/`quizId`) already
+        supported quiz-less, course-scoped questions before this pass — the gap was purely a
+        missing Studio UI to reach it (see the Content Studio entry below) and a missing
+        session-sourcing mode to actually serve them. `quiz.service.ts`'s `hasQuizContent` also
+        needed an explicit third branch — it previously treated any non-`'fixed'` mode as
+        `'dynamic'` (a bucket check), which would have silently reported `false` for every pool
+        quiz. Mobile's Game Quizzes tab now targets `{source:'miniApp', miniAppId: courseId}`
+        directly (the same shape Dictionary's "Take Quiz" already used) instead of its previous
+        "quick-play the first roadmap item" placeholder.
+      - **Gameplay mechanics** — hearts/timer/streak/mistake-limit/perfect-run rules are
+        universal: a client-side layer in `QuizSessionScreen.tsx` that works the same whether
+        the underlying session is a curated roadmap-lesson quiz or a course's pool quiz, since
+        `completeSession` already supported ending a session early (results are computed from
+        actually-answered questions, not from the originally-planned count) — no backend model
+        change was needed for the mechanics themselves, only for sourcing. `hearts`/
+        `mistakeLimit` never reach the API — only `questionCount`/`timeLimit`/`feedbackMode`/
+        `shuffleQuestions` do (`quizPlayModes.ts`'s `toSessionSettingsOverride`); the chosen
+        mode + settings cross the mode-select → session-route navigation boundary as one
+        JSON-encoded `play` param (`encodePlayModeParam`/`parsePlayModeParam`). The new
+        mode-rule effect runs before the pre-existing `feedbackMode:'end'` auto-advance effect
+        in source order and, when it ends a run early, sets a ref (not state — both effects
+        capture their closures from the same commit, so only a ref is read fresh enough to
+        prevent the second effect from also firing a conflicting advance/complete) before the
+        second effect's guard checks it. A small HUD (hearts remaining / mistakes so far /
+        streak / time left) renders in-session, and `QuizResults` gained an optional `banner`
+        prop ("Out of hearts!", "Time's up!", "Best streak: 4", …). Backend DTO gap fixed along
+        the way: `apps/api/src/modules/quiz/quiz.types.ts`'s local `CreateSessionDto` was
+        missing `shuffleQuestions` even though the service layer already supported it.
+      - Settings-pill interactivity still derives from `target.source === 'miniApp'` standing
+        in for `Quiz.isUserAdjustable` — now correctly `true` for both Dictionary's quiz and
+        every course's pool quiz, `false` for roadmap-item quizzes, with no new API field.
+      - Two bugs found while building this, not fixed (out of scope for this pass, flagged
+        instead): `QuizSessionScreen.tsx`'s post-quiz auto-advance still targets
+        `.../course/[courseSlug]/lesson/[lessonId]`, a route the Course & Topic redesign Phase C
+        removed in favour of `LessonModal` — that auto-advance branch is dead code today (found
+        during the first, UI-only pass). Verified via `tsc --noEmit` (backend, web, mobile all
+        clean) and a clean mobile `expo export --platform android` — not yet confirmed on a
+        real device/emulator, nor against a real Atlas database (the migration script and the
+        new pool-mode session-creation path have only been read-reviewed and type-checked, not
+        run end-to-end).
+      - Content Studio (web) gained a "Question Bank" section on `CourseDetailPage.tsx` —
+        lists/searches every question scoped to the course (`searchCourseQuestions`, already
+        existed) with a "+ Add Question" link to `/studio/questions/new?courseId=` **with no
+        `addToQuiz` param** — that page already skipped the quiz-attach step when the param was
+        absent, but no UI anywhere linked to it that way before now. First real "Delete
+        question" button too (`deleteQuestion` existed in `studioSlice.ts`, previously unwired
+        to any button).
+      - See [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s
+        "Quiz Modes" section and
+        [docs/content/content-studio-design.md](docs/content/content-studio-design.md) for full
+        detail.
+- [x] Course Chat (August 2026) — a new "Chat" floating action button on the Course screen,
+      added to `CoursePathActions.tsx`'s existing bottom-right FAB stack, directly above the
+      Mini-apps FAB (same two-tone outer/inner FAB styling as the other three; emerald/success
+      colour pairing, since there's no Figma source for this one to match — see that file's
+      module comment). Tapping it opens a hub (`chat/index.tsx` →
+      `CourseChatHubScreen`) with two tiles: **AI Helper** (live — `chat/ai-helper.tsx` →
+      `AiHelperChatScreen`, a 1:1 course-scoped chat with Claude Haiku) and **Classmates &
+      Teacher** (visibly present, non-interactive, "🔜 Coming soon" badge — no teacher accounts
+      or class/cohort model exist yet; see
+      [docs/product/course-chat-vision.md](docs/product/course-chat-vision.md) for the full
+      product reasoning). Both new routes are **ordinary nested routes inside `(app)`**, not
+      root-level `fullScreenModal` registrations like `quiz/[itemId].tsx` — being a distinct
+      routed screen (not an in-place `<Modal>` like `LessonModal`/`QuizPickerModal`) already
+      satisfies "full screen, not a modal" without touching the root `_layout.tsx`'s `<Stack/>`
+      config. This is also the first real nested dynamic sub-route under `course/[courseSlug]/`
+      since the Course & Topic redesign, Phase C removed the old `lesson/[lessonId].tsx` route in
+      favour of `LessonModal` — everything else at that level is a modal, not a route.
+      `courseId`/`courseName` are passed as router params directly from the Course screen's
+      button rather than re-derived from Redux on the new screens. New `aiChatSlice.ts` mirrors
+      `quizSlice.ts`'s conventions (`rejectWithValue` + shared `extractErrorMessage`,
+      string-union status), state keyed by `courseId`. `AiHelperChatScreen` does an optimistic
+      send (learner's bubble renders from local state immediately, reconciled with Redux once the
+      server responds, left with an inline retry chip on failure) and threads `ageGroup` down for
+      child-mode styling (bigger touch targets, `typography.bodyChild`), same pattern as
+      `QuizSessionScreen.tsx`. New `src/components/course/ChatBubble.tsx` (shared bubble). See
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Course
+      Chat" section for full detail. Verified via `tsc --noEmit` and a clean `expo export
+      --platform android` — **not yet confirmed on a real device/emulator or against a live
+      Anthropic call/Atlas database**, per this project's established "flag what's unverified"
+      convention.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens
@@ -1413,7 +1602,10 @@ my-backpack/
 - Consistent API response shape via `utils/response.ts`
 - Errors thrown as `new AppError(message, statusCode)` 
 - Async controllers wrapped with `catchAsync()`
-- Rate limiting on auth routes: 20 requests per 15 minutes
+- Rate limiting on auth routes: 2000 requests per 15 minutes (a blanket `express-rate-limit`
+  guard, not per-user); Course Chat's AI Helper has its own separate per-profile rate limit (5s
+  cooldown + 50 messages/day) derived from the `AiChatMessage` collection — see its API Routes
+  Reference entry above
 - Education levels follow the South African schooling system
 - Always check ageGroup from JWT when serving content
 - `audio:` prefix on `content.prompt` tells frontend to play audio,

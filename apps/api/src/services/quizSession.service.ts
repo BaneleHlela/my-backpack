@@ -239,10 +239,31 @@ async function selectQuestions(
   return questionIds;
 }
 
+// Selects a random slice of every active Question scoped to a mode:'pool' quiz's miniAppId
+// (a Course, for roadmap content) — no bucket, no pinned list. Mirrors
+// studio/question.service.ts's listQuestions query shape exactly (same {miniAppId,isActive}
+// filter the {miniAppId:1,isActive:1} index already supports). Always shuffles its own
+// selection before slicing — independent of settings.shuffleQuestions, which controls
+// whether the *session's* final serving order gets re-shuffled — otherwise the same
+// Math.min(questionCount, pool.length) questions would be picked in the same order (Mongo's
+// natural/_id order) every single game.
+async function selectPoolQuestions(
+  miniAppId: string,
+  settings: ISessionSettings
+): Promise<Types.ObjectId[]> {
+  const typeFilter: Record<string, unknown> =
+    settings.questionTypes.length > 0 ? { type: { $in: settings.questionTypes } } : {};
+  const questions = await Question.find({ miniAppId, isActive: true, ...typeFilter }).select('_id');
+  const shuffled = shuffle(questions.map((q) => q._id as Types.ObjectId));
+  return shuffled.slice(0, settings.questionCount);
+}
+
 // Creates a new quiz session from a Quiz definition and returns it with the first question.
 // mode: 'fixed' quizzes (e.g. a roadmap lesson's practice set) use the quiz's pinned
 // questionIds; mode: 'dynamic' quizzes (e.g. the general vocab quiz) select live from the
-// profile's bucket across the quiz's sourceMiniAppIds.
+// profile's bucket across the quiz's sourceMiniAppIds; mode: 'pool' quizzes (e.g. a course's
+// auto-created practice pool, for mobile's Quiz Modes) select a random slice of every active
+// question scoped to the quiz's own miniAppId.
 export async function createQuizSession(
   profileId: string,
   quizId: string,
@@ -268,6 +289,8 @@ export async function createQuizSession(
     questionIds = quiz.questionIds
       .map((id) => activeById.get(id.toString()))
       .filter((id): id is Types.ObjectId => id !== undefined);
+  } else if (quiz.mode === 'pool') {
+    questionIds = await selectPoolQuestions(quiz.miniAppId.toString(), settings);
   } else {
     questionIds = await selectQuestions(
       profileId,
