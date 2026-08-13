@@ -1,35 +1,45 @@
 // One button per roadmap ITEM (lesson or quiz) on the flattened Course path — replaces
 // RoadmapNodeCircle.tsx (one-per-node) as part of the Course & Topic redesign, Phase C. Ported
 // from the Figma "Node Button" component (file OaE5PxSOT5p8Fby7SUpoP7, node 22:27039's "Node
-// Button Test" instances) — geometry (85px badge, ring, sparkle cluster) and colours (content-type
-// tint, not progress-status tint) pulled directly from that component rather than approximated
-// from the screenshot alone.
+// Button Test" instances) — geometry (85px badge) and colours (content-type tint, not
+// progress-status tint) pulled directly from that component rather than approximated from the
+// screenshot alone.
 //
-// Two independent variant axes, matching the Figma component exactly:
-// - Progress ('locked' | 'current' | 'completed') drives the ring/dim treatment. Figma's mockup
-//   has every item already completed, so 'locked'/'current' treatments are extrapolated from this
-//   app's existing convention (RoadmapNodeCircle.tsx's dim-locked / light-ring-current), not
-//   sampled from a Figma instance — flagged here since no such instance exists to pull exact
-//   values from.
-// - Content ('lesson' | 'quiz' — no 'project' branch yet, reserved per Phase B) drives the badge's
-//   two-tone colour (rose/error for lesson, violet/primary for quiz) and icon glyph. Confirmed
-//   against Figma: these colours are literally `colors.error.dark`/`colors.error.DEFAULT` and
-//   `colors.primary.dark`/`colors.primary.DEFAULT` already in theme.ts — no new hex values needed.
+// The badge itself is now the bundled Kenney "button_round_depth_gloss" SVG
+// (NodeButtonBackground.tsx) instead of a pair of flat circular Views — see that file for how
+// its main face is the one recolorable part of the asset. Icon/loading content renders in a
+// plain RN overlay on top of the SVG, unchanged in spirit from the original circle-based badge.
 //
-// The completed-state "sparkle cluster" (3 small stars, decreasing size, upper-right of the badge)
-// is a fixed decorative flourish in Figma, NOT a 0-3 stars-earned indicator — that's node-level
-// (INodeProgressEntry.stars), rendered once per node by RoadmapPath.tsx, not per item. Items don't
-// carry a star count in the data model, so this is deliberate, not a simplification of missing data.
+// Two independent variant axes, matching the Figma component:
+// - Progress ('locked' | 'current' | 'completed') drives the dim treatment (locked) and the
+//   surrounding decoration (current: pulsing ring: completed: stars row below). Figma's mockup
+//   has every item already completed, so 'locked'/'current' treatments are extrapolated from
+//   this app's prior convention (dim-locked / accent-ring-current), not sampled from a Figma
+//   instance — flagged here since no such instance exists to pull exact values from.
+// - Content ('lesson' | 'quiz' — no 'project' branch yet, reserved per Phase B) drives the main
+//   face's colour (rose/error for lesson, violet/primary for quiz, via NodeButtonBackground's
+//   `fill`) and icon glyph. Confirmed against Figma: these colours are literally
+//   `colors.error.DEFAULT`/`colors.primary.DEFAULT` already in theme.ts — no new hex values.
 //
-// No real vector icon assets were pulled from Figma (its icons are custom SVG illustrations, e.g.
-// "board-svgrepo-com"/"quiz-svgrepo-com") — every other icon in this app's roadmap UI already comes
-// from lucide-react-native (Lock, Star, ChevronRight, Play, CheckCircle), so the closest lucide
-// glyphs (MonitorPlay for lesson, ClipboardCheck for quiz) are used here for consistency instead of
-// introducing a new bundled-illustration pipeline for two icons.
+// The completed-state indicator is three static Star icons in a row directly under the badge —
+// a fixed decorative flourish, NOT a 0-3 stars-earned indicator (that's node-level,
+// INodeProgressEntry.stars, rendered once per node by RoadmapPath.tsx, not per item). Items
+// don't carry a star count in the data model, so this is deliberate, not a simplification of
+// missing data. Previously this lived as a small sparkle cluster over the badge's upper-right —
+// moved to a plain row underneath it (still not overlapping the badge).
+//
+// No real vector icon assets were pulled from Figma for the content icons (its icons are custom
+// SVG illustrations, e.g. "board-svgrepo-com"/"quiz-svgrepo-com") — every other icon in this
+// app's roadmap UI already comes from lucide-react-native (Lock, Star, ChevronRight, Play,
+// CheckCircle), so the closest lucide glyphs (MonitorPlay for lesson, ClipboardCheck for quiz)
+// are used here for consistency instead of introducing a new bundled-illustration pipeline.
+import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { ClipboardCheck, Lock, MonitorPlay, Star } from 'lucide-react-native';
-import { radii } from '@my-backpack/shared';
+import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import { radii, spacing } from '@my-backpack/shared';
 import type { NodeItemType } from '@my-backpack/shared';
+import NodeButtonBackground from './NodeButtonBackground';
 import { useTheme } from '../../theme/ThemeContext';
 
 export type NodeButtonProgress = 'locked' | 'current' | 'completed';
@@ -43,92 +53,130 @@ interface NodeButtonProps {
 
 export const NODE_BUTTON_SIZE = 84;
 
-type ThemeColors = ReturnType<typeof useTheme>['colors'];
+// Extra vertical room the completed-state stars row needs below the badge. RoadmapPath.tsx
+// (the only place that lays multiple NodeButtons out in a column) adds this to its per-item
+// spacing for completed items only, mirroring how it already pads for its own node-level stars
+// summary — imported rather than duplicated as a second magic number so the two files can't
+// drift apart.
+export const NODE_BUTTON_COMPLETED_EXTRA_HEIGHT = 30;
+
+const STAR_SIZE = 16;
+const PULSE_MAX_SCALE = 1.6;
+const PULSE_DURATION = 1400;
 
 export default function NodeButton({ itemType, progress, loading = false, onPress }: NodeButtonProps) {
   const { colors } = useTheme();
-  const styles = createStyles(colors);
   const isLocked = progress === 'locked';
   const isCurrent = progress === 'current';
   const isCompleted = progress === 'completed';
   const isInteractive = !isLocked && !loading;
 
-  const outerColor = isLocked ? colors.surface.glassSoft : itemType === 'lesson' ? colors.error.dark : colors.primary.dark;
-  const innerColor = itemType === 'lesson' ? colors.error.DEFAULT : colors.primary.DEFAULT;
-
+  const mainFill = isLocked ? colors.surface.glassSoft : itemType === 'lesson' ? colors.error.DEFAULT : colors.primary.DEFAULT;
   const Icon = itemType === 'lesson' ? MonitorPlay : ClipboardCheck;
 
   return (
-    <Pressable
-      onPress={isInteractive ? onPress : undefined}
-      disabled={!isInteractive}
-      style={({ pressed }) => [styles.wrapper, pressed && isInteractive && styles.pressed]}
-    >
-      <View style={[styles.outer, { backgroundColor: outerColor }, isCurrent && styles.currentRing]}>
-        {!isLocked && <View style={[styles.inner, { backgroundColor: innerColor }]} />}
+    <View style={styles.column}>
+      <View style={styles.badgeArea}>
+        {isCurrent && <CurrentPulse color={colors.primary.light} />}
 
-        {loading ? (
-          <ActivityIndicator color="#fff" size="small" />
-        ) : isLocked ? (
-          <Lock size={28} color={colors.text.muted} />
-        ) : (
-          <Icon size={36} color="#fff" strokeWidth={2} />
-        )}
+        <Pressable
+          onPress={isInteractive ? onPress : undefined}
+          disabled={!isInteractive}
+          style={({ pressed }) => [styles.pressable, pressed && isInteractive && styles.pressed]}
+        >
+          <NodeButtonBackground width={NODE_BUTTON_SIZE} height={NODE_BUTTON_SIZE} fill={mainFill} />
 
-        {isCompleted && (
-          <>
-            <Star size={14} color={colors.warning.DEFAULT} fill={colors.warning.DEFAULT} style={styles.sparkle1} />
-            <Star size={11} color={colors.warning.DEFAULT} fill={colors.warning.DEFAULT} style={styles.sparkle2} />
-            <Star size={9} color={colors.warning.DEFAULT} fill={colors.warning.DEFAULT} style={styles.sparkle3} />
-          </>
-        )}
+          <View style={styles.content} pointerEvents="none">
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : isLocked ? (
+              <Lock size={28} color={colors.text.muted} />
+            ) : (
+              <Icon size={36} color="#fff" strokeWidth={2} />
+            )}
+          </View>
+        </Pressable>
       </View>
-    </Pressable>
+
+      {isCompleted && (
+        <View style={styles.starsRow}>
+          {[0, 1, 2].map((i) => (
+            <Star key={i} size={STAR_SIZE} color={colors.warning.DEFAULT} fill={colors.warning.DEFAULT} />
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    wrapper: {
-      width: NODE_BUTTON_SIZE,
-      height: NODE_BUTTON_SIZE,
-    },
-    pressed: {
-      opacity: 0.8,
-    },
-    outer: {
-      width: NODE_BUTTON_SIZE,
-      height: NODE_BUTTON_SIZE * 0.9,
-      borderRadius: radii.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    inner: {
-      position: 'absolute',
-      left: 3,
-      top: 3,
-      right: 3,
-      bottom: 3,
-      borderRadius: radii.full,
-    },
-    currentRing: {
-      borderWidth: 3,
-      borderColor: colors.primary.light,
-    },
-    sparkle1: {
-      position: 'absolute',
-      right: 2,
-      bottom: 10,
-    },
-    sparkle2: {
-      position: 'absolute',
-      right: -3,
-      top: 20,
-    },
-    sparkle3: {
-      position: 'absolute',
-      right: 3,
-      top: 6,
-    },
-  });
+// Duolingo-style "current node" indicator — a translucent circle, the same size as the badge and
+// hidden directly behind it at rest, that continuously scales outward past the badge's edge while
+// fading to transparent, then resets (not a ping-pong reverse) and repeats. Purely decorative:
+// absolutely fills its (already badge-sized) parent, pointerEvents="none" so it can never
+// intercept the press, and only mounted while progress === 'current' — unmounting is what stops
+// the loop and tears down its animated layer, rather than pausing a hidden one. The transform-only
+// animation never resizes the badge itself, and runs on Reanimated (already this project's
+// animation system, e.g. DndTile.tsx), which is native-driver by default.
+function CurrentPulse({ color }: { color: string }) {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(0.6);
+
+  useEffect(() => {
+    scale.value = withRepeat(withTiming(PULSE_MAX_SCALE, { duration: PULSE_DURATION, easing: Easing.out(Easing.ease) }), -1, false);
+    opacity.value = withRepeat(withTiming(0, { duration: PULSE_DURATION, easing: Easing.out(Easing.ease) }), -1, false);
+
+    return () => {
+      cancelAnimation(scale);
+      cancelAnimation(opacity);
+    };
+  }, [opacity, scale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, styles.pulse, { backgroundColor: color }, animatedStyle]}
+    />
+  );
 }
+
+// No colors.* references here (unlike most createStyles(colors) functions elsewhere in this
+// app) — every color this component uses (main fill, icon tint, pulse, stars) is theme-driven
+// but applied inline, since it varies per itemType/progress rather than being a fixed per-theme
+// value. Plain module-level StyleSheet.create is enough.
+const styles = StyleSheet.create({
+  column: {
+    width: NODE_BUTTON_SIZE,
+    alignItems: 'center',
+  },
+  badgeArea: {
+    width: NODE_BUTTON_SIZE,
+    height: NODE_BUTTON_SIZE,
+  },
+  pressable: {
+    width: NODE_BUTTON_SIZE,
+    height: NODE_BUTTON_SIZE,
+  },
+  pressed: {
+    opacity: 0.8,
+  },
+  content: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  starsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  pulse: {
+    borderRadius: radii.full,
+  },
+});

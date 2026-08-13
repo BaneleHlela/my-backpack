@@ -16,6 +16,16 @@ config.resolver.nodeModulesPaths = [
   path.resolve(monorepoRoot, 'node_modules'),
 ];
 
+// Local .svg files import as React components (react-native-svg-transformer),
+// backing NodeButtonBackground.tsx's bundled Kenney UI asset. SVG moves from
+// Metro's default asset pipeline (assetExts, returns a source URI) to the
+// source pipeline (sourceExts, runs through the babel transformer below) —
+// standard react-native-svg-transformer wiring, see
+// https://github.com/kristerkari/react-native-svg-transformer.
+config.transformer.babelTransformerPath = require.resolve('react-native-svg-transformer');
+config.resolver.assetExts = config.resolver.assetExts.filter((ext) => ext !== 'svg');
+config.resolver.sourceExts = [...config.resolver.sourceExts, 'svg'];
+
 // NOTE: expo/metro-config already enables symlink support and hierarchical
 // node_modules lookup by default on this SDK — do not set
 // resolver.unstable_enableSymlinks or resolver.disableHierarchicalLookup

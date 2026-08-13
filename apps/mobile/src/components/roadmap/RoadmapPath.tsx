@@ -20,7 +20,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Star } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { NodeItemWithProgress, RoadmapWithProgress } from '@my-backpack/shared';
-import NodeButton, { NODE_BUTTON_SIZE, type NodeButtonProgress } from './NodeButton';
+import NodeButton, { NODE_BUTTON_COMPLETED_EXTRA_HEIGHT, NODE_BUTTON_SIZE, type NodeButtonProgress } from './NodeButton';
 import { useTheme } from '../../theme/ThemeContext';
 
 interface RoadmapPathProps {
@@ -93,7 +93,9 @@ export default function RoadmapPath({ roadmap, onSelectLesson, onSelectQuiz }: R
           />
         </View>
       );
-      y += ITEM_SPACING;
+      // NodeButton renders its own 3-star decoration directly below a completed badge — leave it
+      // the extra room it needs so the next item on the path doesn't sit on top of those stars.
+      y += ITEM_SPACING + (progress === 'completed' ? NODE_BUTTON_COMPLETED_EXTRA_HEIGHT : 0);
       itemIndex += 1;
     });
 
