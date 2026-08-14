@@ -59,7 +59,7 @@ async function resolveNodeItems(
   const [lessonDocs, quizDocs] = await Promise.all([
     lessonIds.length ? Lesson.find({ _id: { $in: lessonIds }, isActive: true }) : Promise.resolve([]),
     quizIds.length
-      ? Quiz.find({ _id: { $in: quizIds }, isActive: true }).select('title questionIds')
+      ? Quiz.find({ _id: { $in: quizIds }, isActive: true }).select('title questionIds allowPlayModes')
       : Promise.resolve([]),
   ]);
   const lessonMap = new Map(lessonDocs.map((l) => [l._id.toString(), l]));
@@ -94,7 +94,12 @@ async function resolveNodeItems(
         passingScore: ref.passingScore ?? 0.7,
         progressStatus: status,
         isUnlocked,
-        quiz: { _id: quiz._id, title: quiz.title, questionCount: quiz.questionIds.length },
+        quiz: {
+          _id: quiz._id,
+          title: quiz.title,
+          questionCount: quiz.questionIds.length,
+          allowPlayModes: quiz.allowPlayModes,
+        },
       };
     })
     .filter((i): i is ResolvedNodeItem => i !== null);

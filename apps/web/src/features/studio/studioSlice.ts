@@ -452,6 +452,8 @@ export const fetchQuizDetail = createAsyncThunk(
 export interface UpdateQuizInput {
   title?: string;
   settings?: Partial<QuizSettings>;
+  // Teacher opt-in for mobile's Quiz Mode Select screen — see IQuiz.allowPlayModes.
+  allowPlayModes?: boolean;
 }
 
 export const updateQuiz = createAsyncThunk(

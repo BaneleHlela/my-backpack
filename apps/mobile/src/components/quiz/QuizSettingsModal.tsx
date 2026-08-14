@@ -181,7 +181,7 @@ function createStyles(colors: ThemeColors) {
       gap: spacing.sm,
     },
     optionChip: {
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.sm,
       paddingVertical: spacing.xs,
       borderRadius: radii.full,
       backgroundColor: colors.surface.glassSoft,

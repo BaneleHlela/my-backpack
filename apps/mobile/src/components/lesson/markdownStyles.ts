@@ -5,25 +5,27 @@
 import { typography } from '@my-backpack/shared';
 import type { useTheme } from '../../theme/ThemeContext';
 
+// Used only by SteppedNotesViewer, whose content always renders on a GlassCard-equivalent
+// (colors.surface.glassSoft) surface — hence glassText, not text, throughout.
 export function createMarkdownStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return {
     body: {
-      color: colors.text.secondary,
+      color: colors.glassText.secondary,
       fontSize: typography.body,
     },
     heading1: {
-      color: colors.text.primary,
+      color: colors.glassText.primary,
       fontSize: typography.headingLg,
       fontWeight: '700' as const,
     },
     heading2: {
-      color: colors.text.primary,
+      color: colors.glassText.primary,
       fontSize: typography.heading,
       fontWeight: '700' as const,
     },
     strong: {
       fontWeight: '700' as const,
-      color: colors.text.primary,
+      color: colors.glassText.primary,
     },
     bullet_list: {
       marginVertical: 4,

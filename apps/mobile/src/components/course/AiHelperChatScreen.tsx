@@ -136,7 +136,7 @@ export function AiHelperChatScreen({ courseId, courseName }: AiHelperChatScreenP
         <TextInput
           style={styles.input}
           placeholder="Ask a question…"
-          placeholderTextColor={colors.text.muted}
+          placeholderTextColor={colors.glassText.muted}
           value={inputText}
           onChangeText={setInputText}
           multiline
@@ -164,7 +164,7 @@ export function AiHelperChatScreen({ courseId, courseName }: AiHelperChatScreenP
 function createStyles(colors: ReturnType<typeof useTheme>['colors'], isChild: boolean) {
   return StyleSheet.create({
     screen: { flex: 1 },
-    menubar: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+    menubar: { paddingHorizontal: spacing.md, paddingTop: spacing.lg },
     messageList: { flex: 1 },
     messageListContent: {
       padding: spacing.lg,
@@ -182,7 +182,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors'], isChild: bo
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.xs,
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: spacing.xs,
     },
     typingText: {
       fontSize: typography.small,
@@ -190,7 +190,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors'], isChild: bo
     },
     retryChip: {
       alignSelf: 'flex-end',
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: spacing.xs,
       paddingVertical: spacing.xs,
       borderRadius: radii.full,
       backgroundColor: colors.error.light,
@@ -213,10 +213,10 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors'], isChild: bo
       borderWidth: 1,
       borderColor: colors.surface.border,
       borderRadius: radii.lg,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.sm,
       paddingVertical: spacing.sm,
       fontSize: isChild ? typography.bodyChild : typography.body,
-      color: colors.text.primary,
+      color: colors.glassText.primary,
       maxHeight: 120,
     },
     sendButton: {

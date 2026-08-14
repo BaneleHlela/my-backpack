@@ -159,9 +159,11 @@ export default function CourseScreen() {
             <RoadmapPath
               roadmap={currentRoadmap}
               onSelectLesson={(lessonId) => setActiveLessonId(lessonId)}
-              onSelectQuiz={(itemId, nodeId) =>
+              onSelectQuiz={(itemId, nodeId, allowPlayModes) =>
                 router.push({
-                  pathname: '/quiz/modes/[itemId]',
+                  // Topic quizzes skip Quiz Mode Select unless a teacher opted this specific
+                  // quiz in via Content Studio — see Quiz.allowPlayModes.
+                  pathname: allowPlayModes ? '/quiz/modes/[itemId]' : '/quiz/[itemId]',
                   params: { itemId, nodeId, subjectSlug, courseSlug },
                 })
               }
@@ -241,7 +243,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   comingSoonCard: {
     backgroundColor: colors.background,
     borderRadius: radii.lg,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
   },
   comingSoonText: {
@@ -302,7 +304,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
     borderRadius: radii.md,
     backgroundColor: colors.surface.glassSoft,

@@ -81,7 +81,7 @@ export function QuizModeSelectScreen({ target, backLabel }: QuizModeSelectScreen
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     topSection: {
-      paddingHorizontal: spacing.lg,
+      paddingHorizontal: spacing.md,
       paddingTop: spacing.lg,
       gap: spacing.xs,
     },
@@ -98,7 +98,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: spacing.xs,
     },
     gridScroll: {
-      paddingHorizontal: spacing.lg,
+      paddingHorizontal: spacing.md,
       paddingBottom: spacing.xl,
     },
   });

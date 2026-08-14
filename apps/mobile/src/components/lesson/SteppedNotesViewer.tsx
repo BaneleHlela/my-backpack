@@ -54,7 +54,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     stepTitle: {
       fontSize: typography.body,
       fontWeight: '700',
-      color: colors.text.primary,
+      color: colors.glassText.primary,
     },
     nav: {
       flexDirection: 'row',
@@ -68,11 +68,11 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       color: colors.primary.DEFAULT,
     },
     navTextDisabled: {
-      color: colors.text.faint,
+      color: colors.glassText.faint,
     },
     stepCount: {
       fontSize: typography.small,
-      color: colors.text.muted,
+      color: colors.glassText.muted,
     },
   });
 }

@@ -16,6 +16,10 @@ export interface QuizItemSummary {
   _id: Types.ObjectId;
   title: string;
   questionCount: number;
+  // Mirrors Quiz.allowPlayModes — see quiz.model.ts. Kept in sync with
+  // packages/shared/types/roadmap.ts's IQuizItemSummary, which this backend-local type
+  // otherwise duplicates rather than importing.
+  allowPlayModes: boolean;
 }
 
 export interface ResolvedLessonItem {

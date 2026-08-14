@@ -2,9 +2,11 @@
 // true_false_def_term, true_false_usage. content.prompt already carries the full composed
 // question text (and quoted sentence, where relevant) — read aloud via SpokenText (live TTS,
 // see docs/technical/mobile-architecture.md's "Live TTS (Prompt 3)" section) unless it starts
-// with the "audio:" prefix.
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+// with the "audio:" prefix. Submitting happens via the global Submit button (owned by
+// QuizSessionScreen, see questionPatternTypes.ts), not a button local to this pattern.
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import type { Ref } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check, Volume2, X } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
@@ -12,17 +14,20 @@ import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { SpokenText } from '../SpokenText';
 import { useTheme } from '../../../theme/ThemeContext';
+import type { QuestionPatternHandle, QuestionPatternReadyProps } from './questionPatternTypes';
 
-interface TrueFalsePatternProps {
+interface TrueFalsePatternProps extends QuestionPatternReadyProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
   lang: string;
   disabled?: boolean;
-  isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
 }
 
-export function TrueFalsePattern({ content, lang, disabled, isSubmitting, onAnswer }: TrueFalsePatternProps) {
+export const TrueFalsePattern = forwardRef(function TrueFalsePattern(
+  { content, lang, disabled, onAnswer, onReadyChange }: TrueFalsePatternProps,
+  ref: Ref<QuestionPatternHandle>
+) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const [selected, setSelected] = useState<'True' | 'False' | null>(null);
@@ -31,6 +36,13 @@ export function TrueFalsePattern({ content, lang, disabled, isSubmitting, onAnsw
     if (!selected || disabled) return;
     onAnswer(selected, selected === 'True' ? 0 : 1);
   };
+
+  useImperativeHandle(ref, () => ({ submit }));
+
+  useEffect(() => {
+    onReadyChange?.(selected !== null && !disabled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, disabled]);
 
   return (
     <View style={styles.wrapper}>
@@ -46,7 +58,7 @@ export function TrueFalsePattern({ content, lang, disabled, isSubmitting, onAnsw
             hitSlop={8}
             style={styles.audioButton}
           >
-            <Volume2 size={16} color={colors.text.secondary} />
+            <Volume2 size={16} color={colors.glassText.secondary} />
           </Pressable>
         ) : null}
       </View>
@@ -57,7 +69,7 @@ export function TrueFalsePattern({ content, lang, disabled, isSubmitting, onAnsw
           onPress={() => setSelected('True')}
           style={[styles.optionButton, selected === 'True' && styles.optionTrueSelected]}
         >
-          <Check size={20} color={selected === 'True' ? '#fff' : colors.text.primary} />
+          <Check size={20} color={selected === 'True' ? '#fff' : colors.glassText.primary} />
           <Text style={[styles.optionButtonText, selected === 'True' && styles.optionButtonTextSelected]}>
             True
           </Text>
@@ -67,23 +79,15 @@ export function TrueFalsePattern({ content, lang, disabled, isSubmitting, onAnsw
           onPress={() => setSelected('False')}
           style={[styles.optionButton, selected === 'False' && styles.optionFalseSelected]}
         >
-          <X size={20} color={selected === 'False' ? '#fff' : colors.text.primary} />
+          <X size={20} color={selected === 'False' ? '#fff' : colors.glassText.primary} />
           <Text style={[styles.optionButtonText, selected === 'False' && styles.optionButtonTextSelected]}>
             False
           </Text>
         </Pressable>
       </View>
-
-      <Pressable
-        disabled={selected === null || disabled}
-        onPress={submit}
-        style={[styles.submitButton, (selected === null || disabled) && styles.submitButtonDisabled]}
-      >
-        {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Submit</Text>}
-      </Pressable>
     </View>
   );
-}
+});
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
@@ -98,7 +102,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     prompt: {
       flex: 1,
-      fontSize: typography.body,
+      fontSize: typography.bodyChild,
       color: colors.text.primary,
     },
     spokenPrompt: {
@@ -139,24 +143,9 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     optionButtonText: {
       fontSize: typography.body,
       fontWeight: '700',
-      color: colors.text.primary,
+      color: colors.glassText.primary,
     },
     optionButtonTextSelected: {
-      color: '#fff',
-    },
-    submitButton: {
-      paddingVertical: spacing.md,
-      borderRadius: radii.md,
-      backgroundColor: colors.primary.DEFAULT,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    submitButtonDisabled: {
-      opacity: 0.5,
-    },
-    submitButtonText: {
-      fontSize: typography.body,
-      fontWeight: '700',
       color: '#fff',
     },
   });

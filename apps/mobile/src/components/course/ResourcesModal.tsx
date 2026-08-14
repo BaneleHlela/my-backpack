@@ -109,7 +109,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.background,
       borderTopLeftRadius: radii.lg,
       borderTopRightRadius: radii.lg,
-      paddingHorizontal: spacing.lg,
+      paddingHorizontal: spacing.md,
       paddingTop: spacing.md,
       paddingBottom: spacing.lg,
       gap: spacing.md,
@@ -136,7 +136,7 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.xs,
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: spacing.xs,
       paddingVertical: spacing.xs,
     },
     tabDivider: {

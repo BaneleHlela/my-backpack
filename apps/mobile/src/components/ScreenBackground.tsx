@@ -2,6 +2,7 @@ import { ImageBackground, KeyboardAvoidingView, Platform, ScrollView, StyleSheet
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ASSETS } from '@my-backpack/shared';
 import { useTheme } from '../theme/ThemeContext';
+import { spacing } from '@my-backpack/shared';
 
 interface ScreenBackgroundProps extends ViewProps {
   // Wraps children in a KeyboardAvoidingView + ScrollView — for form
@@ -35,7 +36,11 @@ export function ScreenBackground({ scroll = false, style, children, ...rest }: S
       {...rest}
     >
       <View
-        style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }, scroll ? undefined : style]}
+        style={[styles.safeArea, { 
+          paddingTop: insets.top, 
+          paddingBottom: insets.bottom,
+          paddingHorizontal: spacing.xs,
+         }, scroll ? undefined : style]}
       >
         {scroll ? (
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>

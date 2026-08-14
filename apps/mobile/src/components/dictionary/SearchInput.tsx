@@ -113,7 +113,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       borderWidth: 1,
       borderColor: colors.surface.border,
       borderRadius: radii.lg,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.sm,
     },
     searchIcon: {
       marginRight: spacing.sm,

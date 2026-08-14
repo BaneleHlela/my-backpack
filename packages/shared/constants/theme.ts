@@ -17,6 +17,14 @@ export interface IThemeColors {
   warning: { light: string; DEFAULT: string; dark: string };
   error: { light: string; DEFAULT: string; dark: string };
   text: { primary: string; secondary: string; muted: string; faint: string };
+  // Text colour for content rendered directly on a GlassCard/blurred surface. Unlike `text.*`
+  // above (which flips for dark mode, since it's meant for the flat `background` colour),
+  // `glassText.*` is identical in lightColors/darkColors — `surface.*` below is deliberately
+  // unchanged between themes (a white-based translucent fill designed to sit over a wallpaper
+  // image in both modes, per its own comment), so text sitting on top of it must stay on the
+  // same dark-on-light grey scale in both themes too, or it goes illegible in dark mode. Always
+  // use this — never `text.*` — for Text rendered inside a GlassCard.
+  glassText: { primary: string; secondary: string; muted: string; faint: string };
   surface: { glass: string; glassSoft: string; glassStrong: string; border: string };
 }
 
@@ -53,6 +61,14 @@ export const lightColors: IThemeColors = {
     secondary: '#4b5563', // gray-600 — body text
     muted: '#9ca3af', // gray-400 — placeholders
     faint: '#d1d5db', // gray-300 — disabled/unavailable states
+  },
+
+  // Same values as `text.*` above in light mode — glass surfaces are dark-on-light here too.
+  glassText: {
+    primary: '#1f2937', // gray-800
+    secondary: '#4b5563', // gray-600
+    muted: '#9ca3af', // gray-400
+    faint: '#d1d5db', // gray-300
   },
 
   surface: {
@@ -103,6 +119,16 @@ export const darkColors: IThemeColors = {
     secondary: '#d1d5db', // gray-300
     muted: '#9ca3af', // gray-400
     faint: '#4b5563', // gray-600
+  },
+
+  // Deliberately identical to lightColors.glassText, not flipped — see the interface comment.
+  // `text.*` above would put light-grey/cream text on the glass surface's still-light fill,
+  // which is the "grey text invisible in dark mode" bug this token exists to avoid.
+  glassText: {
+    primary: '#1f2937',
+    secondary: '#4b5563',
+    muted: '#9ca3af',
+    faint: '#d1d5db',
   },
 
   surface: {

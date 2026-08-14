@@ -1273,19 +1273,55 @@ Implementation, inside `QuizSessionScreen`:
   to your bucket from the Dictionary…") was Dictionary-specific for the same reason — now
   generic ("No questions to quiz yet… Check back once more questions have been added.").
 
+### Mode-grid gating: Topic quizzes are opt-in (correction, August 2026)
+
+The original decision — the mode grid always shows for every quiz, only the settings pill was
+gated — turned out to be wrong for `mode: 'fixed'` roadmap/node ("Topic") quizzes: showing a
+7-card game-mode picker in front of *every* lesson quiz was too much for content a teacher never
+designed as a game. Corrected with a new `Quiz.allowPlayModes` field (default `false`,
+`quiz.model.ts` + shared `IQuiz`) — a Topic quiz only shows Quiz Mode Select if a teacher
+explicitly turns it on, from a checkbox on `QuizEditorPage.tsx` ("Allow Quiz Modes … for this
+quiz on mobile"). Left off, tapping it goes straight into the ordinary session — exactly the
+pre-Quiz-Modes behavior.
+
+This is a routing-time decision, made by the caller before ever navigating, not something
+`QuizModeSelectScreen` itself checks — so the flag needed to travel with the roadmap data
+mobile already has in hand, not a new API call: `IQuizItemSummary` (`packages/shared/types/
+roadmap.ts`) gained `allowPlayModes`, populated by `roadmap.service.ts`'s node-item resolution
+alongside `questionCount`. `RoadmapPath`'s `onSelectQuiz` callback signature grew a third
+`allowPlayModes` argument (read off `item.quiz.allowPlayModes` where it renders each button);
+`CourseScreen`'s handler and `QuizPickerModal`'s "Course Quizzes" tab both branch on it —
+`allowPlayModes ? '/quiz/modes/[itemId]' : '/quiz/[itemId]'` — the same conditional in both
+places, since both are ways of reaching the same underlying Topic quiz.
+
+**Deliberately not read for `mode: 'dynamic'`/`'pool'` quizzes** — Dictionary's "Take Quiz" and
+every course's auto-created practice pool ("Game Quizzes") always show the grid regardless of
+this flag; those are inherently game surfaces, not curated lesson content a teacher might not
+want gamified. No migration was needed for existing Topic quizzes — they simply take the schema
+default (`false`), which is the corrected behavior.
+
+**Gotcha hit while wiring this**: `apps/api/src/modules/roadmap/roadmap.types.ts` has its own
+backend-local `QuizItemSummary` interface that duplicates the shared `IQuizItemSummary` shape
+rather than importing it — both needed the new field, or `roadmap.service.ts`'s object literal
+fails to compile with "does not exist in type". Same "two declarations" trap as `QuizMode`
+gaining `'pool'` (model enum + shared union) and `NodeItemType` gaining `'project'` (Phase B) —
+worth grepping for a type's *other* declaration before assuming one edit is enough.
+
 ### Settings-pill gating without a new API call
 
-`Quiz.isUserAdjustable` is what the pill's interactivity should follow, per the product
-decision: the mode grid always shows regardless of this flag, but the *settings pill* is only
-interactive for adjustable quizzes — a fixed roadmap/course quiz's card shows its default value
-as a static, non-pressable label instead. Rather than adding a new field to
+`Quiz.isUserAdjustable` is what the pill's interactivity follows, per the (still-standing)
+product decision: for a quiz whose mode grid is showing at all (see above), the *settings pill*
+is only interactive for adjustable quizzes — a non-adjustable quiz's card shows its default
+value as a static, non-pressable label instead. Rather than adding a new field to
 `IQuizItemSummary`/a new API call, `QuizModeSelectScreen` derives this from which entry point
 was used: `target.source === 'miniApp'` stands in for `isUserAdjustable: true`;
-`target.source === 'roadmapItem'` stands in for `false`. This now correctly covers **both**
+`target.source === 'roadmapItem'` stands in for `false`. This correctly covers **both**
 adjustable quizzes seeded today — Dictionary's "General Dictionary Quiz" and every course's
 auto-created pool quiz (both seeded `isUserAdjustable: true`) — while every roadmap-item quiz
-stays non-adjustable. Still a simplification, not a real flag read — revisit if a roadmap-item
-quiz is ever seeded `isUserAdjustable: true`.
+stays non-adjustable. In practice this now only matters for an opted-in Topic quiz (one with
+`allowPlayModes: true`) — its grid shows, but the pill stays a static label, since
+`isUserAdjustable` and `allowPlayModes` are independent flags. Still a simplification, not a
+real flag read — revisit if a roadmap-item quiz is ever seeded `isUserAdjustable: true`.
 
 ### Fonts: Chewy + Fredoka (new screens only)
 
@@ -1436,4 +1472,4 @@ flagging what hasn't been run end-to-end yet.
 
 ---
 
-*Last updated: 2026-08-12.*
+*Last updated: 2026-08-13.*

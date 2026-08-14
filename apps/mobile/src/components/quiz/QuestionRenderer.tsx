@@ -3,6 +3,13 @@
 // dnd_match/dnd_fill still fall through to the placeholder below — no seeded content exists
 // for any of those 5 yet (see docs/technical/mobile-architecture.md), so building renderers
 // for them now would be speculative.
+//
+// Forwards its ref/onReadyChange straight through to whichever single pattern is actually
+// rendered — QuizSessionScreen's global Submit button (see questionPatternTypes.ts) talks to
+// that pattern through this pass-through rather than QuestionRenderer owning any submit state
+// itself.
+import { forwardRef } from 'react';
+import type { Ref } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IQuestion, IQuestionHelpers } from '@my-backpack/shared';
@@ -13,6 +20,7 @@ import { DndSinglePattern } from './patterns/DndSinglePattern';
 import { DndBuildPattern } from './patterns/DndBuildPattern';
 import { DndCountPattern } from './patterns/DndCountPattern';
 import { useTheme } from '../../theme/ThemeContext';
+import type { QuestionPatternHandle } from './patterns/questionPatternTypes';
 
 const MCQ_TYPES = new Set<IQuestion['type']>([
   'mcq_term_to_def',
@@ -42,19 +50,14 @@ export interface QuestionRendererProps {
   ageGroup?: AgeGroup;
   lang: string;
   disabled?: boolean;
-  isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
+  onReadyChange?: (ready: boolean) => void;
 }
 
-export function QuestionRenderer({
-  question,
-  helpers,
-  ageGroup,
-  lang,
-  disabled,
-  isSubmitting,
-  onAnswer,
-}: QuestionRendererProps) {
+export const QuestionRenderer = forwardRef(function QuestionRenderer(
+  { question, helpers, ageGroup, lang, disabled, onAnswer, onReadyChange }: QuestionRendererProps,
+  ref: Ref<QuestionPatternHandle>
+) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const content = question.content;
@@ -62,12 +65,13 @@ export function QuestionRenderer({
   if (MCQ_TYPES.has(question.type)) {
     return (
       <McqPattern
+        ref={ref}
         content={content}
         helpers={helpers}
         lang={lang}
         disabled={disabled}
-        isSubmitting={isSubmitting}
         onAnswer={onAnswer}
+        onReadyChange={onReadyChange}
       />
     );
   }
@@ -75,12 +79,13 @@ export function QuestionRenderer({
   if (TRUE_FALSE_TYPES.has(question.type)) {
     return (
       <TrueFalsePattern
+        ref={ref}
         content={content}
         helpers={helpers}
         lang={lang}
         disabled={disabled}
-        isSubmitting={isSubmitting}
         onAnswer={onAnswer}
+        onReadyChange={onReadyChange}
       />
     );
   }
@@ -88,14 +93,15 @@ export function QuestionRenderer({
   if (TYPED_INPUT_TYPES.has(question.type)) {
     return (
       <TypedInputPattern
+        ref={ref}
         type={question.type}
         termId={question.termId}
         content={content}
         helpers={helpers}
         lang={lang}
         disabled={disabled}
-        isSubmitting={isSubmitting}
         onAnswer={onAnswer}
+        onReadyChange={onReadyChange}
       />
     );
   }
@@ -103,13 +109,14 @@ export function QuestionRenderer({
   if (question.type === 'dnd_single') {
     return (
       <DndSinglePattern
+        ref={ref}
         content={content}
         helpers={helpers}
         ageGroup={ageGroup}
         lang={lang}
         disabled={disabled}
-        isSubmitting={isSubmitting}
         onAnswer={onAnswer}
+        onReadyChange={onReadyChange}
       />
     );
   }
@@ -117,13 +124,14 @@ export function QuestionRenderer({
   if (question.type === 'dnd_build') {
     return (
       <DndBuildPattern
+        ref={ref}
         content={content}
         helpers={helpers}
         ageGroup={ageGroup}
         lang={lang}
         disabled={disabled}
-        isSubmitting={isSubmitting}
         onAnswer={onAnswer}
+        onReadyChange={onReadyChange}
       />
     );
   }
@@ -131,13 +139,14 @@ export function QuestionRenderer({
   if (question.type === 'dnd_count') {
     return (
       <DndCountPattern
+        ref={ref}
         content={content}
         helpers={helpers}
         ageGroup={ageGroup}
         lang={lang}
         disabled={disabled}
-        isSubmitting={isSubmitting}
         onAnswer={onAnswer}
+        onReadyChange={onReadyChange}
       />
     );
   }
@@ -149,7 +158,7 @@ export function QuestionRenderer({
       <Text style={styles.placeholderBody}>“{question.type}” questions will be playable in a future update.</Text>
     </View>
   );
-}
+});
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({

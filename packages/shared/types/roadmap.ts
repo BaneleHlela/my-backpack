@@ -137,6 +137,10 @@ export interface IQuizItemSummary {
   _id: string;
   title: string;
   questionCount: number;
+  // Mirrors Quiz.allowPlayModes — carried here so mobile can decide whether tapping this item
+  // should open the Quiz Mode Select screen or start the ordinary session directly, without a
+  // separate API call. See quiz.model.ts / mobile-architecture.md's "Quiz Modes" section.
+  allowPlayModes: boolean;
 }
 
 export type NodeItemWithProgress =

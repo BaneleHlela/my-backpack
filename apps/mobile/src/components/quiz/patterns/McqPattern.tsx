@@ -4,8 +4,8 @@
 // types. content.prompt is read aloud via SpokenText (live TTS, see
 // docs/technical/mobile-architecture.md's "Live TTS (Prompt 3)" section) unless it's the
 // "audio:" prefix case below, which already has its own dedicated "Play audio" affordance.
-// Selecting an option never submits immediately — the learner always confirms with the Submit
-// button.
+// Selecting an option never submits immediately — the global Submit button (owned by
+// QuizSessionScreen, see questionPatternTypes.ts) is the only way to confirm.
 //
 // mcq_audio: reuses the "audio:" prefix affordance TypedInputPattern.tsx built for
 // text_input_audio, but simpler — mcq_audio is exclusively hand-curated seed content (never
@@ -13,8 +13,9 @@
 // "audio:" prefix convention on content.prompt with no termId-based fallback fetch to port
 // (that fallback exists on TypedInputPattern only because the auto-generator doesn't tag
 // text_input_audio's prompt the same way).
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import type { Ref } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Volume2 } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
@@ -22,20 +23,23 @@ import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { SpokenText } from '../SpokenText';
 import { useTheme } from '../../../theme/ThemeContext';
+import type { QuestionPatternHandle, QuestionPatternReadyProps } from './questionPatternTypes';
 
-interface McqPatternProps {
+interface McqPatternProps extends QuestionPatternReadyProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
   lang: string;
   disabled?: boolean;
-  isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
 }
 
 const OPTION_LABELS = ['A', 'B', 'C', 'D', 'E', 'F'];
 const AUDIO_PROMPT_PREFIX = 'audio:';
 
-export function McqPattern({ content, lang, disabled, isSubmitting, onAnswer }: McqPatternProps) {
+export const McqPattern = forwardRef(function McqPattern(
+  { content, lang, disabled, onAnswer, onReadyChange }: McqPatternProps,
+  ref: Ref<QuestionPatternHandle>
+) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const [selected, setSelected] = useState<number | null>(null);
@@ -49,6 +53,13 @@ export function McqPattern({ content, lang, disabled, isSubmitting, onAnswer }: 
     if (selected === null || disabled) return;
     onAnswer(options[selected], selected);
   };
+
+  useImperativeHandle(ref, () => ({ submit }));
+
+  useEffect(() => {
+    onReadyChange?.(selected !== null && !disabled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, disabled]);
 
   return (
     <View style={styles.wrapper}>
@@ -89,17 +100,9 @@ export function McqPattern({ content, lang, disabled, isSubmitting, onAnswer }: 
           </Pressable>
         ))}
       </View>
-
-      <Pressable
-        disabled={selected === null || disabled}
-        onPress={submit}
-        style={[styles.submitButton, (selected === null || disabled) && styles.submitButtonDisabled]}
-      >
-        {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Submit</Text>}
-      </Pressable>
     </View>
   );
-}
+});
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
@@ -128,7 +131,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: spacing.xs,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.sm,
       paddingVertical: spacing.sm,
       borderRadius: radii.md,
       backgroundColor: colors.primary.DEFAULT,
@@ -145,7 +148,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.sm,
       paddingVertical: spacing.sm,
       borderRadius: radii.md,
       borderWidth: 1,
@@ -181,21 +184,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       color: colors.text.primary,
     },
     optionTextSelected: {
-      color: '#fff',
-    },
-    submitButton: {
-      paddingVertical: spacing.md,
-      borderRadius: radii.md,
-      backgroundColor: colors.primary.DEFAULT,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    submitButtonDisabled: {
-      opacity: 0.5,
-    },
-    submitButtonText: {
-      fontSize: typography.body,
-      fontWeight: '700',
       color: '#fff',
     },
   });

@@ -5,8 +5,10 @@
 //
 // - "Course Quizzes" — unchanged from the original single-list version: every quiz-type item
 //   across the course's nodes, grouped by node title (same aggregation shape as
-//   ResourcesModal's video grouping). Picking one hands off to the Quiz Mode Select screen
-//   exactly as if it had been tapped directly on the path.
+//   ResourcesModal's video grouping). Picking one hands off exactly as if it had been tapped
+//   directly on the path: the Quiz Mode Select screen if the teacher opted this specific quiz
+//   in via Content Studio (`Quiz.allowPlayModes`), otherwise straight into the ordinary
+//   session — Topic quizzes don't get the mode grid by default.
 // - "Game Quizzes" — the same QuizModeGrid used by the full-screen QuizModeSelectScreen,
 //   embedded directly in this tab. It targets the course's own auto-created mode:'pool'
 //   practice quiz (`{source:'miniApp', miniAppId: courseId}` — the same shape Dictionary's
@@ -72,10 +74,12 @@ export default function QuizPickerModal({
     })
     .filter((g) => g.quizzes.length > 0);
 
-  const goToModeSelect = (itemId: string, nodeId: string) => {
+  // Topic quizzes skip Quiz Mode Select unless a teacher opted this specific quiz in via
+  // Content Studio — same rule as tapping the item directly on the path (see Quiz.allowPlayModes).
+  const goToQuiz = (itemId: string, nodeId: string, allowPlayModes: boolean) => {
     onClose();
     router.push({
-      pathname: '/quiz/modes/[itemId]',
+      pathname: allowPlayModes ? '/quiz/modes/[itemId]' : '/quiz/[itemId]',
       params: { itemId, nodeId, subjectSlug, courseSlug },
     });
   };
@@ -127,7 +131,7 @@ export default function QuizPickerModal({
                     {group.quizzes.map((item) => (
                       <Pressable
                         key={item.itemId}
-                        onPress={() => goToModeSelect(item.itemId, group.nodeId)}
+                        onPress={() => goToQuiz(item.itemId, group.nodeId, item.quiz.allowPlayModes)}
                         style={styles.row}
                       >
                         <View style={styles.rowIcon}>
@@ -167,7 +171,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.background,
       borderTopLeftRadius: radii.lg,
       borderTopRightRadius: radii.lg,
-      paddingHorizontal: spacing.lg,
+      paddingHorizontal: spacing.md,
       paddingTop: spacing.md,
       paddingBottom: spacing.lg,
       gap: spacing.md,
@@ -194,7 +198,7 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.xs,
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: spacing.xs,
       paddingVertical: spacing.xs,
     },
     tabDivider: {

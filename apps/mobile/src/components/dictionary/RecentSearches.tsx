@@ -70,7 +70,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       gap: spacing.xs,
     },
     chip: {
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.sm,
       paddingVertical: spacing.xs,
       borderRadius: radii.full,
       backgroundColor: colors.surface.glassSoft,
@@ -79,7 +79,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     chipText: {
       fontSize: typography.small,
-      color: colors.text.secondary,
+      color: colors.glassText.secondary,
     },
   });
 }

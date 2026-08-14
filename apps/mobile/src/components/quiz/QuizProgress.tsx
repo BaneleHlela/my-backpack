@@ -1,69 +1,38 @@
-// "Question N of M" label plus a progress bar. Ports apps/web's QuizProgress.tsx.
-// `rightSlot` (e.g. a Skip button) renders inline with the label — used by DnD questions
-// (Phase 4), which fold their Skip control up here instead of showing it below the question.
-import type { ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { radii, spacing, typography } from '@my-backpack/shared';
-import type { AgeGroup } from '@my-backpack/shared';
+// A bare progress bar — ports apps/web's QuizProgress.tsx, minus its "Question N of M" label
+// and Skip rightSlot. Both moved out of this component as part of the full-height/full-width
+// question restyle: the question count now surfaces in QuizSessionScreen's mode/stat bar (for
+// Classic mode and roadmap-item quizzes with no active play mode, where there's otherwise
+// nothing else to show there), and Skip is now a permanent control in the global bottom bar
+// alongside Submit — see QuizSessionScreen's module comment.
+import { StyleSheet, View } from 'react-native';
+import { radii, spacing } from '@my-backpack/shared';
 import { useTheme } from '../../theme/ThemeContext';
 
 interface QuizProgressProps {
   answered: number;
   total: number;
-  ageGroup?: AgeGroup;
-  rightSlot?: ReactNode;
 }
 
-export function QuizProgress({ answered, total, ageGroup, rightSlot }: QuizProgressProps) {
+export function QuizProgress({ answered, total }: QuizProgressProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-  const isChild = ageGroup === 'child';
-  const current = Math.min(answered + 1, total || 1);
   const pct = total > 0 ? Math.round((answered / total) * 100) : 0;
 
   return (
-    <View style={styles.wrapper}>
-      <View style={styles.labelRow}>
-        <Text style={[styles.label, isChild && styles.labelChild]}>
-          Question {current} of {total}
-        </Text>
-        {rightSlot}
-      </View>
-      <View style={[styles.track, isChild && styles.trackChild]}>
-        <View style={[styles.fill, { width: `${pct}%` }]} />
-      </View>
+    <View style={styles.track}>
+      <View style={[styles.fill, { width: `${pct}%` }]} />
     </View>
   );
 }
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
-    wrapper: {
-      marginBottom: spacing.md,
-    },
-    labelRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: spacing.xs,
-    },
-    label: {
-      fontSize: typography.small,
-      color: colors.text.muted,
-    },
-    labelChild: {
-      fontSize: typography.body,
-      fontWeight: '600',
-      color: colors.text.secondary,
-    },
     track: {
       height: 6,
       borderRadius: radii.full,
       backgroundColor: colors.surface.glassSoft,
       overflow: 'hidden',
-    },
-    trackChild: {
-      height: 12,
+      marginVertical: spacing.sm,
     },
     fill: {
       height: '100%',

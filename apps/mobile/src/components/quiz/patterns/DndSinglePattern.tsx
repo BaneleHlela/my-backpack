@@ -22,7 +22,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import {
-  ActivityIndicator,
   Image,
   ImageBackground,
   Pressable,
@@ -40,14 +39,14 @@ import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useSpeak } from '../../../lib/useSpeak';
 import { useTheme } from '../../../theme/ThemeContext';
+import type { QuestionPatternHandle, QuestionPatternReadyProps } from './questionPatternTypes';
 
-interface DndSinglePatternProps {
+interface DndSinglePatternProps extends QuestionPatternReadyProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
   ageGroup?: AgeGroup;
   lang: string;
   disabled?: boolean;
-  isSubmitting?: boolean;
   onAnswer: (rawResponse: string) => void;
 }
 
@@ -155,15 +154,10 @@ const DraggableTile = forwardRef(function DraggableTile(
   );
 });
 
-export function DndSinglePattern({
-  content,
-  helpers,
-  ageGroup,
-  lang,
-  disabled,
-  isSubmitting,
-  onAnswer,
-}: DndSinglePatternProps) {
+export const DndSinglePattern = forwardRef(function DndSinglePattern(
+  { content, helpers, ageGroup, lang, disabled, onAnswer, onReadyChange }: DndSinglePatternProps,
+  ref: Ref<QuestionPatternHandle>
+) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const isChild = ageGroup === 'child';
@@ -208,6 +202,30 @@ export function DndSinglePattern({
     return () => clearTimeout(timer);
   }, [helpers.hintDelaySeconds, hintButtonReady]);
 
+  // Defined above the `!dropZone` early return (and self-guards on `dropZone`) so the
+  // useImperativeHandle/onReadyChange hooks just below — which must run unconditionally on
+  // every render per the Rules of Hooks — can safely close over it regardless of which branch
+  // this render takes.
+  const submit = (finalPlacedId: string) => {
+    if (!dropZone || disabled || submittedRef.current) return;
+    submittedRef.current = true;
+    onAnswer(JSON.stringify({ placements: [{ draggableId: finalPlacedId, dropZoneId: dropZone.id }] }));
+  };
+
+  // autoSubmit questions (all 6 vowels dnd_single variants) have no manual submit moment — the
+  // global Submit button stays disabled for the whole question, matching "always visible but
+  // disabled when not used".
+  useImperativeHandle(ref, () => ({
+    submit: () => {
+      if (!helpers.autoSubmit && placedId) submit(placedId);
+    },
+  }));
+
+  useEffect(() => {
+    onReadyChange?.(!helpers.autoSubmit && placedId !== null && !disabled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placedId, helpers.autoSubmit, disabled]);
+
   if (!dropZone) return null;
 
   const placedItem = orderedDraggables.find((d) => d.id === placedId) ?? null;
@@ -228,12 +246,6 @@ export function DndSinglePattern({
     dropZoneRef.current?.measureInWindow((x, y, width, height) => {
       dropZoneRectRef.current = { x, y, width, height };
     });
-  };
-
-  const submit = (finalPlacedId: string) => {
-    if (disabled || submittedRef.current) return;
-    submittedRef.current = true;
-    onAnswer(JSON.stringify({ placements: [{ draggableId: finalPlacedId, dropZoneId: dropZone.id }] }));
   };
 
   // Ordinary fallback rule: prerecorded item.audioUrl wins when set (phonetically load-bearing,
@@ -381,16 +393,6 @@ export function DndSinglePattern({
       {wrongAttempt && wrongAvatarUrl ? (
         <Image source={{ uri: wrongAvatarUrl }} style={styles.wrongAvatar} resizeMode="contain" />
       ) : null}
-
-      {!helpers.autoSubmit ? (
-        <Pressable
-          disabled={!placedId || disabled}
-          onPress={() => placedId && submit(placedId)}
-          style={[styles.submitButton, (!placedId || disabled) && styles.submitButtonDisabled]}
-        >
-          {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Submit</Text>}
-        </Pressable>
-      ) : null}
     </View>
   );
 
@@ -401,7 +403,7 @@ export function DndSinglePattern({
       {body}
     </ImageBackground>
   );
-}
+});
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
@@ -520,21 +522,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     width: 72,
     height: 72,
     alignSelf: 'center',
-  },
-  submitButton: {
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary.DEFAULT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: '#fff',
   },
   });
 }

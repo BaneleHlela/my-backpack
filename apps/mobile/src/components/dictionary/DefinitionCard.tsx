@@ -1,12 +1,16 @@
 // Ports apps/web's DefinitionCard.tsx — same three "Add to bucket" states
-// (default / adding / added) via PrimaryButton's variant/loading props.
+// (default / adding / added) via PrimaryButton's variant/loading props. Header row (part of
+// speech + Add-to-bucket button) sits above the definition text, which then runs the card's
+// full width — the button no longer competes with the definition for horizontal space.
+// Pressing "Added" removes the term from the bucket (removeFromBucket is term-scoped
+// server-side, not per-definition — see apps/api's vocab.service.ts).
 import { StyleSheet, Text, View } from 'react-native';
 import { Check, Plus } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
 import { PrimaryButton } from '../PrimaryButton';
-import { addDefinitionToBucket } from '../../features/vocab/vocabSlice';
+import { addDefinitionToBucket, removeBucketEntry } from '../../features/vocab/vocabSlice';
 import type { DefinitionWithStatus } from '../../features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../store/store';
 import { useTheme } from '../../theme/ThemeContext';
@@ -22,60 +26,67 @@ export function DefinitionCard({ termId, miniAppId, index, entry }: DefinitionCa
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const dispatch = useDispatch<AppDispatch>();
-  const { addingDefinitionIds } = useSelector((state: RootState) => state.vocab);
+  const { addingDefinitionIds, removingTermIds } = useSelector((state: RootState) => state.vocab);
   const { definition, inBucket } = entry;
   const isAdding = addingDefinitionIds.includes(definition._id);
+  const isRemoving = removingTermIds.includes(termId);
+  const isBusy = isAdding || isRemoving;
+
+  const handlePress = () => {
+    if (inBucket) {
+      dispatch(removeBucketEntry({ termId, miniAppId }));
+    } else {
+      dispatch(addDefinitionToBucket({ termId, definitionId: definition._id, miniAppId }));
+    }
+  };
 
   return (
     <GlassCard intensity="soft">
-      <View style={styles.row}>
-        <View style={styles.textColumn}>
-          <Text style={styles.partOfSpeech}>
-            {index + 1}. {definition.partOfSpeech}
-          </Text>
-          <Text style={styles.definition}>{definition.definition}</Text>
-
-          {definition.examples.length > 0 ? (
-            <Text style={styles.example}>"{definition.examples[0]}"</Text>
-          ) : null}
-
-          {definition.synonyms.length > 0 || definition.antonyms.length > 0 ? (
-            <View style={styles.wordLists}>
-              {definition.synonyms.length > 0 ? (
-                <Text style={styles.wordListText}>Synonyms: {definition.synonyms.join(', ')}</Text>
-              ) : null}
-              {definition.antonyms.length > 0 ? (
-                <Text style={styles.wordListText}>Antonyms: {definition.antonyms.join(', ')}</Text>
-              ) : null}
-            </View>
-          ) : null}
-        </View>
+      <View style={styles.header}>
+        <Text style={styles.partOfSpeech}>
+          {index + 1}. {definition.partOfSpeech}
+        </Text>
 
         <PrimaryButton
-          title={inBucket ? 'Added' : isAdding ? 'Adding...' : 'Add to bucket'}
+          title={inBucket ? (isRemoving ? 'Removing...' : 'Added') : isAdding ? 'Adding...' : 'Add to bucket'}
           icon={inBucket ? <Check size={14} color={colors.success.dark} /> : !isAdding ? <Plus size={14} color="#fff" /> : undefined}
           variant={inBucket ? 'success' : 'primary'}
-          loading={isAdding}
-          disabled={inBucket}
-          onPress={() => dispatch(addDefinitionToBucket({ termId, definitionId: definition._id, miniAppId }))}
+          loading={isBusy}
+          onPress={handlePress}
           style={styles.button}
         />
       </View>
+
+      <Text style={styles.definition}>{definition.definition}</Text>
+
+      {definition.examples.length > 0 ? (
+        <Text style={styles.example}>"{definition.examples[0]}"</Text>
+      ) : null}
+
+      {definition.synonyms.length > 0 || definition.antonyms.length > 0 ? (
+        <View style={styles.wordLists}>
+          {definition.synonyms.length > 0 ? (
+            <Text style={styles.wordListText}>Synonyms: {definition.synonyms.join(', ')}</Text>
+          ) : null}
+          {definition.antonyms.length > 0 ? (
+            <Text style={styles.wordListText}>Antonyms: {definition.antonyms.join(', ')}</Text>
+          ) : null}
+        </View>
+      ) : null}
     </GlassCard>
   );
 }
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
-    row: {
+    header: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
+      alignItems: 'center',
+      justifyContent: 'space-between',
       gap: spacing.sm,
     },
-    textColumn: {
-      flex: 1,
-    },
     partOfSpeech: {
+      flex: 1,
       fontSize: 11,
       fontWeight: '700',
       textTransform: 'uppercase',
@@ -84,13 +95,14 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     definition: {
       fontSize: typography.body,
-      color: colors.text.primary,
-      marginTop: spacing.xs,
+      color: colors.glassText.primary,
+      marginTop: spacing.sm,
+      width: '100%',
     },
     example: {
       fontSize: typography.small,
       fontStyle: 'italic',
-      color: colors.text.muted,
+      color: colors.glassText.muted,
       marginTop: spacing.xs,
     },
     wordLists: {
@@ -99,7 +111,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     wordListText: {
       fontSize: 12,
-      color: colors.text.muted,
+      color: colors.glassText.muted,
     },
     button: {
       flexShrink: 0,

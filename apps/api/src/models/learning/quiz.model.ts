@@ -44,6 +44,15 @@ export interface IQuizDocument extends Document {
   settings: IQuizSettings;
   isUserAdjustable: boolean;
   isDefault: boolean;
+  // Whether mobile's Quiz Mode Select screen (Classic/Hearts/Time Run/…) is reachable for this
+  // quiz at all. Default false — a mode:'fixed' roadmap/node quiz ("Topic quiz") only ever gets
+  // the mode grid if a teacher explicitly opts it in via Content Studio's QuizEditorPage; until
+  // then, tapping it goes straight to the ordinary session, exactly as before Quiz Modes
+  // existed. Not read for mode:'dynamic'/'pool' quizzes (Dictionary's quiz, a course's
+  // auto-created practice pool) — those are inherently "game" surfaces and always show the
+  // grid regardless of this flag. See docs/technical/mobile-architecture.md's "Quiz Modes"
+  // section.
+  allowPlayModes: boolean;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -79,6 +88,7 @@ const quizSchema = new Schema<IQuizDocument>(
     settings: { type: quizSettingsSchema, required: true },
     isUserAdjustable: { type: Boolean, default: false },
     isDefault: { type: Boolean, default: false },
+    allowPlayModes: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

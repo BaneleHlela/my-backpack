@@ -4,13 +4,22 @@
 // are read aloud via SpokenText (live TTS, see docs/technical/mobile-architecture.md's "Live
 // TTS (Prompt 3)" section) — explanation always (no prerecorded equivalent exists), feedback
 // text only when feedback.audioUrl isn't set (that prerecorded clip wins instead).
-import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+//
+// The card is a DepthView (../DepthView.tsx) and the advance button a DepthButton
+// (../DepthButton.tsx) — the same "3D gloss plate" chrome used everywhere else in this restyle
+// (see QuizSessionScreen's module comment). The correct/incorrect/skipped ring that used to be
+// a plain `borderColor` is now DepthView's `shadowColor` — an opaque tint drawn where the rim
+// peeks out from behind the inset face, so it reads as a colored ring around the whole card
+// rather than a thin 1-2px border line.
+import { Image, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { CheckCircle2, SkipForward, Volume2, XCircle } from 'lucide-react-native';
 import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IQuestionContent } from '@my-backpack/shared';
 import { playAudioUrl } from '../../lib/audio';
 import { resolveAssetUrl } from '../../lib/assetUrl';
 import { SpokenText } from './SpokenText';
+import { DepthView } from '../DepthView';
+import { DepthButton } from '../DepthButton';
 import { useTheme } from '../../theme/ThemeContext';
 
 interface AnswerFeedbackProps {
@@ -25,6 +34,9 @@ interface AnswerFeedbackProps {
   onAdvance: () => void;
 }
 
+const CARD_MAX_WIDTH = 420;
+const CARD_PADDING = spacing.lg;
+
 export function AnswerFeedback({
   isCorrect,
   pointsAwarded,
@@ -38,6 +50,7 @@ export function AnswerFeedback({
 }: AnswerFeedbackProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { width: windowWidth } = useWindowDimensions();
   const isChild = ageGroup === 'child';
 
   const headline = wasSkipped
@@ -51,7 +64,10 @@ export function AnswerFeedback({
         : 'Not quite';
 
   const ringColor = wasSkipped ? colors.text.faint : isCorrect ? colors.success.DEFAULT : colors.error.DEFAULT;
-  const headlineColor = wasSkipped ? colors.text.secondary : isCorrect ? colors.success.dark : colors.error.dark;
+  // The card face itself is always solid white (see the DepthView `color` prop below) regardless
+  // of app theme, so text drawn on it must stay on the fixed dark-on-light `glassText` scale —
+  // never `text.*`, which flips to pale/cream tones in dark mode and would go illegible here.
+  const headlineColor = wasSkipped ? colors.glassText.secondary : isCorrect ? colors.success.dark : colors.error.dark;
 
   const feedback = isCorrect ? content.successFeedback : content.tryAgainFeedback;
   const avatarUrl =
@@ -59,10 +75,19 @@ export function AnswerFeedback({
       ? ASSETS.AVATARS.image(content.avatar.avatarId, feedback?.avatarEmotion ?? content.avatar.emotion)
       : undefined;
 
+  const cardWidth = Math.min(CARD_MAX_WIDTH, windowWidth - spacing.lg * 2);
+  const advanceButtonWidth = cardWidth - CARD_PADDING * 2;
+
   return (
     <Modal transparent animationType="fade" visible onRequestClose={() => {}}>
       <View style={styles.overlay}>
-        <View style={[styles.card, { borderColor: ringColor }]}>
+        <DepthView
+          width={cardWidth}
+          color="#ffffff"
+          shadowColor={ringColor}
+          borderRadius={radii.lg}
+          contentStyle={styles.cardContent}
+        >
           {avatarUrl ? (
             <Image
               source={{ uri: avatarUrl }}
@@ -73,7 +98,7 @@ export function AnswerFeedback({
 
           <View style={styles.headerRow}>
             {wasSkipped ? (
-              <SkipForward size={28} color={colors.text.muted} />
+              <SkipForward size={28} color={colors.glassText.muted} />
             ) : isCorrect ? (
               <CheckCircle2 size={28} color={colors.success.DEFAULT} />
             ) : (
@@ -96,7 +121,7 @@ export function AnswerFeedback({
                       hitSlop={8}
                       style={styles.audioButton}
                     >
-                      <Volume2 size={14} color={colors.text.secondary} />
+                      <Volume2 size={14} color={colors.glassText.secondary} />
                     </Pressable>
                   </View>
                 ) : (
@@ -116,10 +141,17 @@ export function AnswerFeedback({
             </View>
           </View>
 
-          <Pressable onPress={onAdvance} style={[styles.advanceButton, isChild && styles.advanceButtonChild]}>
+          <DepthButton
+            width={advanceButtonWidth}
+            height={isChild ? 60 : 52}
+            color={colors.primary.DEFAULT}
+            borderRadius={radii.md}
+            onPress={onAdvance}
+            style={styles.advanceButton}
+          >
             <Text style={styles.advanceButtonText}>{isLastQuestion ? 'Finish' : 'Next question'}</Text>
-          </Pressable>
-        </View>
+          </DepthButton>
+        </DepthView>
       </View>
     </Modal>
   );
@@ -134,13 +166,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       justifyContent: 'center',
       padding: spacing.lg,
     },
-    card: {
-      width: '100%',
-      maxWidth: 420,
-      backgroundColor: '#fff',
-      borderRadius: radii.lg,
-      borderWidth: 2,
-      padding: spacing.lg,
+    cardContent: {
+      padding: CARD_PADDING,
     },
     avatar: {
       width: 64,
@@ -169,7 +196,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     pointsText: {
       fontSize: typography.small,
-      color: colors.text.secondary,
+      color: colors.glassText.secondary,
     },
     feedbackTextRow: {
       flexDirection: 'row',
@@ -179,7 +206,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     feedbackText: {
       fontSize: typography.small,
-      color: colors.text.secondary,
+      color: colors.glassText.secondary,
       marginTop: spacing.xs,
       flexShrink: 1,
     },
@@ -189,31 +216,28 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       borderRadius: radii.sm,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surface.glassSoft,
+      // Not `colors.surface.glassSoft` — that's a white-based translucent tint meant to sit over
+      // a wallpaper/blur, which would be invisible against this card's own solid white face. A
+      // dark-based tint instead, same in both themes.
+      backgroundColor: 'rgba(31,41,55,0.06)',
     },
     correctAnswerText: {
       fontSize: typography.small,
-      color: colors.text.secondary,
+      color: colors.glassText.secondary,
       marginTop: spacing.xs,
     },
     correctAnswerValue: {
       fontWeight: '700',
-      color: colors.text.primary,
+      color: colors.glassText.primary,
     },
     explanationText: {
       fontSize: typography.small,
-      color: colors.text.secondary,
+      color: colors.glassText.secondary,
       marginTop: spacing.xs,
     },
     advanceButton: {
+      alignSelf: 'center',
       marginTop: spacing.lg,
-      paddingVertical: spacing.md,
-      borderRadius: radii.md,
-      backgroundColor: colors.primary.DEFAULT,
-      alignItems: 'center',
-    },
-    advanceButtonChild: {
-      paddingVertical: spacing.md + 4,
     },
     advanceButtonText: {
       fontSize: typography.body,

@@ -46,7 +46,7 @@ export function BrowseResultRow({
         <Text style={styles.word}>{term.word}</Text>
         {term.phonetic ? <Text style={styles.phonetic}>{term.phonetic}</Text> : null}
       </View>
-      {term.audioUrl ? <Volume2 size={14} color={colors.text.muted} /> : null}
+      {term.audioUrl ? <Volume2 size={14} color={colors.glassText.muted} /> : null}
     </Pressable>
   );
 }
@@ -63,7 +63,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       borderWidth: 1,
       borderColor: colors.surface.border,
       borderRadius: radii.md,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.sm,
       paddingVertical: spacing.sm,
       margin: spacing.xs / 2,
     },
@@ -76,11 +76,11 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     word: {
       fontSize: typography.small,
       fontWeight: '600',
-      color: colors.text.primary,
+      color: colors.glassText.primary,
     },
     phonetic: {
       fontSize: 12,
-      color: colors.text.muted,
+      color: colors.glassText.muted,
     },
   });
 }

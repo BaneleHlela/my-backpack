@@ -41,7 +41,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       borderColor: colors.surface.border,
       borderRadius: radii.md,
       paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.sm,
       fontSize: typography.body,
       color: colors.text.primary,
     },

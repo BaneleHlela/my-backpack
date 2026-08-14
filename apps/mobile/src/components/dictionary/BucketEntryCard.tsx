@@ -156,7 +156,7 @@ function createStyles(colors: ThemeColors) {
       marginTop: spacing.xs,
     },
     badge: {
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: spacing.xs,
       paddingVertical: 2,
       borderRadius: radii.full,
     },

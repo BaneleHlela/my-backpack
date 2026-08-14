@@ -139,6 +139,7 @@ export default function QuizEditorPage() {
   const [timeLimit, setTimeLimit] = useState<string>('');
   const [feedbackMode, setFeedbackMode] = useState<FeedbackMode>('immediate');
   const [shuffleQuestions, setShuffleQuestions] = useState(false);
+  const [allowPlayModes, setAllowPlayModes] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
@@ -157,6 +158,7 @@ export default function QuizEditorPage() {
     setTimeLimit(currentQuiz.settings.timeLimit != null ? String(currentQuiz.settings.timeLimit) : '');
     setFeedbackMode(currentQuiz.settings.feedbackMode);
     setShuffleQuestions(currentQuiz.settings.shuffleQuestions);
+    setAllowPlayModes(currentQuiz.allowPlayModes);
     setLocalOrder(null);
   }, [currentQuiz]);
 
@@ -198,6 +200,7 @@ export default function QuizEditorPage() {
             feedbackMode,
             shuffleQuestions,
           },
+          allowPlayModes,
         },
       })
     );
@@ -288,6 +291,20 @@ export default function QuizEditorPage() {
           />
           Shuffle question order each session
         </label>
+
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={allowPlayModes}
+            onChange={(e) => setAllowPlayModes(e.target.checked)}
+            className="rounded"
+          />
+          Allow Quiz Modes (Classic, Hearts, Time Run, …) for this quiz on mobile
+        </label>
+        <p className="text-xs text-gray-400 -mt-2">
+          Off by default — learners go straight into this quiz as usual. Turn on to let them
+          pick a play mode first.
+        </p>
 
         <div className="flex justify-end items-center gap-3 pt-1">
           {justSaved && <span className="text-xs text-green-600">Saved</span>}

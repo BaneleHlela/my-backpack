@@ -1147,8 +1147,10 @@ my-backpack/
       quiz's `miniAppId`, no bucket, no pinned list (`selectPoolQuestions` in
       `quizSession.service.ts`). One `isDefault:true, mode:'pool'` Quiz is now auto-created per
       Course (`studio/course.service.ts`'s `createCourse`); existing courses backfilled via
-      `seed/migrations/2026-08-quiz-modes-pool.ts`. Backs mobile's Quiz Modes "Game Quizzes" —
-      full detail under Frontend Mobile's "Quiz Modes" entry below.
+      `seed/migrations/2026-08-quiz-modes-pool.ts`. Backs mobile's Quiz Modes "Game Quizzes".
+      Also added: `Quiz.allowPlayModes` (default `false`) — gates whether a `mode:'fixed'`
+      Topic quiz shows the mode grid at all; teacher-set from Content Studio, not read for
+      `'dynamic'`/`'pool'` quizzes. Full detail under Frontend Mobile's "Quiz Modes" entry below.
 - [x] Course Chat — AI Helper backend (August 2026) — new `AiChatMessage` model
       (`models/learning/`) and `modules/aiChat/` (routes/controller/service/types, mounted at
       `/api/ai-chat`, same thin-controller pattern as `modules/vocab/`). New
@@ -1552,6 +1554,24 @@ my-backpack/
         absent, but no UI anywhere linked to it that way before now. First real "Delete
         question" button too (`deleteQuestion` existed in `studioSlice.ts`, previously unwired
         to any button).
+      - **Correction (August 2026): Topic quizzes no longer show Quiz Mode Select by
+        default.** The original "grid always shows" decision was wrong for `mode: 'fixed'`
+        roadmap/node quizzes — a new `Quiz.allowPlayModes` field (default `false`) now gates
+        this per quiz, teacher-controlled from a checkbox on `QuizEditorPage.tsx` ("Allow Quiz
+        Modes … for this quiz on mobile"). Tapping a Topic quiz (on the path or via
+        `QuizPickerModal`'s "Course Quizzes" tab) goes straight into the ordinary session unless
+        its `allowPlayModes` is `true`, in which case it behaves exactly as before (mode grid,
+        then the chosen mode's mechanics). Carried onto `IQuizItemSummary`
+        (`packages/shared/types/roadmap.ts`) so mobile can decide the route with no extra API
+        call — `roadmap.service.ts`'s node-item resolution selects/returns it alongside
+        `questionCount`. **Not read for `mode: 'dynamic'`/`'pool'` quizzes** — Dictionary's quiz
+        and every course's auto-created practice pool always show the grid regardless, since
+        those are inherently "game" surfaces, not curated lesson content. No migration needed —
+        existing Topic quizzes simply take the schema default (`false`), which is the corrected
+        behavior. One gotcha hit while wiring this: `apps/api/src/modules/roadmap/
+        roadmap.types.ts` has its own backend-local `QuizItemSummary` duplicating the shared
+        `IQuizItemSummary` shape — both needed the field, or the object literal in
+        `roadmap.service.ts` fails to compile.
       - See [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s
         "Quiz Modes" section and
         [docs/content/content-studio-design.md](docs/content/content-studio-design.md) for full

@@ -143,7 +143,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
     borderRadius: 12,
     backgroundColor: colors.surface.glass,

@@ -33,6 +33,10 @@ export interface IQuiz {
   settings: QuizSettings;
   isUserAdjustable: boolean;
   isDefault: boolean;
+  // Gates mobile's Quiz Mode Select screen for mode:'fixed' quizzes — false by default, a
+  // teacher opts a specific Topic quiz in via Content Studio. Not read for 'dynamic'/'pool'
+  // quizzes, which always show the mode grid. See quiz.model.ts for the full writeup.
+  allowPlayModes: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

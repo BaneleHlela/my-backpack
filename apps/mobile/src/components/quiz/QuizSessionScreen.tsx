@@ -17,8 +17,25 @@
 // quiz). See the "mode rule" effect below and docs/technical/mobile-architecture.md's "Quiz
 // Modes" section for the full writeup, including the race this design deliberately avoids
 // between the mode-rule effect and the existing feedbackMode:'end' auto-advance effect.
+//
+// Full-height/full-width question restyle (see docs/technical/mobile-architecture.md): the
+// screen is now five stacked rows instead of a menubar + boxed "question card":
+//   1. Header — course/mini-app name + exit icon (replaces the shared Menubar for this screen).
+//   2. Mode/stat bar (DepthView) — mode name (Classic/Hearts/...) + a right-aligned stat. For
+//      modes with no natural stat (Classic/Perfect) or no play mode at all (an ordinary roadmap
+//      Topic quiz), the stat falls back to "Question N of M" — QuizProgress itself no longer
+//      renders that text.
+//   3. QuizProgress — bar only, no label.
+//   4. The active question, centered in whatever height remains (patterns that are naturally
+//      compact center vertically; DnD patterns' own `flex: 1` container still fills the space,
+//      same as before).
+//   5. A permanent bottom bar — Submit (80% of the bar's width) + Skip (fixed, DepthButton),
+//      both always rendered, disabled rather than hidden when not usable right now. Submit no
+//      longer lives inside each pattern — QuestionRenderer forwards a ref
+//      (QuestionPatternHandle, see questionPatternTypes.ts) this screen calls directly, and
+//      each pattern reports its own submittable-ness via onReadyChange.
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -28,6 +45,8 @@ import type { AgeGroup, ApiResponse, ItemCompletionResult } from '@my-backpack/s
 import api from '../../lib/api';
 import { subjectSlugToLangCode } from '../../lib/lang';
 import { useTheme } from '../../theme/ThemeContext';
+import { DepthView } from '../DepthView';
+import { DepthButton } from '../DepthButton';
 import {
   startQuizItemSession,
   startMiniAppQuizSession,
@@ -42,9 +61,13 @@ import { QuizProgress } from './QuizProgress';
 import { AnswerFeedback } from './AnswerFeedback';
 import { QuizResults } from './QuizResults';
 import { getQuizPlayMode, toSessionSettingsOverride, type QuizPlayModeId, type QuizPlayModeSettings } from './quizPlayModes';
+import type { QuestionPatternHandle } from './patterns/questionPatternTypes';
 import type { AppDispatch, RootState } from '../../store/store';
 
 const AUTO_ADVANCE_DELAY_MS = 1800;
+const SUBMIT_WIDTH_RATIO = 0.8;
+const SKIP_BUTTON_SIZE = 56;
+const BOTTOM_BUTTON_HEIGHT = 56;
 
 export type QuizSessionSource =
   | { source: 'roadmapItem'; nodeId: string; itemId: string; subjectSlug: string; courseSlug: string }
@@ -62,6 +85,20 @@ interface QuizSessionScreenProps {
   playMode?: QuizPlayModeChoice;
 }
 
+// No display name travels with a roadmapItem session (unlike miniApp's `title`, always fed from
+// somewhere that already has the real name) — humanizing the slug is a good stand-in without
+// threading an extra param through every screen/modal that can start a quiz (CourseScreen,
+// QuizPickerModal, QuizModeSelectScreen, ...). Course slugs are already word-ish
+// ("number-sense", "phonics"), so this reliably reconstructs the real Course name.
+function humanizeSlug(slug?: string): string {
+  if (!slug) return 'Course';
+  return slug
+    .split('-')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -69,6 +106,7 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   // root-level fullScreenModal route, so it insets itself directly instead of inheriting padding
   // from that shared wrapper.
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const quiz = useSelector((state: RootState) => state.quiz);
@@ -81,6 +119,12 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   // Only the miniApp source needs a pre-check — a roadmap quiz item's questions are curated
   // for that node, so there's nothing to fail-open around; seeded straight to `true`.
   const [hasContent, setHasContent] = useState<boolean | null>(session.source === 'miniApp' ? null : true);
+
+  // The active pattern's imperative submit trigger + whether it currently has a submittable
+  // answer — see questionPatternTypes.ts and QuestionRenderer's pass-through.
+  const patternRef = useRef<QuestionPatternHandle>(null);
+  const [patternReady, setPatternReady] = useState(false);
+  const [bottomBarWidth, setBottomBarWidth] = useState(windowWidth - spacing.lg * 2);
 
   // Quiz Modes gameplay state — see module comment. playModeDef supplies fallback defaults
   // (buildInitialSettings in QuizModeGrid always seeds full settings, so these fallbacks are a
@@ -161,6 +205,8 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
 
   useEffect(() => {
     questionStartedAt.current = Date.now();
+    // A fresh question always starts unsubmittable until its pattern reports otherwise.
+    setPatternReady(false);
   }, [quiz.currentQuestion?._id]);
 
   useEffect(() => {
@@ -371,27 +417,32 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   const currentHelpers = quiz.currentQuestion
     ? resolveHelpers(quiz.currentQuestion.content.defaultHelpers, undefined)
     : null;
-  const isDndQuestion = quiz.currentQuestion?.type === 'dnd_single';
-  const title = session.source === 'miniApp' ? session.title : undefined;
+  const title = session.source === 'miniApp' ? (session.title ?? 'Quiz') : humanizeSlug(session.courseSlug);
   // Dictionary has exactly one mini-app, seeded under English — no isiZulu dictionary exists
   // yet, so that path is hardcoded rather than plumbing subjectSlug through the mini-app quiz
   // route. Revisit if a non-English dictionary is ever seeded.
   const lang = session.source === 'roadmapItem' ? subjectSlugToLangCode(session.subjectSlug) : 'en-US';
 
-  // Quiz Modes in-session HUD — a minimal "why might this run end" indicator. Classic/Perfect
-  // have nothing worth showing mid-session (Perfect ends on the first wrong answer regardless
-  // of a visible counter); intentionally no HUD for those.
-  let modeHud: { Icon?: typeof Heart; text: string } | null = null;
+  // Mode/stat bar — mode name on the left (the active Quiz Mode, or a generic label when this
+  // is an ordinary roadmap Topic quiz with no mode chosen), a right-aligned stat on the right.
+  // Modes with nothing per-answer worth showing (Classic/Perfect) and the no-play-mode case both
+  // fall back to "Question N of M" — the text QuizProgress itself no longer renders.
+  const ModeIcon = playModeDef?.icon;
+  const modeLabel = playModeDef?.label ?? 'Quiz';
+  let modeStat: { Icon?: typeof Heart; text: string };
   if (playMode?.id === 'hearts' || playMode?.id === 'survival') {
-    modeHud = { Icon: Heart, text: `${Math.max(hearts, 0)}` };
+    modeStat = { Icon: Heart, text: `${Math.max(hearts, 0)}` };
   } else if (playMode?.id === 'streak') {
-    modeHud = { Icon: Flame, text: `${streak}` };
+    modeStat = { Icon: Flame, text: `${streak}` };
   } else if (playMode?.id === 'endless') {
     const limit = playMode.settings.mistakeLimit ?? playModeDef?.defaultSettings.mistakeLimit ?? 5;
-    modeHud = { text: `${mistakes}/${limit} mistakes` };
+    modeStat = { text: `${mistakes}/${limit} mistakes` };
   } else if (playMode?.id === 'time_run' && timeLeftMs !== null) {
     const totalSeconds = Math.ceil(timeLeftMs / 1000);
-    modeHud = { Icon: Timer, text: `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}` };
+    modeStat = { Icon: Timer, text: `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}` };
+  } else {
+    const current = Math.min(quiz.progress.answered + 1, quiz.progress.total || 1);
+    modeStat = { text: `Question ${current} of ${quiz.progress.total}` };
   }
 
   // Results-screen banner explaining an early end, or (Streak, which never ends early) the
@@ -403,16 +454,21 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   else if (endedEarlyReason === 'perfect') resultsBanner = 'Perfect run ended.';
   else if (playMode?.id === 'streak') resultsBanner = `Best streak: ${bestStreak}`;
 
+  const isQuestionActive =
+    hasContent === true &&
+    (quiz.status === 'active' || quiz.status === 'submitting' || quiz.status === 'awaiting_advance') &&
+    quiz.currentQuestion &&
+    currentHelpers;
+
+  const canSubmit = quiz.status === 'active' && patternReady;
+  const canSkip = quiz.status === 'active' && !currentHelpers?.retryUntilCorrect;
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <View style={styles.topBar}>
-        {title ? (
-          <Text style={styles.topBarTitle} numberOfLines={1}>
-            {title}
-          </Text>
-        ) : (
-          <View />
-        )}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {title}
+        </Text>
         <Pressable onPress={() => router.back()} hitSlop={8}>
           <X size={22} color={colors.text.secondary} />
         </Pressable>
@@ -456,66 +512,49 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
           </View>
         )}
 
-        {hasContent === true &&
-          (quiz.status === 'active' || quiz.status === 'submitting' || quiz.status === 'awaiting_advance') &&
-          quiz.currentQuestion &&
-          currentHelpers && (
-            <View style={styles.activeWrapper}>
-              {modeHud && (
-                <View style={styles.modeHud}>
-                  {modeHud.Icon && <modeHud.Icon size={16} color={colors.primary.dark} />}
-                  <Text style={styles.modeHudText}>{modeHud.text}</Text>
-                </View>
-              )}
-
-              <QuizProgress
-                answered={quiz.progress.answered}
-                total={quiz.progress.total}
-                ageGroup={ageGroup}
-                rightSlot={
-                  isDndQuestion && quiz.status === 'active' && !currentHelpers.retryUntilCorrect ? (
-                    <Pressable onPress={handleSkip} style={styles.skipRow}>
-                      <SkipForward size={14} color={colors.text.muted} />
-                      <Text style={styles.skipText}>Skip question</Text>
-                    </Pressable>
-                  ) : undefined
-                }
-              />
-
-              <View style={styles.questionCard}>
-                <QuestionRenderer
-                  question={quiz.currentQuestion}
-                  helpers={currentHelpers}
-                  ageGroup={ageGroup}
-                  lang={lang}
-                  disabled={quiz.status !== 'active'}
-                  isSubmitting={quiz.status === 'submitting'}
-                  onAnswer={handleAnswer}
-                />
+        {isQuestionActive && quiz.currentQuestion && currentHelpers && (
+          <View style={styles.activeWrapper}>
+            <DepthView color={colors.surface.glassStrong} borderRadius={radii.md} contentStyle={styles.modeBarContent}>
+              <View style={styles.modeBarSide}>
+                {ModeIcon && <ModeIcon size={16} color={colors.primary.dark} />}
+                <Text style={styles.modeBarLabel}>{modeLabel}</Text>
               </View>
+              <View style={styles.modeBarSide}>
+                {modeStat.Icon && <modeStat.Icon size={16} color={colors.primary.dark} />}
+                <Text style={styles.modeBarStat}>{modeStat.text}</Text>
+              </View>
+            </DepthView>
 
-              {!isDndQuestion && quiz.status === 'active' && !currentHelpers.retryUntilCorrect && (
-                <Pressable onPress={handleSkip} style={styles.skipRowCentered}>
-                  <SkipForward size={14} color={colors.text.muted} />
-                  <Text style={styles.skipText}>Skip question</Text>
-                </Pressable>
-              )}
+            <QuizProgress answered={quiz.progress.answered} total={quiz.progress.total} />
 
-              {quiz.status === 'awaiting_advance' && quiz.feedbackMode === 'immediate' && quiz.lastAnswer && (
-                <AnswerFeedback
-                  isCorrect={quiz.lastAnswer.isCorrect}
-                  pointsAwarded={quiz.lastAnswer.pointsAwarded}
-                  maxPoints={quiz.lastAnswer.maxPoints}
-                  content={quiz.currentQuestion.content}
-                  ageGroup={ageGroup}
-                  lang={lang}
-                  isLastQuestion={quiz.lastAnswer.sessionComplete}
-                  wasSkipped={quiz.lastAnswer.wasSkipped}
-                  onAdvance={handleAdvance}
-                />
-              )}
+            <View style={styles.questionArea}>
+              <QuestionRenderer
+                ref={patternRef}
+                question={quiz.currentQuestion}
+                helpers={currentHelpers}
+                ageGroup={ageGroup}
+                lang={lang}
+                disabled={quiz.status !== 'active'}
+                onAnswer={handleAnswer}
+                onReadyChange={setPatternReady}
+              />
             </View>
-          )}
+
+            {quiz.status === 'awaiting_advance' && quiz.feedbackMode === 'immediate' && quiz.lastAnswer && (
+              <AnswerFeedback
+                isCorrect={quiz.lastAnswer.isCorrect}
+                pointsAwarded={quiz.lastAnswer.pointsAwarded}
+                maxPoints={quiz.lastAnswer.maxPoints}
+                content={quiz.currentQuestion.content}
+                ageGroup={ageGroup}
+                lang={lang}
+                isLastQuestion={quiz.lastAnswer.sessionComplete}
+                wasSkipped={quiz.lastAnswer.wasSkipped}
+                onAdvance={handleAdvance}
+              />
+            )}
+          </View>
+        )}
 
         {hasContent === true && quiz.status === 'completing' && (
           <View style={styles.center}>
@@ -548,6 +587,39 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
           </ScrollView>
         )}
       </View>
+
+      {isQuestionActive && (
+        <View style={styles.bottomBarOuter}>
+        <View style={styles.bottomBar} onLayout={(e) => setBottomBarWidth(e.nativeEvent.layout.width)}>
+          <DepthButton
+            width={bottomBarWidth * SUBMIT_WIDTH_RATIO}
+            height={BOTTOM_BUTTON_HEIGHT}
+            borderRadius={radii.md}
+            color={colors.primary.DEFAULT}
+            disabled={!canSubmit}
+            onPress={() => patternRef.current?.submit()}
+            style={!canSubmit && styles.bottomButtonDisabled}
+          >
+            {quiz.status === 'submitting' ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.submitButtonText}>Submit</Text>
+            )}
+          </DepthButton>
+
+          <DepthButton
+            width={SKIP_BUTTON_SIZE}
+            height={BOTTOM_BUTTON_HEIGHT}
+            color={colors.surface.glassStrong}
+            disabled={!canSkip}
+            onPress={handleSkip}
+            style={!canSkip && styles.bottomButtonDisabled}
+          >
+            <SkipForward size={22} color={canSkip ? colors.text.secondary : colors.text.faint} />
+          </DepthButton>
+        </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -558,14 +630,15 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     flex: 1,
     backgroundColor: colors.background,
   },
-  topBar: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
   },
-  topBarTitle: {
+  headerTitle: {
     flex: 1,
     fontSize: typography.body,
     fontWeight: '700',
@@ -574,24 +647,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   },
   body: {
     flex: 1,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-  },
-  modeHud: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-end',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface.glassSoft,
-    marginBottom: spacing.xs,
-  },
-  modeHudText: {
-    fontSize: typography.small,
-    fontWeight: '700',
-    color: colors.primary.dark,
+    paddingHorizontal: spacing.md,
   },
   center: {
     flex: 1,
@@ -604,7 +660,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
   emptyTitle: {
     fontSize: typography.body,
@@ -623,7 +679,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     textAlign: 'center',
   },
   retryButton: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radii.md,
     backgroundColor: colors.surface.glassSoft,
@@ -638,28 +694,31 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   activeWrapper: {
     flex: 1,
   },
-  questionCard: {
-    flex: 1,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
-    backgroundColor: colors.surface.glassSoft,
-  },
-  skipRow: {
+  modeBarContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
   },
-  skipRowCentered: {
+  modeBarSide: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    alignSelf: 'center',
-    marginTop: spacing.sm,
+    gap: spacing.xs,
   },
-  skipText: {
+  modeBarLabel: {
     fontSize: typography.small,
-    color: colors.text.muted,
+    fontWeight: '700',
+    color: colors.text.secondary,
+  },
+  modeBarStat: {
+    fontSize: typography.body,
+    fontWeight: '700',
+    color: colors.primary.dark,
+  },
+  questionArea: {
+    flex: 1,
+    justifyContent: 'center',
   },
   resultsWrapper: {
     flexGrow: 1,
@@ -681,6 +740,24 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     textAlign: 'center',
     fontSize: typography.small,
     color: colors.text.muted,
+  },
+  bottomBarOuter: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  bottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  submitButtonText: {
+    fontSize: typography.body,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  bottomButtonDisabled: {
+    opacity: 0.45,
   },
   });
 }

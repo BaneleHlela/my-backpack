@@ -5,10 +5,10 @@
 // progress-status tint) pulled directly from that component rather than approximated from the
 // screenshot alone.
 //
-// The badge itself is now the bundled Kenney "button_round_depth_gloss" SVG
-// (NodeButtonBackground.tsx) instead of a pair of flat circular Views — see that file for how
-// its main face is the one recolorable part of the asset. Icon/loading content renders in a
-// plain RN overlay on top of the SVG, unchanged in spirit from the original circle-based badge.
+// The badge itself is DepthButton (../DepthButton.tsx) — a plain-View "3D gloss button"
+// primitive, not an image/SVG asset (a bundled Kenney SVG was tried first here but rendered
+// inconsistently; DepthButton replaces it and owns its own press/content handling, which is why
+// NodeButton no longer wraps its own Pressable).
 //
 // Two independent variant axes, matching the Figma component:
 // - Progress ('locked' | 'current' | 'completed') drives the dim treatment (locked) and the
@@ -17,8 +17,8 @@
 //   this app's prior convention (dim-locked / accent-ring-current), not sampled from a Figma
 //   instance — flagged here since no such instance exists to pull exact values from.
 // - Content ('lesson' | 'quiz' — no 'project' branch yet, reserved per Phase B) drives the main
-//   face's colour (rose/error for lesson, violet/primary for quiz, via NodeButtonBackground's
-//   `fill`) and icon glyph. Confirmed against Figma: these colours are literally
+//   face's colour (rose/error for lesson, violet/primary for quiz, via DepthButton's `color`)
+//   and icon glyph. Confirmed against Figma: these colours are literally
 //   `colors.error.DEFAULT`/`colors.primary.DEFAULT` already in theme.ts — no new hex values.
 //
 // The completed-state indicator is three static Star icons in a row directly under the badge —
@@ -34,12 +34,12 @@
 // CheckCircle), so the closest lucide glyphs (MonitorPlay for lesson, ClipboardCheck for quiz)
 // are used here for consistency instead of introducing a new bundled-illustration pipeline.
 import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { ClipboardCheck, Lock, MonitorPlay, Star } from 'lucide-react-native';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { radii, spacing } from '@my-backpack/shared';
 import type { NodeItemType } from '@my-backpack/shared';
-import NodeButtonBackground from './NodeButtonBackground';
+import { DepthButton } from '../DepthButton';
 import { useTheme } from '../../theme/ThemeContext';
 
 export type NodeButtonProgress = 'locked' | 'current' | 'completed';
@@ -51,7 +51,7 @@ interface NodeButtonProps {
   onPress: () => void;
 }
 
-export const NODE_BUTTON_SIZE = 84;
+export const NODE_BUTTON_SIZE = 82;
 
 // Extra vertical room the completed-state stars row needs below the badge. RoadmapPath.tsx
 // (the only place that lays multiple NodeButtons out in a column) adds this to its per-item
@@ -69,7 +69,6 @@ export default function NodeButton({ itemType, progress, loading = false, onPres
   const isLocked = progress === 'locked';
   const isCurrent = progress === 'current';
   const isCompleted = progress === 'completed';
-  const isInteractive = !isLocked && !loading;
 
   const mainFill = isLocked ? colors.surface.glassSoft : itemType === 'lesson' ? colors.error.DEFAULT : colors.primary.DEFAULT;
   const Icon = itemType === 'lesson' ? MonitorPlay : ClipboardCheck;
@@ -79,29 +78,21 @@ export default function NodeButton({ itemType, progress, loading = false, onPres
       <View style={styles.badgeArea}>
         {isCurrent && <CurrentPulse color={colors.primary.light} />}
 
-        <Pressable
-          onPress={isInteractive ? onPress : undefined}
-          disabled={!isInteractive}
-          style={({ pressed }) => [styles.pressable, pressed && isInteractive && styles.pressed]}
-        >
-          <NodeButtonBackground width={NODE_BUTTON_SIZE} height={NODE_BUTTON_SIZE} fill={mainFill} />
-
-          <View style={styles.content} pointerEvents="none">
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : isLocked ? (
-              <Lock size={28} color={colors.text.muted} />
-            ) : (
-              <Icon size={36} color="#fff" strokeWidth={2} />
-            )}
-          </View>
-        </Pressable>
+        <DepthButton width={NODE_BUTTON_SIZE} color={mainFill} onPress={onPress} disabled={isLocked || loading}>
+          {loading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : isLocked ? (
+            <Lock size={28} color={colors.text.muted} />
+          ) : (
+            <Icon size={36} color="#fff" strokeWidth={2} />
+          )}
+        </DepthButton>
       </View>
 
       {isCompleted && (
         <View style={styles.starsRow}>
           {[0, 1, 2].map((i) => (
-            <Star key={i} size={STAR_SIZE} color={colors.warning.DEFAULT} fill={colors.warning.DEFAULT} />
+            <Star key={i} size={i !== 1 ? STAR_SIZE : STAR_SIZE + 3} color={colors.warning.DEFAULT} fill={colors.warning.DEFAULT} />
           ))}
         </View>
       )}
@@ -144,10 +135,6 @@ function CurrentPulse({ color }: { color: string }) {
   );
 }
 
-// No colors.* references here (unlike most createStyles(colors) functions elsewhere in this
-// app) — every color this component uses (main fill, icon tint, pulse, stars) is theme-driven
-// but applied inline, since it varies per itemType/progress rather than being a fixed per-theme
-// value. Plain module-level StyleSheet.create is enough.
 const styles = StyleSheet.create({
   column: {
     width: NODE_BUTTON_SIZE,
@@ -157,24 +144,12 @@ const styles = StyleSheet.create({
     width: NODE_BUTTON_SIZE,
     height: NODE_BUTTON_SIZE,
   },
-  pressable: {
-    width: NODE_BUTTON_SIZE,
-    height: NODE_BUTTON_SIZE,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  content: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   starsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: spacing.xs,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
   },
   pulse: {
     borderRadius: radii.full,

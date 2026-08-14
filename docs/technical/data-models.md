@@ -221,6 +221,7 @@ These models track what learners have done. They are subject-agnostic — the sa
 | `settings` | Object | `questionCount`, `timeLimit`, `questionTypes`, `bucketFilter`, `feedbackMode`, `shuffleQuestions` |
 | `isUserAdjustable` | Boolean | Whether a profile can override `settings` at session-create time |
 | `isDefault` | Boolean | The quiz `POST /api/quiz/session { miniAppId }` resolves to for that mini-app |
+| `allowPlayModes` | Boolean | Default `false`. Gates mobile's Quiz Mode Select screen for `mode: 'fixed'` quizzes — a teacher opts a specific Topic quiz in from `QuizEditorPage.tsx`. Not read for `'dynamic'`/`'pool'` quizzes, which always show the mode grid. |
 | `isActive` | Boolean | Soft-delete flag |
 
 **`mode` — three question-sourcing strategies:**

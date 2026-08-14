@@ -465,6 +465,15 @@ const vocabSlice = createSlice({
         if (state.bucketPagination) {
           state.bucketPagination.total = Math.max(0, state.bucketPagination.total - 1);
         }
+        // Term detail screen's definitions carry their own inBucket flag (removeFromBucket is
+        // term-scoped server-side, not per-definition — see the API's removeFromBucket) — flip
+        // every definition on the removed term back to "not in bucket" so DefinitionCard's
+        // "Added" button reverts to "Add to bucket" without a refetch.
+        if (state.activeTerm && state.activeTerm.term._id === action.payload.termId) {
+          state.activeTerm.definitions.forEach((d) => {
+            d.inBucket = false;
+          });
+        }
       })
       .addCase(removeBucketEntry.rejected, (state, action) => {
         const payload = action.payload as { termId: string; message: string } | undefined;

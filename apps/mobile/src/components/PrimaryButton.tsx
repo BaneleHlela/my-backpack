@@ -3,7 +3,9 @@ import { radii, spacing, typography } from '@my-backpack/shared';
 import { useTheme } from '../theme/ThemeContext';
 
 // Mirrors apps/web's DefinitionCard "Add to bucket" button states:
-// default (violet) / loading (spinner) / success (emerald, non-interactive).
+// default (violet) / loading (spinner) / success (emerald). The success variant stays
+// pressable by default — DefinitionCard uses that to let "Added" remove the term from the
+// bucket — pass `disabled` explicitly for a caller that wants success to be a terminal state.
 interface PrimaryButtonProps {
   title: string;
   onPress: () => void;
@@ -25,7 +27,7 @@ export function PrimaryButton({
 }: PrimaryButtonProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-  const isInteractive = !disabled && !loading && variant !== 'success';
+  const isInteractive = !disabled && !loading;
 
   return (
     <Pressable
@@ -65,7 +67,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       justifyContent: 'center',
       gap: spacing.xs,
       paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.sm,
       borderRadius: radii.md,
     },
     primary: {

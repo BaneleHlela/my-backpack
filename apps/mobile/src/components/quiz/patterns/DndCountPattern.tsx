@@ -26,9 +26,9 @@
 // every successful landing in the zone, alongside the existing "N placed" text label — visual
 // and audio reinforcement together, not audio replacing the label. See
 // docs/technical/mobile-architecture.md's "Live TTS (Prompt 3)" section.
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import type { Ref } from 'react';
 import {
-  ActivityIndicator,
   Image,
   ImageBackground,
   Pressable,
@@ -44,14 +44,14 @@ import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useSpeak } from '../../../lib/useSpeak';
 import { DndTile, DndTileHandle, Rect, clampTileSize, playAsset, pointInRect, shuffle } from './DndTile';
 import { useTheme } from '../../../theme/ThemeContext';
+import type { QuestionPatternHandle, QuestionPatternReadyProps } from './questionPatternTypes';
 
-interface DndCountPatternProps {
+interface DndCountPatternProps extends QuestionPatternReadyProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
   ageGroup?: AgeGroup;
   lang: string;
   disabled?: boolean;
-  isSubmitting?: boolean;
   onAnswer: (rawResponse: string) => void;
 }
 
@@ -74,15 +74,10 @@ function buildInstances(draggables: IDraggable[], shuffleOrder: boolean): Dragga
   return shuffleOrder ? shuffle(instances) : instances;
 }
 
-export function DndCountPattern({
-  content,
-  helpers,
-  ageGroup,
-  lang,
-  disabled,
-  isSubmitting,
-  onAnswer,
-}: DndCountPatternProps) {
+export const DndCountPattern = forwardRef(function DndCountPattern(
+  { content, helpers, ageGroup, lang, disabled, onAnswer, onReadyChange }: DndCountPatternProps,
+  ref: Ref<QuestionPatternHandle>
+) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const isChild = ageGroup === 'child';
@@ -124,6 +119,28 @@ export function DndCountPattern({
     return () => clearTimeout(timer);
   }, [helpers.hintDelaySeconds, hintButtonReady]);
 
+  // Defined above the `!dropZone` early return (and self-contained on hook-derived state only —
+  // `instances`/`placedInstanceIds`, not the `zoneInstances` const declared after the return) so
+  // the useImperativeHandle/onReadyChange hooks just below — which must run unconditionally on
+  // every render per the Rules of Hooks — can safely close over it regardless of which branch
+  // this render takes.
+  const submit = () => {
+    if (!dropZone || disabled || submittedRef.current || placedInstanceIds.size === 0) return;
+    submittedRef.current = true;
+    const placementsArr = instances
+      .filter((i) => placedInstanceIds.has(i.id))
+      .map((inst) => ({ draggableId: inst.typeId, dropZoneId: dropZone.id }));
+    onAnswer(JSON.stringify({ placements: placementsArr }));
+  };
+
+  // Never autoSubmit (see the module comment) — always ready once at least one item is placed.
+  useImperativeHandle(ref, () => ({ submit }));
+
+  useEffect(() => {
+    onReadyChange?.(placedInstanceIds.size > 0 && !disabled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placedInstanceIds, disabled]);
+
   if (!dropZone) return null;
 
   const poolInstances = instances.filter((i) => !placedInstanceIds.has(i.id));
@@ -138,13 +155,6 @@ export function DndCountPattern({
     zoneRef.current?.measureInWindow((x, y, width, height) => {
       zoneRectRef.current = { x, y, width, height };
     });
-  };
-
-  const submit = () => {
-    if (disabled || submittedRef.current || placedInstanceIds.size === 0) return;
-    submittedRef.current = true;
-    const placementsArr = zoneInstances.map((inst) => ({ draggableId: inst.typeId, dropZoneId: dropZone.id }));
-    onAnswer(JSON.stringify({ placements: placementsArr }));
   };
 
   const handleDropAttempt = (item: IDraggable, absoluteX: number, absoluteY: number) => {
@@ -276,14 +286,6 @@ export function DndCountPattern({
       </View>
 
       <Text style={styles.countLabel}>{zoneInstances.length} placed</Text>
-
-      <Pressable
-        disabled={placedInstanceIds.size === 0 || disabled}
-        onPress={submit}
-        style={[styles.submitButton, (placedInstanceIds.size === 0 || disabled) && styles.submitButtonDisabled]}
-      >
-        {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Submit</Text>}
-      </Pressable>
     </View>
   );
 
@@ -294,7 +296,7 @@ export function DndCountPattern({
       {body}
     </ImageBackground>
   );
-}
+});
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
@@ -387,21 +389,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     fontSize: typography.small,
     fontWeight: '600',
     color: colors.text.secondary,
-  },
-  submitButton: {
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary.DEFAULT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: '#fff',
   },
   });
 }

@@ -292,7 +292,7 @@ function createStyles(colors: ThemeColors) {
       maxWidth: '100%',
     },
     ageBadge: {
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: spacing.xs,
       paddingVertical: 2,
       borderRadius: radii.full,
     },

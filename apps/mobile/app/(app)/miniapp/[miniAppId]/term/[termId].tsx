@@ -6,7 +6,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Volume2 } from 'lucide-react-native';
-import { spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../../../../../src/components/GlassCard';
 import { DefinitionCard } from '../../../../../src/components/dictionary/DefinitionCard';
 import { Menubar } from '../../../../../src/components/Menubar';
@@ -46,10 +46,12 @@ export default function TermDetailScreen() {
         <>
           <GlassCard>
             <View style={styles.wordRow}>
-              <Text style={styles.word}>{activeTerm.term.word}</Text>
-              {activeTerm.term.phonetic ? <Text style={styles.phonetic}>{activeTerm.term.phonetic}</Text> : null}
+              <View style={styles.wordGroup}>
+                <Text style={styles.word}>{activeTerm.term.word}</Text>
+                {activeTerm.term.phonetic ? <Text style={styles.phonetic}>{activeTerm.term.phonetic}</Text> : null}
+              </View>
               {activeTerm.term.audioUrl ? (
-                <Pressable onPress={() => playAudioUrl(activeTerm.term.audioUrl!)} hitSlop={8}>
+                <Pressable onPress={() => playAudioUrl(activeTerm.term.audioUrl!)} hitSlop={8} style={styles.audioButton}>
                   <Volume2 size={18} color={colors.primary.DEFAULT} />
                 </Pressable>
               ) : null}
@@ -94,16 +96,32 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   wordRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  wordGroup: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
   },
   word: {
     fontSize: typography.headingLg,
     fontWeight: '700',
-    color: colors.text.primary,
+    color: colors.glassText.primary,
   },
   phonetic: {
     fontSize: typography.body,
-    color: colors.text.muted,
+    color: colors.glassText.muted,
+  },
+  audioButton: {
+    flexShrink: 0,
+    width: 36,
+    height: 36,
+    borderRadius: radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface.glassSoft,
   },
   emptyText: {
     textAlign: 'center',

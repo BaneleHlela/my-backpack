@@ -130,7 +130,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontWeight: '700',
       color: colors.primary.dark,
       marginTop: spacing.sm,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.sm,
       paddingVertical: spacing.xs,
       borderRadius: radii.full,
       backgroundColor: colors.surface.glassSoft,

@@ -61,6 +61,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     card: {
+      flexDirection: 'column',
       alignItems: 'center',
       gap: spacing.xs,
       minHeight: 190,
@@ -90,7 +91,7 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: spacing.xs,
       paddingVertical: 5,
       borderRadius: radii.full,
       backgroundColor: colors.surface.glassStrong,

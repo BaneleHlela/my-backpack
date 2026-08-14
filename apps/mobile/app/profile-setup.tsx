@@ -216,7 +216,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       paddingBottom: spacing.xs,
     },
     chip: {
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.sm,
       paddingVertical: spacing.xs,
       borderRadius: radii.full,
       backgroundColor: colors.surface.glass,

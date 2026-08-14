@@ -58,6 +58,10 @@ export async function getQuiz(quizId: string): Promise<IQuizDocument> {
 export interface UpdateQuizInput {
   title?: string;
   settings?: Partial<IQuizSettings>;
+  // Teacher opt-in for mobile's Quiz Mode Select screen — see quiz.model.ts's allowPlayModes
+  // comment. Every quiz reachable from QuizEditorPage is mode:'fixed', so this is the only
+  // place in the app that can ever set it true.
+  allowPlayModes?: boolean;
 }
 
 export async function updateQuiz(quizId: string, input: UpdateQuizInput): Promise<IQuizDocument> {
@@ -68,6 +72,7 @@ export async function updateQuiz(quizId: string, input: UpdateQuizInput): Promis
   if (input.settings !== undefined) {
     quiz.settings = { ...quiz.settings, ...input.settings, questionCount: quiz.questionIds.length };
   }
+  if (input.allowPlayModes !== undefined) quiz.allowPlayModes = input.allowPlayModes;
 
   await quiz.save();
   return quiz;

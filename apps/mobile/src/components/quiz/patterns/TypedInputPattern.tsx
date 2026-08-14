@@ -1,15 +1,18 @@
 // Ports apps/web's TypedInputPattern.tsx — shared UI for fill_blank_typed, text_input_def,
-// text_input_audio, text_input_example: a text input + submit button. content.prompt is read
-// aloud via SpokenText (live TTS, see docs/technical/mobile-architecture.md's "Live TTS
-// (Prompt 3)" section) unless it's the "audio:" prefix case or text_input_audio (both already
-// have their own dedicated audio playback flow below).
+// text_input_audio, text_input_example: a text input, submitted via the global Submit button
+// (owned by QuizSessionScreen, see questionPatternTypes.ts) or the keyboard's "done"/submit key.
+// content.prompt is read aloud via SpokenText (live TTS, see
+// docs/technical/mobile-architecture.md's "Live TTS (Prompt 3)" section) unless it's the
+// "audio:" prefix case or text_input_audio (both already have their own dedicated audio
+// playback flow below).
 //
 // text_input_audio: the generator doesn't tag content.prompt with the "audio:" prefix
 // convention for this type (it only stores instructional text), so there's no GCS path on the
 // question itself. Audio is resolved by fetching the term's audioUrl via the existing
 // GET /api/vocab/terms/:termId endpoint — no new backend route needed. If a future prompt DOES
 // use the "audio:" prefix, that takes priority.
-import { useEffect, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import type { Ref } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Volume2 } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
@@ -19,27 +22,22 @@ import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { SpokenText } from '../SpokenText';
 import { useTheme } from '../../../theme/ThemeContext';
+import type { QuestionPatternHandle, QuestionPatternReadyProps } from './questionPatternTypes';
 
-interface TypedInputPatternProps {
+interface TypedInputPatternProps extends QuestionPatternReadyProps {
   type: QuestionType;
   termId?: string;
   content: IQuestionContent;
   helpers: IQuestionHelpers;
   lang: string;
   disabled?: boolean;
-  isSubmitting?: boolean;
   onAnswer: (rawResponse: string, selectedOptionIndex?: number) => void;
 }
 
-export function TypedInputPattern({
-  type,
-  termId,
-  content,
-  lang,
-  disabled,
-  isSubmitting,
-  onAnswer,
-}: TypedInputPatternProps) {
+export const TypedInputPattern = forwardRef(function TypedInputPattern(
+  { type, termId, content, lang, disabled, onAnswer, onReadyChange }: TypedInputPatternProps,
+  ref: Ref<QuestionPatternHandle>
+) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const [value, setValue] = useState('');
@@ -67,6 +65,13 @@ export function TypedInputPattern({
     if (disabled || !value.trim()) return;
     onAnswer(value.trim());
   };
+
+  useImperativeHandle(ref, () => ({ submit }));
+
+  useEffect(() => {
+    onReadyChange?.(value.trim().length > 0 && !disabled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, disabled]);
 
   return (
     <View style={styles.wrapper}>
@@ -113,17 +118,9 @@ export function TypedInputPattern({
         autoCapitalize="none"
         style={styles.input}
       />
-
-      <Pressable
-        disabled={disabled || !value.trim()}
-        onPress={submit}
-        style={[styles.submitButton, (disabled || !value.trim()) && styles.submitButtonDisabled]}
-      >
-        {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Submit</Text>}
-      </Pressable>
     </View>
   );
-}
+});
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
@@ -161,7 +158,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.xs,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.sm,
       paddingVertical: spacing.sm,
       borderRadius: radii.md,
       backgroundColor: colors.primary.DEFAULT,
@@ -179,7 +176,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       color: colors.text.muted,
     },
     input: {
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.sm,
       paddingVertical: spacing.sm,
       borderRadius: radii.md,
       borderWidth: 1,
@@ -187,21 +184,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       backgroundColor: colors.surface.glassSoft,
       fontSize: typography.body,
       color: colors.text.primary,
-    },
-    submitButton: {
-      paddingVertical: spacing.md,
-      borderRadius: radii.md,
-      backgroundColor: colors.primary.DEFAULT,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    submitButtonDisabled: {
-      opacity: 0.5,
-    },
-    submitButtonText: {
-      fontSize: typography.body,
-      fontWeight: '700',
-      color: '#fff',
     },
   });
 }

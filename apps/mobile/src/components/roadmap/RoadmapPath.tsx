@@ -26,7 +26,9 @@ import { useTheme } from '../../theme/ThemeContext';
 interface RoadmapPathProps {
   roadmap: RoadmapWithProgress;
   onSelectLesson: (lessonId: string, nodeId: string, nodeTitle: string) => void;
-  onSelectQuiz: (itemId: string, nodeId: string) => void;
+  // allowPlayModes mirrors Quiz.allowPlayModes for this specific item — the caller decides
+  // whether to open the Quiz Mode Select screen or start the ordinary session directly.
+  onSelectQuiz: (itemId: string, nodeId: string, allowPlayModes: boolean) => void;
 }
 
 const ITEM_SPACING = 110;
@@ -87,7 +89,7 @@ export default function RoadmapPath({ roadmap, onSelectLesson, onSelectQuiz }: R
               if (item.itemType === 'lesson') {
                 onSelectLesson(item.lesson._id, node._id, node.title);
               } else {
-                onSelectQuiz(item.quiz._id, node._id);
+                onSelectQuiz(item.quiz._id, node._id, item.quiz.allowPlayModes);
               }
             }}
           />
@@ -133,7 +135,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: spacing.sm,
-      paddingHorizontal: spacing.lg,
+      paddingHorizontal: spacing.md,
     },
     bannerLine: {
       flex: 1,

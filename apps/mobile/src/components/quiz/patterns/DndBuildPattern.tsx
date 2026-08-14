@@ -19,9 +19,9 @@
 // helpers.retryUntilCorrect, where a future question does set it, still applies per-blank the
 // same way it does for dnd_single: a wrong tile is rejected at drop time (bounces back +
 // tryAgainFeedback) rather than ever landing.
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import type { Ref } from 'react';
 import {
-  ActivityIndicator,
   Image,
   ImageBackground,
   Pressable,
@@ -37,26 +37,21 @@ import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useSpeak } from '../../../lib/useSpeak';
 import { DndTile, DndTileHandle, Rect, clampTileSize, playAsset, pointInRect, shuffle } from './DndTile';
 import { useTheme } from '../../../theme/ThemeContext';
+import type { QuestionPatternHandle, QuestionPatternReadyProps } from './questionPatternTypes';
 
-interface DndBuildPatternProps {
+interface DndBuildPatternProps extends QuestionPatternReadyProps {
   content: IQuestionContent;
   helpers: IQuestionHelpers;
   ageGroup?: AgeGroup;
   lang: string;
   disabled?: boolean;
-  isSubmitting?: boolean;
   onAnswer: (rawResponse: string) => void;
 }
 
-export function DndBuildPattern({
-  content,
-  helpers,
-  ageGroup,
-  lang,
-  disabled,
-  isSubmitting,
-  onAnswer,
-}: DndBuildPatternProps) {
+export const DndBuildPattern = forwardRef(function DndBuildPattern(
+  { content, helpers, ageGroup, lang, disabled, onAnswer, onReadyChange }: DndBuildPatternProps,
+  ref: Ref<QuestionPatternHandle>
+) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const isChild = ageGroup === 'child';
@@ -122,6 +117,20 @@ export function DndBuildPattern({
     if (allFilled && helpers.autoSubmit) submit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allFilled]);
+
+  // autoSubmit questions submit themselves the instant every blank fills — the global Submit
+  // button stays disabled for those the whole time, matching "always visible but disabled when
+  // not used".
+  useImperativeHandle(ref, () => ({
+    submit: () => {
+      if (!helpers.autoSubmit) submit();
+    },
+  }));
+
+  useEffect(() => {
+    onReadyChange?.(!helpers.autoSubmit && allFilled && !disabled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allFilled, helpers.autoSubmit, disabled]);
 
   const measureZone = (zoneId: string) => {
     zoneRefs.current.get(zoneId)?.measureInWindow((x, y, width, height) => {
@@ -283,16 +292,6 @@ export function DndBuildPattern({
       {wrongZoneId && wrongAvatarUrl ? (
         <Image source={{ uri: wrongAvatarUrl }} style={styles.wrongAvatar} resizeMode="contain" />
       ) : null}
-
-      {!helpers.autoSubmit ? (
-        <Pressable
-          disabled={!allFilled || disabled}
-          onPress={submit}
-          style={[styles.submitButton, (!allFilled || disabled) && styles.submitButtonDisabled]}
-        >
-          {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Submit</Text>}
-        </Pressable>
-      ) : null}
     </View>
   );
 
@@ -303,7 +302,7 @@ export function DndBuildPattern({
       {body}
     </ImageBackground>
   );
-}
+});
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
@@ -399,21 +398,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     width: 72,
     height: 72,
     alignSelf: 'center',
-  },
-  submitButton: {
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary.DEFAULT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: '#fff',
   },
   });
 }
