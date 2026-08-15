@@ -25,6 +25,7 @@ import {
 } from './roadmap.types';
 import { updateProgressSummary } from '../enrollment/enrollment.service';
 import Course from '../../models/core/course.model';
+import { computeStars } from '../../utils/gradeSettings';
 
 // Default status for a node that has no progress entry yet.
 function defaultNodeStatus(node: IRoadmapNodeDocument): NodeStatus {
@@ -59,7 +60,7 @@ async function resolveNodeItems(
   const [lessonDocs, quizDocs] = await Promise.all([
     lessonIds.length ? Lesson.find({ _id: { $in: lessonIds }, isActive: true }) : Promise.resolve([]),
     quizIds.length
-      ? Quiz.find({ _id: { $in: quizIds }, isActive: true }).select('title questionIds allowPlayModes')
+      ? Quiz.find({ _id: { $in: quizIds }, isActive: true }).select('title questionIds assignedPlayMode')
       : Promise.resolve([]),
   ]);
   const lessonMap = new Map(lessonDocs.map((l) => [l._id.toString(), l]));
@@ -98,7 +99,7 @@ async function resolveNodeItems(
           _id: quiz._id,
           title: quiz.title,
           questionCount: quiz.questionIds.length,
-          allowPlayModes: quiz.allowPlayModes,
+          assignedPlayMode: quiz.assignedPlayMode,
         },
       };
     })
@@ -352,10 +353,9 @@ export async function completeQuizItem(
   const sortedRefs = node.items.slice().sort((a, b) => a.position - b.position);
   const isLastItem = sortedRefs[sortedRefs.length - 1]?.itemId.toString() === itemId;
   if (isLastItem && passed) {
-    let stars = 0;
-    if (scoreRatio >= 1.0) stars = 3;
-    else if (scoreRatio >= 0.85) stars = 2;
-    else stars = 1;
+    // Teacher-configured via Content Studio's QuizEditorPage (ref.starThresholds); falls back
+    // to the historical 100%->3/85%->2/passingScore->1 scale when unset — see gradeSettings.ts.
+    const stars = computeStars(scoreRatio, passingScore, ref.starThresholds);
     const ne = progress.nodeProgress.get(nodeKey);
     if (ne) {
       ne.stars = Math.max(ne.stars, stars);

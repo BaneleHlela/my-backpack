@@ -32,6 +32,9 @@ import type {
   IQuestion,
   QuestionType,
   IQuestionContent,
+  IStarThreshold,
+  IQuizGradeSettings,
+  IAssignedPlayMode,
 } from '@my-backpack/shared';
 
 function extractErrorMessage(err: unknown, fallback: string): string {
@@ -106,6 +109,14 @@ export interface NodeDetail {
   items: NodeItemWithProgress[];
 }
 
+// GET /dashboard/quizzes/:quizId's response — the base Quiz plus the owning node item's
+// grade settings (passingScore/starThresholds), merged server-side since QuizEditorPage edits
+// both as one "Grade Settings" section. See quiz.controller.ts's getQuizHandler.
+export interface IQuizDetail extends IQuiz {
+  nodeId: string | null;
+  gradeSettings: IQuizGradeSettings | null;
+}
+
 interface StudioState {
   allCourses: StudioCourseEntry[];
   allCoursesLoaded: boolean;
@@ -116,7 +127,7 @@ interface StudioState {
 
   currentNode: NodeDetail | null;
   currentLesson: ILesson | null;
-  currentQuiz: IQuiz | null;
+  currentQuiz: IQuizDetail | null;
 
   // Every question fetched so far this session, keyed by id — used to render preview rows
   // (quiz question list, node quiz previews) without losing data when a search narrows results.
@@ -362,6 +373,7 @@ export const deleteNode = createAsyncThunk(
 export interface CreateLessonInput {
   title: string;
   resources: IResource[];
+  requireVideoWatch?: boolean;
 }
 
 export const createLesson = createAsyncThunk(
@@ -392,6 +404,7 @@ export const fetchLessonDetail = createAsyncThunk(
 export interface UpdateLessonInput {
   title?: string;
   resources?: IResource[];
+  requireVideoWatch?: boolean;
 }
 
 export const updateLesson = createAsyncThunk(
@@ -442,7 +455,7 @@ export const fetchQuizDetail = createAsyncThunk(
   async (quizId: string, { rejectWithValue }) => {
     try {
       const res = await api.get(`/dashboard/quizzes/${quizId}`);
-      return res.data.data as IQuiz;
+      return res.data.data as IQuizDetail;
     } catch (err: unknown) {
       return rejectWithValue(extractErrorMessage(err, 'Failed to load quiz'));
     }
@@ -452,8 +465,9 @@ export const fetchQuizDetail = createAsyncThunk(
 export interface UpdateQuizInput {
   title?: string;
   settings?: Partial<QuizSettings>;
-  // Teacher opt-in for mobile's Quiz Mode Select screen — see IQuiz.allowPlayModes.
-  allowPlayModes?: boolean;
+  // Teacher-assigned Quiz Mode — see IQuiz.assignedPlayMode. `null` clears an existing
+  // assignment back to an ordinary session; omitting the field leaves it untouched.
+  assignedPlayMode?: IAssignedPlayMode | null;
 }
 
 export const updateQuiz = createAsyncThunk(
@@ -464,6 +478,29 @@ export const updateQuiz = createAsyncThunk(
       return res.data.data as IQuiz;
     } catch (err: unknown) {
       return rejectWithValue(extractErrorMessage(err, 'Failed to save quiz'));
+    }
+  }
+);
+
+// Grade Settings — passingScore/starThresholds live on the owning RoadmapNode's item ref, not
+// on the Quiz document (a Quiz can be reused outside roadmaps), so this is a separate endpoint
+// from updateQuiz even though QuizEditorPage presents both as one form.
+export interface UpdateGradeSettingsInput {
+  passingScore?: number;
+  starThresholds?: IStarThreshold[];
+}
+
+export const updateItemGradeSettings = createAsyncThunk(
+  'studio/updateItemGradeSettings',
+  async (
+    { nodeId, itemId, input }: { nodeId: string; itemId: string; input: UpdateGradeSettingsInput },
+    { rejectWithValue }
+  ) => {
+    try {
+      const res = await api.patch(`/dashboard/nodes/${nodeId}/items/${itemId}/grade-settings`, input);
+      return res.data.data as IQuizGradeSettings;
+    } catch (err: unknown) {
+      return rejectWithValue(extractErrorMessage(err, 'Failed to save grade settings'));
     }
   }
 );
@@ -731,13 +768,24 @@ const studioSlice = createSlice({
         state.error = action.payload as string;
       })
       .addCase(createQuiz.fulfilled, (state, action) => {
-        state.currentQuiz = action.payload;
+        state.currentQuiz = { ...action.payload, nodeId: null, gradeSettings: null };
       })
+      // updateQuiz/updateQuizQuestions responses are the base Quiz only (no nodeId/
+      // gradeSettings — those come from fetchQuizDetail's merged response), so they're merged
+      // onto the existing currentQuiz rather than replacing it, or grade settings prefill would
+      // silently blank out on every "Save settings"/question-list edit.
       .addCase(updateQuiz.fulfilled, (state, action) => {
-        state.currentQuiz = action.payload;
+        state.currentQuiz = state.currentQuiz
+          ? { ...state.currentQuiz, ...action.payload }
+          : { ...action.payload, nodeId: null, gradeSettings: null };
       })
       .addCase(updateQuizQuestions.fulfilled, (state, action) => {
-        state.currentQuiz = action.payload;
+        state.currentQuiz = state.currentQuiz
+          ? { ...state.currentQuiz, ...action.payload }
+          : { ...action.payload, nodeId: null, gradeSettings: null };
+      })
+      .addCase(updateItemGradeSettings.fulfilled, (state, action) => {
+        if (state.currentQuiz) state.currentQuiz.gradeSettings = action.payload;
       })
       // searchCourseQuestions
       .addCase(searchCourseQuestions.fulfilled, (state, action) => {

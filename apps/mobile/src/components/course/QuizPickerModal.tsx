@@ -6,9 +6,9 @@
 // - "Course Quizzes" — unchanged from the original single-list version: every quiz-type item
 //   across the course's nodes, grouped by node title (same aggregation shape as
 //   ResourcesModal's video grouping). Picking one hands off exactly as if it had been tapped
-//   directly on the path: the Quiz Mode Select screen if the teacher opted this specific quiz
-//   in via Content Studio (`Quiz.allowPlayModes`), otherwise straight into the ordinary
-//   session — Topic quizzes don't get the mode grid by default.
+//   directly on the path: straight into the ordinary session route, carrying the teacher's
+//   assigned mode (`Quiz.assignedPlayMode`) if one was set in Content Studio — Topic quizzes
+//   never show a mode-selection screen; the learner just plays.
 // - "Game Quizzes" — the same QuizModeGrid used by the full-screen QuizModeSelectScreen,
 //   embedded directly in this tab. It targets the course's own auto-created mode:'pool'
 //   practice quiz (`{source:'miniApp', miniAppId: courseId}` — the same shape Dictionary's
@@ -32,11 +32,11 @@
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ClipboardCheck, Gamepad2, Lock, X } from 'lucide-react-native';
+import { ClipboardCheck, Gamepad2, History, Lock, X } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
-import type { NodeItemWithProgress, RoadmapWithProgress } from '@my-backpack/shared';
+import type { IQuizItemSummary, NodeItemWithProgress, RoadmapWithProgress } from '@my-backpack/shared';
 import { QuizModeGrid } from '../quiz/QuizModeGrid';
-import { encodePlayModeParam, type QuizPlayModeId, type QuizPlayModeSettings } from '../quiz/quizPlayModes';
+import { encodeAssignedPlayMode, encodePlayModeParam, type QuizPlayModeId, type QuizPlayModeSettings } from '../quiz/quizPlayModes';
 import { useTheme } from '../../theme/ThemeContext';
 
 interface QuizPickerModalProps {
@@ -74,13 +74,14 @@ export default function QuizPickerModal({
     })
     .filter((g) => g.quizzes.length > 0);
 
-  // Topic quizzes skip Quiz Mode Select unless a teacher opted this specific quiz in via
-  // Content Studio — same rule as tapping the item directly on the path (see Quiz.allowPlayModes).
-  const goToQuiz = (itemId: string, nodeId: string, allowPlayModes: boolean) => {
+  // Topic quizzes never show Quiz Mode Select — same rule as tapping the item directly on the
+  // path (see Quiz.assignedPlayMode). The teacher's assigned mode, if any, rides along as the
+  // `play` param exactly like a learner-chosen one would.
+  const goToQuiz = (itemId: string, nodeId: string, assignedPlayMode: IQuizItemSummary['assignedPlayMode']) => {
     onClose();
     router.push({
-      pathname: allowPlayModes ? '/quiz/modes/[itemId]' : '/quiz/[itemId]',
-      params: { itemId, nodeId, subjectSlug, courseSlug },
+      pathname: '/quiz/[itemId]',
+      params: { itemId, nodeId, subjectSlug, courseSlug, play: encodeAssignedPlayMode(assignedPlayMode) },
     });
   };
 
@@ -118,6 +119,18 @@ export default function QuizPickerModal({
             </Pressable>
           </View>
 
+          <Pressable
+            onPress={() => {
+              onClose();
+              router.push({ pathname: '/(app)/quiz-history', params: { contextId: courseId } });
+            }}
+            style={styles.historyLink}
+            hitSlop={8}
+          >
+            <History size={14} color={colors.primary.DEFAULT} />
+            <Text style={styles.historyLinkText}>Quiz History</Text>
+          </Pressable>
+
           <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
             {tab === 'course' ? (
               groups.length === 0 ? (
@@ -131,7 +144,7 @@ export default function QuizPickerModal({
                     {group.quizzes.map((item) => (
                       <Pressable
                         key={item.itemId}
-                        onPress={() => goToQuiz(item.itemId, group.nodeId, item.quiz.allowPlayModes)}
+                        onPress={() => goToQuiz(item.itemId, group.nodeId, item.quiz.assignedPlayMode)}
                         style={styles.row}
                       >
                         <View style={styles.rowIcon}>
@@ -211,6 +224,17 @@ function createStyles(colors: ThemeColors) {
       fontSize: typography.body,
       fontWeight: '600',
       color: colors.text.muted,
+    },
+    historyLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+    },
+    historyLinkText: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.primary.DEFAULT,
     },
     scrollView: {
       flex: 1,

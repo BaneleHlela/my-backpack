@@ -30,6 +30,13 @@ export interface ILessonDocument extends Document {
   position: number;
   title: string;
   resources: IResource[];
+  // Video-watch completion gating (August 2026) — teacher-configurable per lesson, opt-out.
+  // When true (default) and the lesson has at least one 'video' resource, mobile's LessonModal
+  // hides "Mark As Completed" until every video is watched and then completes automatically;
+  // false restores the plain always-tappable button regardless of watch state. No effect on a
+  // lesson with no video resources either way. Mongoose applies this default on read for
+  // pre-existing documents that predate the field, so no backfill migration was needed.
+  requireVideoWatch: boolean;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -68,6 +75,7 @@ const lessonSchema = new Schema<ILessonDocument>(
     position: { type: Number, required: true },
     title: { type: String, required: true },
     resources: { type: [resourceSchema], default: [] },
+    requireVideoWatch: { type: Boolean, default: true },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

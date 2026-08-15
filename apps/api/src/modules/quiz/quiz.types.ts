@@ -3,7 +3,12 @@ import { ResponseType } from '../../models/learning/answerRecord.model';
 import { BucketFilter, FeedbackMode } from '../../models/learning/quizSession.model';
 
 export interface CreateSessionDto {
-  miniAppId: string;
+  // Either miniAppId (resolves to that mini-app's default quiz — the original behavior) or
+  // quizId (starts/retakes this exact Quiz directly, bypassing the isDefault lookup — used by
+  // Quiz History's retake flow, where the quiz may not be the mini-app's default, e.g. a
+  // roadmap Topic quiz) must be provided.
+  miniAppId?: string;
+  quizId?: string;
   settings?: {
     questionCount?: number;
     timeLimit?: number;
@@ -12,6 +17,14 @@ export interface CreateSessionDto {
     feedbackMode?: FeedbackMode;
     shuffleQuestions?: boolean;
   };
+}
+
+export interface QuizHistoryQuery {
+  contextId?: string;
+  nodeId?: string;
+  status?: 'completed' | 'abandoned' | 'all';
+  page?: string;
+  limit?: string;
 }
 
 export interface CaptureAnswerDto {

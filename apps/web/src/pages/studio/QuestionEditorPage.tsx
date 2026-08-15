@@ -33,6 +33,7 @@ import type {
   IDropZone,
   IBlank,
   IFeedback,
+  IQuestionHelpers,
 } from '@my-backpack/shared';
 
 function cleanFeedback(feedback: IFeedback): IFeedback | undefined {
@@ -70,6 +71,11 @@ export default function QuestionEditorPage() {
   const [successFeedback, setSuccessFeedback] = useState<IFeedback>({});
   const [tryAgainFeedback, setTryAgainFeedback] = useState<IFeedback>({});
 
+  // Full defaultHelpers object is preserved round-trip (not just the one field this page
+  // exposes a checkbox for) so saving here never silently drops other helper overrides
+  // (e.g. retryUntilCorrect) that seed data or a future editor set.
+  const [defaultHelpers, setDefaultHelpers] = useState<Partial<IQuestionHelpers>>({});
+
   const [maxPoints, setMaxPoints] = useState('');
   const [pointsCanBePartial, setPointsCanBePartial] = useState(false);
 
@@ -101,6 +107,7 @@ export default function QuestionEditorPage() {
     setBlanks(c.blanks ?? []);
     setSuccessFeedback(c.successFeedback ?? {});
     setTryAgainFeedback(c.tryAgainFeedback ?? {});
+    setDefaultHelpers(c.defaultHelpers ?? {});
     setMaxPoints(String(currentQuestion.maxPoints));
     setPointsCanBePartial(currentQuestion.pointsCanBePartial);
   }, [currentQuestion]);
@@ -136,6 +143,9 @@ export default function QuestionEditorPage() {
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
+    const helpersToSave =
+      Object.keys(defaultHelpers).length > 0 ? defaultHelpers : undefined;
+
     const content = isDnd
       ? {
           prompt: prompt.trim(),
@@ -146,6 +156,7 @@ export default function QuestionEditorPage() {
           ...(isFillBuild ? { sentenceTemplate: sentenceTemplate.trim(), blanks } : {}),
           successFeedback: cleanFeedback(successFeedback),
           tryAgainFeedback: cleanFeedback(tryAgainFeedback),
+          defaultHelpers: helpersToSave,
         }
       : {
           prompt: prompt.trim(),
@@ -156,6 +167,7 @@ export default function QuestionEditorPage() {
           explanation: explanation.trim() || undefined,
           successFeedback: cleanFeedback(successFeedback),
           tryAgainFeedback: cleanFeedback(tryAgainFeedback),
+          defaultHelpers: helpersToSave,
         };
 
     const points = maxPoints.trim() ? Number(maxPoints) : undefined;
@@ -270,6 +282,17 @@ export default function QuestionEditorPage() {
               onChange={setDragAreaImageUrl}
               label="Drag area background (optional)"
             />
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={defaultHelpers.shuffleDraggables ?? false}
+                onChange={(e) =>
+                  setDefaultHelpers((prev) => ({ ...prev, shuffleDraggables: e.target.checked }))
+                }
+                className="rounded"
+              />
+              Shuffle draggable pool order each time this question loads
+            </label>
             {isFillBuild && (
               <>
                 <div>

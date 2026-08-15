@@ -19,16 +19,17 @@ import type { LayoutChangeEvent } from 'react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { Star } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
-import type { NodeItemWithProgress, RoadmapWithProgress } from '@my-backpack/shared';
+import type { IQuizItemSummary, NodeItemWithProgress, RoadmapWithProgress } from '@my-backpack/shared';
 import NodeButton, { NODE_BUTTON_COMPLETED_EXTRA_HEIGHT, NODE_BUTTON_SIZE, type NodeButtonProgress } from './NodeButton';
 import { useTheme } from '../../theme/ThemeContext';
 
 interface RoadmapPathProps {
   roadmap: RoadmapWithProgress;
   onSelectLesson: (lessonId: string, nodeId: string, nodeTitle: string) => void;
-  // allowPlayModes mirrors Quiz.allowPlayModes for this specific item — the caller decides
-  // whether to open the Quiz Mode Select screen or start the ordinary session directly.
-  onSelectQuiz: (itemId: string, nodeId: string, allowPlayModes: boolean) => void;
+  // assignedPlayMode mirrors Quiz.assignedPlayMode for this specific item — the caller starts
+  // the session straight into that mode (no selection screen) when set, or an ordinary session
+  // when null.
+  onSelectQuiz: (itemId: string, nodeId: string, assignedPlayMode: IQuizItemSummary['assignedPlayMode']) => void;
 }
 
 const ITEM_SPACING = 110;
@@ -89,7 +90,7 @@ export default function RoadmapPath({ roadmap, onSelectLesson, onSelectQuiz }: R
               if (item.itemType === 'lesson') {
                 onSelectLesson(item.lesson._id, node._id, node.title);
               } else {
-                onSelectQuiz(item.quiz._id, node._id, item.quiz.allowPlayModes);
+                onSelectQuiz(item.quiz._id, node._id, item.quiz.assignedPlayMode);
               }
             }}
           />

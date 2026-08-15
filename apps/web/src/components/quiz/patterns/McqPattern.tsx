@@ -6,11 +6,21 @@
 // Selecting an option never submits immediately — the learner always confirms
 // with the dedicated Submit button, regardless of helpers.autoSubmit (that flag
 // is reserved for DnD interaction patterns, not click-to-select ones).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, Volume2 } from 'lucide-react';
 import { ASSETS } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 import SpokenText from '../SpokenText';
+
+// Fisher-Yates — same local-per-file convention as DndSinglePattern.tsx's shuffle().
+function shuffle<T>(items: T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
 interface McqPatternProps {
   content: IQuestionContent;
@@ -35,7 +45,19 @@ function playAudio(path?: string) {
 
 export default function McqPattern({ content, lang, disabled, isSubmitting, onAnswer }: McqPatternProps) {
   const [selected, setSelected] = useState<number | null>(null);
-  const options = content.options ?? [];
+  // Options are always shuffled client-side — grading matches on rawResponse text against
+  // content.correctAnswer (see quizSession.service.ts), never on index, so display order is
+  // free to vary independently of the authored/seeded order.
+  const [options, setOptions] = useState<string[]>(() => shuffle(content.options ?? []));
+
+  // Reset per-question state whenever a new question loads — previously `selected` (and the
+  // shuffled order) carried over from the prior question when the next one was the same
+  // pattern type, since this component isn't remounted between questions.
+  useEffect(() => {
+    setSelected(null);
+    setOptions(shuffle(content.options ?? []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content]);
 
   const choose = (index: number) => {
     if (disabled) return;

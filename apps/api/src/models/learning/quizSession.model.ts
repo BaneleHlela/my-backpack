@@ -42,6 +42,11 @@ export interface IQuizSessionDocument extends Document {
   _id: Types.ObjectId;
   profileId: Types.ObjectId;
   miniAppId: Types.ObjectId;
+  // The Quiz this session was created from. Optional — sessions created before this field was
+  // added (August 2026) will have it undefined. Populated by createQuizSession, which always
+  // receives a resolved quizId regardless of entry point (roadmap item, Dictionary/pool default
+  // quiz, or a direct retake). Lets a session be traced back to its Quiz/Topic for Quiz History.
+  quizId?: Types.ObjectId;
   status: SessionStatus;
   questionIds: Types.ObjectId[];
   settings: ISessionSettings;
@@ -90,6 +95,7 @@ const quizSessionSchema = new Schema<IQuizSessionDocument>(
   {
     profileId: { type: Schema.Types.ObjectId, ref: 'Profile', required: true },
     miniAppId: { type: Schema.Types.ObjectId, ref: 'MiniApp', required: true },
+    quizId: { type: Schema.Types.ObjectId, ref: 'Quiz' },
     status: {
       type: String,
       enum: ['active', 'completed', 'abandoned'],
@@ -106,6 +112,7 @@ const quizSessionSchema = new Schema<IQuizSessionDocument>(
 
 quizSessionSchema.index({ profileId: 1, status: 1 });
 quizSessionSchema.index({ profileId: 1, miniAppId: 1 });
+quizSessionSchema.index({ profileId: 1, quizId: 1 });
 
 const QuizSession: Model<IQuizSessionDocument> = mongoose.model<IQuizSessionDocument>(
   'QuizSession',

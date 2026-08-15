@@ -87,7 +87,7 @@ export const lightColors: IThemeColors = {
 // the white-based glass opacities were designed to sit over a wallpaper
 // image in both modes, not the flat `background` colour.
 export const darkColors: IThemeColors = {
-  background: '#1f2937', // gray-800
+  background: '#101828', // gray-900
 
   primary: {
     light: '#a78bfa', // violet-400 — unchanged from light mode
@@ -161,3 +161,11 @@ export const typography = {
   heading: 24,
   headingLg: 28,
 } as const;
+
+export const borderWidth = {
+  xs: .5,
+  sm: 1,
+  md: 2,
+  lg: 4,
+  xl: 6,
+}

@@ -23,6 +23,7 @@ import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { SpokenText } from '../SpokenText';
 import { useTheme } from '../../../theme/ThemeContext';
+import { shuffle } from './DndTile';
 import type { QuestionPatternHandle, QuestionPatternReadyProps } from './questionPatternTypes';
 
 interface McqPatternProps extends QuestionPatternReadyProps {
@@ -43,7 +44,10 @@ export const McqPattern = forwardRef(function McqPattern(
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const [selected, setSelected] = useState<number | null>(null);
-  const options = content.options ?? [];
+  // Options are always shuffled client-side — grading matches on rawResponse text against
+  // content.correctAnswer (see quizSession.service.ts), never on index, so display order is
+  // free to vary independently of the authored/seeded order.
+  const [options, setOptions] = useState<string[]>(() => shuffle(content.options ?? []));
 
   const audioPromptUrl = content.prompt?.startsWith(AUDIO_PROMPT_PREFIX)
     ? resolveAssetUrl(content.prompt.slice(AUDIO_PROMPT_PREFIX.length))
@@ -55,6 +59,15 @@ export const McqPattern = forwardRef(function McqPattern(
   };
 
   useImperativeHandle(ref, () => ({ submit }));
+
+  // Reset per-question state whenever a new question loads — previously `selected` (and the
+  // shuffled order) carried over from the prior question when the next one was also MCQ, since
+  // this component isn't remounted between questions.
+  useEffect(() => {
+    setSelected(null);
+    setOptions(shuffle(content.options ?? []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content]);
 
   useEffect(() => {
     onReadyChange?.(selected !== null && !disabled);

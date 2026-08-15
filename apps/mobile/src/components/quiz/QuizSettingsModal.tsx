@@ -17,7 +17,7 @@ import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
 import { PrimaryButton } from '../PrimaryButton';
 import { useTheme } from '../../theme/ThemeContext';
-import type { QuizPlayModeDef, QuizPlayModeSettings } from './quizPlayModes';
+import { QUIZ_PLAY_MODE_ICONS, type QuizPlayModeDef, type QuizPlayModeSettings } from './quizPlayModes';
 
 interface QuizSettingsModalProps {
   mode: QuizPlayModeDef;
@@ -31,7 +31,7 @@ type ThemeColors = ReturnType<typeof useTheme>['colors'];
 export function QuizSettingsModal({ mode, settings, onClose, onConfirm }: QuizSettingsModalProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-  const Icon = mode.icon;
+  const Icon = QUIZ_PLAY_MODE_ICONS[mode.id];
   const [draft, setDraft] = useState<QuizPlayModeSettings>(settings);
 
   const currentValue =
@@ -43,7 +43,9 @@ export function QuizSettingsModal({ mode, settings, onClose, onConfirm }: QuizSe
           ? draft.hearts
           : mode.settingKey === 'mistakeLimit'
             ? draft.mistakeLimit
-            : undefined;
+            : mode.settingKey === 'streakTarget'
+              ? draft.streakTarget
+              : undefined;
 
   const setModeValue = (value: number) => {
     setDraft((prev) => ({
@@ -52,6 +54,7 @@ export function QuizSettingsModal({ mode, settings, onClose, onConfirm }: QuizSe
       ...(mode.settingKey === 'duration' && { duration: value }),
       ...(mode.settingKey === 'hearts' && { hearts: value }),
       ...(mode.settingKey === 'mistakeLimit' && { mistakeLimit: value }),
+      ...(mode.settingKey === 'streakTarget' && { streakTarget: value }),
     }));
   };
 

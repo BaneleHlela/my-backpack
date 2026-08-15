@@ -7,6 +7,7 @@ import RoadmapNode, {
   IRoadmapNodeDocument,
   ICurriculumTag,
   INodeRewards,
+  IStarThreshold,
 } from '../../models/learning/roadmapNode.model';
 import Roadmap from '../../models/learning/roadmap.model';
 import Lesson from '../../models/learning/lesson.model';
@@ -158,4 +159,60 @@ export async function removeNodeItem(nodeId: Types.ObjectId | string, itemId: st
       .filter((i) => i.itemType === 'lesson')
       .map((i) => Lesson.findByIdAndUpdate(i.itemId, { position: i.position }))
   );
+}
+
+export interface UpdateNodeItemGradeSettingsInput {
+  passingScore?: number;
+  starThresholds?: IStarThreshold[];
+}
+
+// Updates the passingScore/starThresholds on one quiz item ref (see INodeItemRef in
+// roadmapNode.model.ts) — the "Grade Settings" section of Content Studio's QuizEditorPage.
+// Only meaningful for itemType: 'quiz'; a Quiz document itself has no passingScore/
+// starThresholds fields since it can be reused outside roadmaps (same reasoning that already
+// put passingScore on the item ref rather than on Quiz).
+export async function updateNodeItemGradeSettings(
+  nodeId: string,
+  itemId: string,
+  input: UpdateNodeItemGradeSettingsInput
+): Promise<IRoadmapNodeDocument> {
+  const node = await RoadmapNode.findById(nodeId);
+  if (!node) throw new AppError('Node not found', 404);
+
+  const idx = node.items.findIndex((i) => i.itemId.toString() === itemId);
+  if (idx === -1) throw new AppError('Item not found on this node', 404);
+  if (node.items[idx].itemType !== 'quiz') {
+    throw new AppError('Grade settings only apply to quiz items', 400);
+  }
+
+  if (input.passingScore !== undefined && (input.passingScore < 0 || input.passingScore > 1)) {
+    throw new AppError('passingScore must be between 0 and 1', 400);
+  }
+  if (input.starThresholds !== undefined) {
+    for (const tier of input.starThresholds) {
+      if (tier.minScore < 0 || tier.minScore > 1) {
+        throw new AppError('starThresholds[].minScore must be between 0 and 1', 400);
+      }
+      if (tier.stars < 0 || tier.stars > 3 || !Number.isInteger(tier.stars)) {
+        throw new AppError('starThresholds[].stars must be a whole number between 0 and 3', 400);
+      }
+    }
+  }
+
+  const updatedItems = node.items.map((i, i2) => {
+    if (i2 !== idx) return i;
+    return {
+      itemType: i.itemType,
+      itemId: i.itemId,
+      position: i.position,
+      passingScore: input.passingScore !== undefined ? input.passingScore : i.passingScore,
+      starThresholds: input.starThresholds !== undefined ? input.starThresholds : i.starThresholds,
+    };
+  });
+
+  await RoadmapNode.findByIdAndUpdate(nodeId, { items: updatedItems });
+
+  const updated = await RoadmapNode.findById(nodeId);
+  if (!updated) throw new AppError('Node not found', 404);
+  return updated;
 }

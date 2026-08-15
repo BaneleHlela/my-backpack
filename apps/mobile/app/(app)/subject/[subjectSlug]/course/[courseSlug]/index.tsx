@@ -19,6 +19,7 @@ import CoursePathActions from '../../../../../../src/components/roadmap/CoursePa
 import LessonModal from '../../../../../../src/components/course/LessonModal';
 import ResourcesModal from '../../../../../../src/components/course/ResourcesModal';
 import QuizPickerModal from '../../../../../../src/components/course/QuizPickerModal';
+import { encodeAssignedPlayMode } from '../../../../../../src/components/quiz/quizPlayModes';
 import { Menubar } from '../../../../../../src/components/Menubar';
 import type { AppDispatch, RootState } from '../../../../../../src/store/store';
 import { useTheme } from '../../../../../../src/theme/ThemeContext';
@@ -159,12 +160,13 @@ export default function CourseScreen() {
             <RoadmapPath
               roadmap={currentRoadmap}
               onSelectLesson={(lessonId) => setActiveLessonId(lessonId)}
-              onSelectQuiz={(itemId, nodeId, allowPlayModes) =>
+              onSelectQuiz={(itemId, nodeId, assignedPlayMode) =>
                 router.push({
-                  // Topic quizzes skip Quiz Mode Select unless a teacher opted this specific
-                  // quiz in via Content Studio — see Quiz.allowPlayModes.
-                  pathname: allowPlayModes ? '/quiz/modes/[itemId]' : '/quiz/[itemId]',
-                  params: { itemId, nodeId, subjectSlug, courseSlug },
+                  // Topic quizzes never show Quiz Mode Select — a teacher assigns at most one
+                  // specific mode from Content Studio (Quiz.assignedPlayMode), which starts the
+                  // session straight into that mode's gameplay with no choice for the learner.
+                  pathname: '/quiz/[itemId]',
+                  params: { itemId, nodeId, subjectSlug, courseSlug, play: encodeAssignedPlayMode(assignedPlayMode) },
                 })
               }
             />

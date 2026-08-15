@@ -8,7 +8,27 @@
 // Notes tab has no real content or authoring path yet — Figma only designed the Videos state, so
 // this is a placeholder ("No available notes for this lesson." + a disabled "Add notes" button),
 // not a built-out notes UI.
-import { useEffect, useState } from 'react';
+//
+// Video-watch tracking (August 2026): a lesson with at least one video resource is, by default,
+// no longer completed by an unconditional tap — the learner must watch every video (LessonVideo's
+// onWatched, ~90% played or reaching the natural end) before "Mark As Completed" appears, at
+// which point it fires automatically (no tap required). This is teacher-configurable per lesson
+// via `Lesson.requireVideoWatch` (opt-out, default true, edited from Content Studio's
+// LessonEditorPage.tsx) — `gatingActive` below folds that setting in alongside "does this lesson
+// even have a video." A lesson with no video resources, or one with gating explicitly disabled,
+// keeps the original always-tappable behavior. A flat 90s fallback timer reveals a manual
+// "Continue anyway" escape hatch when gating is active, in case a watched-event never resolves
+// (flaky connection, device-specific playback bug) — this stays even for teacher-enabled gating,
+// it's not a way to skip watching, just a stuck-state safety valve. Each video's watched state is
+// tracked (and shown via a small badge on `LessonVideo`) independently of whether gating is
+// active, so the badge still reflects real progress even on a lesson where the teacher has
+// disabled the completion gate. Re-visiting an already-`completed` lesson (currentLessonProgress,
+// threaded from GET /roadmap/lesson/:lessonId via roadmapSlice's fetchLesson) skips all of this —
+// free playback/review, no button, nothing to re-watch. The parent Course screen
+// (app/(app)/subject/[subjectSlug]/course/[courseSlug]/index.tsx) only ever mounts this component
+// when `activeLessonId` transitions from null to a value, so every open is a fresh mount — this
+// component's own state never needs a lessonId-keyed reset effect.
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { BookOpen, Video, X } from 'lucide-react-native';
@@ -31,13 +51,21 @@ type Tab = 'videos' | 'notes';
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
+// How long to wait for every video's watched-event before offering a manual escape hatch.
+const CONTINUE_ANYWAY_TIMEOUT_MS = 90000;
+
 export default function LessonModal({ lessonId, onClose, onCompleted }: LessonModalProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const dispatch = useDispatch<AppDispatch>();
-  const { currentLesson, isLoading } = useSelector((state: RootState) => state.roadmap);
+  const { currentLesson, currentLessonProgress, isLoading } = useSelector(
+    (state: RootState) => state.roadmap
+  );
   const [tab, setTab] = useState<Tab>('videos');
   const [completing, setCompleting] = useState(false);
+  const [watchedPositions, setWatchedPositions] = useState<Set<number>>(new Set());
+  const [showContinueAnyway, setShowContinueAnyway] = useState(false);
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     dispatch(fetchLesson(lessonId));
@@ -59,9 +87,44 @@ export default function LessonModal({ lessonId, onClose, onCompleted }: LessonMo
     }
   };
 
+  const alreadyCompleted = currentLessonProgress?.status === 'completed';
+
   const videoResources = currentLesson
     ? [...currentLesson.resources].filter((r) => r.type === 'video').sort((a, b) => a.position - b.position)
     : [];
+
+  const allVideosWatched =
+    videoResources.length === 0 || videoResources.every((r) => watchedPositions.has(r.position));
+
+  // Teacher-configurable opt-out (default true — see Lesson.requireVideoWatch). Gating only
+  // ever applies to a lesson that both has a video and hasn't had it disabled; everything else
+  // (badge display via `watchedPositions`, `onWatched` tracking below) stays unconditional.
+  const gatingActive = videoResources.length > 0 && (currentLesson?.requireVideoWatch ?? true);
+
+  // 90s fallback timer — starts on mount (i.e. whenever this lesson's modal opens), cleared on
+  // unmount or as soon as every video is confirmed watched.
+  useEffect(() => {
+    fallbackTimerRef.current = setTimeout(() => setShowContinueAnyway(true), CONTINUE_ANYWAY_TIMEOUT_MS);
+    return () => {
+      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (allVideosWatched && fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
+  }, [allVideosWatched]);
+
+  // Once every video is watched, complete automatically — no tap required. Skipped entirely for
+  // a lesson with no video, one whose teacher has disabled gating, and one already completed on
+  // a revisit (nothing left to mark).
+  useEffect(() => {
+    if (alreadyCompleted || !gatingActive || !allVideosWatched || completing) return;
+    void handleMarkCompleted();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allVideosWatched, alreadyCompleted, gatingActive, completing]);
 
   return (
     <Modal transparent animationType="slide" visible onRequestClose={onClose}>
@@ -106,6 +169,15 @@ export default function LessonModal({ lessonId, onClose, onCompleted }: LessonMo
                         caption={resource.caption}
                         thumbnailUrl={resource.thumbnailUrl}
                         description={resource.description}
+                        watched={alreadyCompleted || watchedPositions.has(resource.position)}
+                        onWatched={
+                          alreadyCompleted
+                            ? undefined
+                            : () =>
+                                setWatchedPositions((prev) =>
+                                  prev.has(resource.position) ? prev : new Set(prev).add(resource.position)
+                                )
+                        }
                       />
                     ) : null
                   )
@@ -119,12 +191,25 @@ export default function LessonModal({ lessonId, onClose, onCompleted }: LessonMo
             </ScrollView>
           )}
 
-          <PrimaryButton
-            title="Mark As Completed"
-            onPress={() => void handleMarkCompleted()}
-            loading={completing}
-            style={styles.completeButton}
-          />
+          {currentLesson && !alreadyCompleted ? (
+            !gatingActive || allVideosWatched ? (
+              <PrimaryButton
+                title="Mark As Completed"
+                onPress={() => void handleMarkCompleted()}
+                loading={completing}
+                style={styles.completeButton}
+              />
+            ) : (
+              <View style={styles.watchHintRow}>
+                <Text style={styles.emptyText}>Watch the video to continue</Text>
+                {showContinueAnyway ? (
+                  <Pressable onPress={() => void handleMarkCompleted()} hitSlop={8}>
+                    <Text style={styles.continueAnywayText}>Continue anyway</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            )
+          ) : null}
         </Pressable>
       </Pressable>
     </Modal>
@@ -213,6 +298,16 @@ function createStyles(colors: ThemeColors) {
     },
     completeButton: {
       backgroundColor: colors.primary.dark,
+    },
+    watchHintRow: {
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    continueAnywayText: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.primary.DEFAULT,
+      textDecorationLine: 'underline',
     },
   });
 }

@@ -4,7 +4,7 @@
 // linkable/bookmarkable and supports browser back/forward.
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Bookmark, Sparkles } from 'lucide-react';
+import { ChevronLeft, Bookmark, Sparkles, History } from 'lucide-react';
 import type { IMiniApp } from '@my-backpack/shared';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../../app/store';
@@ -45,24 +45,34 @@ export default function DictionaryPage({ miniApp, subjectSlug }: DictionaryPageP
         Back to roadmap
       </button>
 
-      <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <h1 className="text-2xl font-bold text-gray-800">{miniApp.name}</h1>
-        <button
-          type="button"
-          onClick={() => navigate(`${miniAppBasePath}/bucket`)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/40 backdrop-blur border border-white/50 text-sm font-medium text-violet-600 hover:bg-white/60 transition-colors flex-shrink-0"
-        >
-          <Bookmark className="w-4 h-4" />
-          My Bucket
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate(`${miniAppBasePath}/quiz`)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/40 backdrop-blur border border-white/50 text-sm font-medium text-violet-600 hover:bg-white/60 transition-colors flex-shrink-0"
-        >
-          <Sparkles className="w-4 h-4" />
-          Take Quiz
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => navigate(`${miniAppBasePath}/bucket`)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/40 backdrop-blur border border-white/50 text-sm font-medium text-violet-600 hover:bg-white/60 transition-colors flex-shrink-0"
+          >
+            <Bookmark className="w-4 h-4" />
+            My Bucket
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(`${miniAppBasePath}/quiz`)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/40 backdrop-blur border border-white/50 text-sm font-medium text-violet-600 hover:bg-white/60 transition-colors flex-shrink-0"
+          >
+            <Sparkles className="w-4 h-4" />
+            Take Quiz
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(`/quiz-history?contextId=${miniApp._id}`)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/40 backdrop-blur border border-white/50 text-sm font-medium text-violet-600 hover:bg-white/60 transition-colors flex-shrink-0"
+          >
+            <History className="w-4 h-4" />
+            Quiz History
+          </button>
+        </div>
       </div>
 
       <div className="mb-6">

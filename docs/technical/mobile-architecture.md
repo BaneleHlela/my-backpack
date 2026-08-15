@@ -1012,6 +1012,118 @@ directly: it does an unfiltered `Lesson.find(...)`, not a `.select()`-restricted
 API call was needed. There is no teacher-added supplementary resource data yet; that (plus its
 Studio authoring UI) is separate, later, web-side work.
 
+#### Video-watch tracking → lesson completion gating (August 2026)
+
+`LessonModal`'s "Mark As Completed" was, until this pass, an unconditional tap available the
+instant the modal opened — nothing checked whether the learner had actually watched a lesson's
+video. A lesson with at least one `'video'` resource is now gated on actually watching it (subject
+to the teacher opt-out below); a lesson with none keeps the original always-tappable behavior
+exactly as before. Shipped in two passes: the initial gating mechanism, then a follow-up (real
+device testing surfaced a native-controls bug; a visual "watched" indicator and a teacher opt-out
+were also requested) covered in the later bullets below.
+
+- **Detecting "watched"** (`LessonVideo.tsx`) — gained an optional `onWatched?: () => void` prop.
+  `useVideoPlayer(null, ...)`'s setup callback now also sets `player.timeUpdateEventInterval = 1`;
+  since that setup callback only re-runs if the (always-null) initial source changes, this is set
+  once at player creation and persists across the later `player.replace(url)` call in
+  `startPlayback`. Two listeners via `useEventListener` (from `expo`, alongside the file's
+  existing `useEvent`) drive a ref-guarded `fireWatched()` helper (`hasFiredRef`, so it fires at
+  most once per mount regardless of how many times either listener trips afterward): `playToEnd`
+  is the primary signal (reached the natural end), and `timeUpdate` is a backstop — firing once
+  `currentTime / player.duration >= 0.9` (`WATCHED_THRESHOLD`) — for when `playToEnd` doesn't
+  cleanly fire (network hiccup, learner pauses a second early). No anti-scrub enforcement and no
+  custom video controls either way — native `VideoView` controls are untouched, and reaching 90%
+  by scrubbing counts the same as watching normally, per CLAUDE.md's "we are not scaling yet"
+  guidance. `ResourcesModal` renders `LessonVideo` for course-wide browsing with no lessonId or
+  completion concept — `onWatched` is optional and that call site simply never passes it, no
+  changes needed there.
+- **Gating + auto-fire** (`LessonModal.tsx`) — tracks watched state per video resource in a
+  `Set<number>` keyed by `resource.position` (`watchedPositions`), wired via each `<LessonVideo>`'s
+  `onWatched`. `allVideosWatched = videoResources.length === 0 || videoResources.every(r =>
+  watchedPositions.has(r.position))`. For a lesson with videos, the "Mark As Completed" button is
+  withheld until `allVideosWatched`; in its place, a centered "Watch the video to continue" hint
+  reuses the file's existing `emptyText` style rather than introducing new typography. Once
+  `allVideosWatched` flips true, a `useEffect` calls the existing `handleMarkCompleted()`
+  **automatically** — no tap required — guarded against double-firing by also checking the
+  in-flight `completing` flag. A lesson with no video resources skips this effect entirely
+  (`videoResources.length === 0` short-circuits it) and keeps the original manual-tap button.
+- **"Watched" badge** (`LessonVideo.tsx`) — a small `CheckCircle` (green, `colors.success.DEFAULT`)
+  pinned to the top-right corner of the placeholder or the playing video box, driven by a new
+  `watched?: boolean` prop. `LessonModal` passes `alreadyCompleted || watchedPositions.has(resource.
+  position)`, so it lights up the moment a video crosses the same `onWatched` threshold used for
+  gating, and stays lit permanently once the whole lesson is `completed`. This is purely a display
+  flag, independent of gating — it lights up the same way whether or not `requireVideoWatch` (see
+  below) is even enabled for that lesson, since "did I watch this" is useful information on its
+  own. Always rendered with `pointerEvents="none"` so it can never be the thing standing between a
+  learner and the native controls underneath it (see the controls-access fix below).
+- **Fallback escape hatch** — a flat 90s timer (`CONTINUE_ANYWAY_TIMEOUT_MS`) starts on mount
+  (i.e. whenever the modal opens) and, if `allVideosWatched` still hasn't fired by then, reveals a
+  small "Continue anyway" text link next to the hint that calls `handleMarkCompleted()` manually.
+  Covers a stuck watched-event on a flaky connection or a device-specific playback bug without
+  trapping the learner behind a video that never resolves. The timer is cleared on unmount and
+  again as soon as `allVideosWatched` becomes true (a second effect watching that flag), so the
+  link can't flash into view during the brief async gap between the auto-fire effect calling
+  `handleMarkCompleted()` and the modal actually closing.
+- **Not re-gating a revisit** — `getLessonWithProgress` (`roadmap.service.ts`) already returned
+  `{ lesson, progress, isUnlocked }`, but `roadmapSlice.ts`'s `fetchLesson` thunk previously kept
+  only `lesson`. It now threads `progress` through into a new sibling `currentLessonProgress:
+  IItemProgressEntry | null` field (cleared alongside `currentLesson`, same lifecycle — both in
+  `clearLesson` and `clearRoadmap`). `LessonModal` derives `alreadyCompleted =
+  currentLessonProgress?.status === 'completed'` and, when true, skips all of the above: the
+  Videos tab renders for free playback/review (each `LessonVideo`'s `onWatched` is left
+  `undefined` rather than wired up, since there's nothing left to gate), and neither the "Mark As
+  Completed" button nor the hint/fallback link render at all. Closing via the X button or the
+  overlay tap already worked for leaving the modal at any time, on a revisit or otherwise. This
+  relies on the Course screen only ever mounting `LessonModal` fresh (`{activeLessonId &&
+  <LessonModal .../>}` — the component unmounts to `null` before a different lesson's `lessonId`
+  is set), so none of this new state needs a `lessonId`-keyed reset effect; a fresh mount already
+  starts clean.
+- **Teacher opt-out** — `Lesson.requireVideoWatch: boolean` (`lesson.model.ts`, default `true`,
+  mirrored in `packages/shared/types/roadmap.ts`). Gating (the previous four bullets — hidden
+  button, auto-fire, fallback link) only ever applies when `videoResources.length > 0 &&
+  (currentLesson?.requireVideoWatch ?? true)` (`LessonModal`'s `gatingActive`); a teacher who
+  unchecks it for a specific lesson gets the plain always-tappable button back regardless of watch
+  state, same as a lesson with no video at all. Watched-state tracking and the badge above stay on
+  either way — only the completion *gate* is what the flag turns off. Edited from Content Studio's
+  `LessonEditorPage.tsx` (`apps/web`): a checkbox, "Require watching the video to complete,"
+  conditionally rendered only when the draft has at least one `'video'` resource (checking a box
+  for a text-only lesson would be meaningless). `studioSlice.ts`'s `CreateLessonInput`/
+  `UpdateLessonInput` and `lesson.service.ts`'s matching server-side interfaces all gained the
+  optional field; `PATCH /api/dashboard/lessons/:lessonId` now round-trips it alongside
+  title/resources. No backfill migration — Mongoose applies the schema default (`true`) to
+  existing Lesson documents that predate the field at read time, so every pre-existing lesson with
+  video content keeps the just-shipped gating behavior unless a teacher explicitly opts it out.
+  This was an explicit product decision (opt-**out**, not opt-in) — the alternative (opt-in,
+  defaulting every lesson back to the old always-tappable button) was considered and rejected,
+  since it would have silently undone the gating this whole feature exists to add.
+- **Native video controls were inaccessible during playback (bug fix)** — found via real-device
+  testing of the pass above. `expo-video`'s `VideoView` defaults `nativeControls` to `true`, so
+  pause/resume/fullscreen should always be reachable — but `LessonVideo.tsx`'s own `isLoading`
+  overlay (a translucent `rgba(0,0,0,0.4)` `View`, `ActivityIndicator` only, no press handler) sat
+  on top of the video and, since it never declared `pointerEvents`, silently absorbed every touch
+  meant for the native controls underneath — including ones that would otherwise reach them fine.
+  The video was visibly playing (the overlay is translucent, and `player.play()` had already been
+  called), so the controls looked present but were untappable. Root cause: `isLoading` is derived
+  from `statusChange`'s `status !== 'readyToPlay'`, and this file's own existing comment already
+  documented that `statusChange` has "real-world cases... of getting stuck on 'loading'" on some
+  devices/sources — exactly the condition that leaves the overlay up indefinitely even once frames
+  are genuinely decoding and displaying. Two-part fix: (1) the loading overlay now sets
+  `pointerEvents="none"` (it has no interactive content, so this is safe unconditionally) as a
+  defensive measure regardless of root cause; (2) a new `onFirstFrameRender` callback on
+  `VideoView` (a direct native signal that a frame has actually been drawn — more reliable here
+  than `statusChange`) sets a `hasRenderedFrame` flag that permanently retires the overlay
+  (`isLoading = hasStarted && !isError && status !== 'readyToPlay' && !hasRenderedFrame`),
+  independent of whatever `status` does afterward. `nativeControls` and `fullscreenOptions={{
+  enable: true }}` are now also passed to `VideoView` explicitly (both already matched the
+  library's own defaults — this doesn't change behavior, just documents the intent given what was
+  just debugged here). The (interactive, has a Retry button) error overlay is untouched — it's
+  meant to block the video, that's not the bug.
+
+Verified via `tsc --noEmit` (clean, all three passes) — the original gating mechanism was
+**confirmed on a real device** during this work (that's how the controls-access bug above was
+found and reported); the controls fix and the teacher-opt-out addition, landed in the same
+follow-up pass, have **not yet been re-confirmed on-device**.
+
 ### `CoursePathActions.tsx` (`src/components/roadmap/`, new)
 
 Three floating action buttons pinned to the bottom of the Course screen, ported from Figma's
@@ -1273,55 +1385,120 @@ Implementation, inside `QuizSessionScreen`:
   to your bucket from the Dictionary…") was Dictionary-specific for the same reason — now
   generic ("No questions to quiz yet… Check back once more questions have been added.").
 
-### Mode-grid gating: Topic quizzes are opt-in (correction, August 2026)
+### Topic quizzes: teacher-assigned mode, no selection screen (redesign, August 2026)
 
-The original decision — the mode grid always shows for every quiz, only the settings pill was
-gated — turned out to be wrong for `mode: 'fixed'` roadmap/node ("Topic") quizzes: showing a
-7-card game-mode picker in front of *every* lesson quiz was too much for content a teacher never
-designed as a game. Corrected with a new `Quiz.allowPlayModes` field (default `false`,
-`quiz.model.ts` + shared `IQuiz`) — a Topic quiz only shows Quiz Mode Select if a teacher
-explicitly turns it on, from a checkbox on `QuizEditorPage.tsx` ("Allow Quiz Modes … for this
-quiz on mobile"). Left off, tapping it goes straight into the ordinary session — exactly the
-pre-Quiz-Modes behavior.
+Superseded the `Quiz.allowPlayModes: boolean` opt-in described below (kept here for history —
+don't reintroduce that field or `/quiz/modes/[itemId]`, both removed). The opt-in still put the
+*choice* of mode in the learner's hands once a teacher flipped it on; the corrected design puts
+the choice entirely with the teacher: `Quiz.allowPlayModes` was replaced with
+`Quiz.assignedPlayMode: IAssignedPlayMode | null` (`quiz.model.ts` + shared `IQuiz`, mirrored
+type in `packages/shared/constants/quizPlayModes.ts`) — a teacher picks **at most one** mode
+and its settings from a dropdown on `QuizEditorPage.tsx` ("Quiz Mode"), and the learner is
+dropped straight into that exact configuration on mobile with nothing to choose — no grid, no
+settings pill, no `QuizModeSelectScreen` in the flow at all. `null` (the default) plays the
+quiz as an ordinary session, exactly as before Quiz Modes existed.
 
-This is a routing-time decision, made by the caller before ever navigating, not something
-`QuizModeSelectScreen` itself checks — so the flag needed to travel with the roadmap data
-mobile already has in hand, not a new API call: `IQuizItemSummary` (`packages/shared/types/
-roadmap.ts`) gained `allowPlayModes`, populated by `roadmap.service.ts`'s node-item resolution
-alongside `questionCount`. `RoadmapPath`'s `onSelectQuiz` callback signature grew a third
-`allowPlayModes` argument (read off `item.quiz.allowPlayModes` where it renders each button);
-`CourseScreen`'s handler and `QuizPickerModal`'s "Course Quizzes" tab both branch on it —
-`allowPlayModes ? '/quiz/modes/[itemId]' : '/quiz/[itemId]'` — the same conditional in both
-places, since both are ways of reaching the same underlying Topic quiz.
+This is still a routing-time decision made by the caller before ever navigating: `IQuizItemSummary`
+(`packages/shared/types/roadmap.ts`) carries `assignedPlayMode` (populated by
+`roadmap.service.ts`'s node-item resolution alongside `questionCount`, same as the old field),
+and `RoadmapPath`'s `onSelectQuiz` callback / `CourseScreen`'s handler / `QuizPickerModal`'s
+"Course Quizzes" tab all route straight to `/quiz/[itemId]`, JSON-encoding the assignment (if
+any) into the same `play` param a learner-chosen mode would have carried
+(`encodeAssignedPlayMode` in `quizPlayModes.ts`, a thin wrapper over `encodePlayModeParam`).
+`/quiz/[itemId].tsx` itself is untouched — it already parsed an optional `play` param from
+`QuizModeSelectScreen`'s old roadmapItem branch, so a teacher-assigned mode rides the exact same
+mechanism a learner-chosen one used to.
+
+**`QuizModeSelectScreen` is miniApp-only now** — its `target` prop narrowed from the old
+`QuizSessionSource` union (`roadmapItem | miniApp`) to just `{ miniAppId, title? }`, since a
+Topic quiz never reaches it anymore. `app/quiz/modes/[itemId].tsx` (the roadmapItem wrapper
+route) was deleted outright as dead code.
 
 **Deliberately not read for `mode: 'dynamic'`/`'pool'` quizzes** — Dictionary's "Take Quiz" and
-every course's auto-created practice pool ("Game Quizzes") always show the grid regardless of
-this flag; those are inherently game surfaces, not curated lesson content a teacher might not
-want gamified. No migration was needed for existing Topic quizzes — they simply take the schema
-default (`false`), which is the corrected behavior.
+every course's auto-created practice pool ("Game Quizzes") always show the grid, learner-chosen,
+regardless of `assignedPlayMode`; those are inherently game surfaces, not curated lesson content.
+No migration was needed for existing Topic quizzes when the old field was first added, and none
+was needed for this replacement either — Mongoose simply returns `assignedPlayMode: null` (the
+schema default) for any pre-existing document, identical in effect to the old `allowPlayModes:
+false` default.
 
-**Gotcha hit while wiring this**: `apps/api/src/modules/roadmap/roadmap.types.ts` has its own
-backend-local `QuizItemSummary` interface that duplicates the shared `IQuizItemSummary` shape
-rather than importing it — both needed the new field, or `roadmap.service.ts`'s object literal
-fails to compile with "does not exist in type". Same "two declarations" trap as `QuizMode`
-gaining `'pool'` (model enum + shared union) and `NodeItemType` gaining `'project'` (Phase B) —
-worth grepping for a type's *other* declaration before assuming one edit is enough.
+**Gotcha hit while wiring both the original field and this replacement**:
+`apps/api/src/modules/roadmap/roadmap.types.ts` has its own backend-local `QuizItemSummary`
+interface that duplicates the shared `IQuizItemSummary` shape rather than importing it — both
+needed the field renamed, or `roadmap.service.ts`'s object literal fails to compile with "does
+not exist in type". Same "two declarations" trap as `QuizMode` gaining `'pool'` (model enum +
+shared union) and `NodeItemType` gaining `'project'` (Phase B) — worth grepping for a type's
+*other* declaration before assuming one edit is enough.
+
+### Mastery mode: pass by streak, not by score (August 2026)
+
+An eighth Quiz Mode, `mastery` — the learner must answer correctly a set number of times **in a
+row** (`streakTarget`, default 5, options 3/5/7/10 — the same `QuizPlayModeSettingKey`/
+`settingOptions` pattern every other mode's control uses) to pass. A wrong answer resets the
+streak to zero but never ends the run — unlike every other early-ending mode (Hearts/Perfect/
+Endless/Time Run), Mastery just keeps going. If the quiz's question pool runs out before the
+streak target is reached, the run doesn't end either: it quietly reshuffles and repeats.
+
+**Why this needed more than a per-answer rule, unlike every other mode**: Hearts/Perfect/Endless/
+Time Run all *end* a `QuizSession` early by calling `completeSession` and showing results.
+Mastery needs the opposite — to keep a session going past its own question list. Since
+`createQuizSession`'s question list is fixed at session-creation time (no "add more questions to
+an active session" concept exists, and shouldn't — `QuizSession.questionIds` reflects one
+`Quiz.settings.shuffleQuestions`-ordered draw), "reshuffle and repeat" is implemented as
+**chaining multiple real `QuizSession` documents behind one continuous learner experience**, not
+as one long session:
+
+1. `QuizSessionScreen`'s mode-rule effect tracks the streak the same way Streak mode already
+   does (shared `streak`/`bestStreak` state — the two modes' increment/reset logic is one
+   branch, `playMode.id === 'streak' || playMode.id === 'mastery'`).
+2. Reaching the target — `next >= masteryTarget` — is a genuine finish: `endedEarlyRef.current =
+   'mastery'` and `completeSession` fire exactly like Hearts/Perfect's early-end, wherever in the
+   pool it happens to land.
+3. Exhausting the pool (`quiz.lastAnswer.sessionComplete`) *without* reaching the target — on
+   either a right or a wrong answer — is **not** a finish: the effect sets
+   `endedEarlyRef.current = 'mastery_continue'` (a third sentinel value alongside the real
+   `EndedEarlyReason`s, never shown to the learner) and a `masteryContinuingRef` boolean, then
+   calls `completeSession` anyway — every answer in that leg was already persisted via
+   `AnswerRecord`, so finalizing it is honest bookkeeping, not a discard. A dedicated
+   continuation effect, declared *before* the roadmap item-complete effect in source order (both
+   fire in the same commit once `quiz.status` flips to `'completed'` — see the module comment's
+   race-avoidance note, extended to cover this), sees `masteryContinuingRef.current` still `true`
+   and silently `resetQuiz()` + re-`startQuiz()`s — a brand-new `QuizSession` on the same quiz,
+   reshuffled if the teacher enabled `Quiz.settings.shuffleQuestions` (if not, each leg replays
+   the same authored order — still "repeats", just not shuffled; worth teachers turning shuffle
+   on for a Mastery-assigned Topic quiz). `masteryContinuingRef` only resets back to `false` once
+   the new leg's session actually leaves `'completed'`/`'completing'` — a *later* commit, so the
+   same-commit roadmap item-complete effect reliably still sees it `true` and skips firing the
+   roadmap gating call for what's only an internal continuation, not the learner's real finish.
+   The render layer mirrors this: the results screen and the ordinary `'completing'` spinner both
+   check `isMasteryContinuing` and show a "Reshuffling questions…" spinner instead for that one
+   commit, so the learner never sees a flash of an intermediate leg's (often low, since it
+   includes whatever wrong answers happened before the streak reset) score.
+4. For a `roadmapItem` (Topic quiz) session specifically, this "reshuffle" is really "replay
+   the quiz's own fixed `questionIds`" — `startQuizItemSession` has no settings-override
+   parameter at all, so nothing about repeat legs' sourcing needs special-casing there; it's the
+   exact same mechanism `handleQuizAgain`'s "Quiz Again" button already used, just triggered
+   automatically instead of by a tap.
+
+No backend changes were needed for the looping mechanic itself — `completeSession`/
+`startQuizItem`/`createQuizSession` are called exactly as they always are, just more than once
+per learner-visible "run". `completeQuizItem` (the roadmap gating call) only ever receives the
+*final* leg's `sessionId`, so `scoreRatio`/stars are computed from that one leg's answers only —
+a deliberate v1 simplification (documented inline) rather than aggregating across every leg, and
+generally favorable to the learner since a leg that ends by hitting the streak target necessarily
+finishes on `streakTarget` consecutive correct answers.
 
 ### Settings-pill gating without a new API call
 
 `Quiz.isUserAdjustable` is what the pill's interactivity follows, per the (still-standing)
-product decision: for a quiz whose mode grid is showing at all (see above), the *settings pill*
-is only interactive for adjustable quizzes — a non-adjustable quiz's card shows its default
-value as a static, non-pressable label instead. Rather than adding a new field to
-`IQuizItemSummary`/a new API call, `QuizModeSelectScreen` derives this from which entry point
-was used: `target.source === 'miniApp'` stands in for `isUserAdjustable: true`;
-`target.source === 'roadmapItem'` stands in for `false`. This correctly covers **both**
-adjustable quizzes seeded today — Dictionary's "General Dictionary Quiz" and every course's
-auto-created pool quiz (both seeded `isUserAdjustable: true`) — while every roadmap-item quiz
-stays non-adjustable. In practice this now only matters for an opted-in Topic quiz (one with
-`allowPlayModes: true`) — its grid shows, but the pill stays a static label, since
-`isUserAdjustable` and `allowPlayModes` are independent flags. Still a simplification, not a
-real flag read — revisit if a roadmap-item quiz is ever seeded `isUserAdjustable: true`.
+product decision: for a quiz whose mode grid is showing at all (see above — miniApp sessions
+only, now that Topic quizzes never show it), the *settings pill* is only interactive for
+adjustable quizzes — a non-adjustable quiz's card shows its default value as a static,
+non-pressable label instead. `QuizModeSelectScreen` now always passes `settingsAdjustable: true`
+to `QuizModeGrid`, since every quiz reachable through it (Dictionary's "General Dictionary Quiz",
+every course's auto-created pool quiz) is seeded `isUserAdjustable: true` — the old
+`target.source === 'miniApp' ? true : false` derivation collapsed to a constant once the
+`roadmapItem` branch was removed.
 
 ### Fonts: Chewy + Fredoka (new screens only)
 

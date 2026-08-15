@@ -26,19 +26,24 @@
 //   reads as a highlight *border* around the bottom half rather than a hard cutoff at the
 //   middle. `borderWidth: 0` collapses the frame to nothing (the core fills it edge-to-edge).
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { radii } from '@my-backpack/shared';
 
 interface DepthButtonProps {
   width: number;
-  height?: number; // defaults to width (square/circular)
+  height?: number;
   color: string;
-  borderRadius?: number; // defaults to radii.full — a fully round button
-  borderWidth?: number; // thickness of the ring visible on every side, default 2
-  depth?: number; // extra thickness of the shadow rim peeking out at the bottom only, default 3
-  shadowColor?: string; // defaults to a generic semi-transparent black — button "physics" colors
-  showGloss?: boolean; // default true
-  glossOpacity?: number; // default 0.28
+  borderRadius?: number;
+  depth?: number;
+  shadowColor?: string;
+  showGloss?: boolean;
+  glossOpacity?: number;
   onPress?: () => void;
   disabled?: boolean;
   children?: ReactNode;
@@ -46,9 +51,8 @@ interface DepthButtonProps {
 }
 
 const DEFAULT_BORDER_RADIUS = radii.full;
-const DEFAULT_BORDER_WIDTH = 2;
-const DEFAULT_DEPTH = 3;
-const DEFAULT_SHADOW_COLOR = 'rgba(0,0,0,0.35)';
+const DEFAULT_DEPTH = 4;
+const DEFAULT_SHADOW_COLOR = '#7045B8';
 const DEFAULT_GLOSS_OPACITY = 0.28;
 
 export function DepthButton({
@@ -56,7 +60,6 @@ export function DepthButton({
   height,
   color,
   borderRadius = DEFAULT_BORDER_RADIUS,
-  borderWidth = DEFAULT_BORDER_WIDTH,
   depth = DEFAULT_DEPTH,
   shadowColor = DEFAULT_SHADOW_COLOR,
   showGloss = true,
@@ -74,51 +77,55 @@ export function DepthButton({
     <Pressable
       onPress={isInteractive ? onPress : undefined}
       disabled={!isInteractive}
-      style={({ pressed }) => [{ width, height: h }, pressed && isInteractive && styles.pressed, style]}
+      style={({ pressed }) => [
+        {
+          width,
+          height: h,
+        },
+        pressed && isInteractive && styles.pressed,
+        style,
+      ]}
     >
-      {/* Base + its darkening overlay — together, the ring/rim that peeks out around `face`. */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: color, borderRadius }]} />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: shadowColor, borderRadius }]} />
-
-      {/* The actual front face — inset more at the bottom than the other 3 sides, so the darkened
-          base shows through as a thicker rim there (the "3D thickness" read). */}
+      {/* Bottom / shadow button */}
       <View
-        style={{
-          position: 'absolute',
-          left: borderWidth,
-          right: borderWidth,
-          top: borderWidth,
-          bottom: borderWidth + depth,
-          backgroundColor: color,
-          borderRadius,
-          overflow: 'hidden',
-        }}
+        style={[
+          styles.button,
+          {
+            width,
+            height: h,
+            borderRadius,
+            backgroundColor: shadowColor,
+          },
+        ]}
+      />
+
+      {/* Top / main button — EXACT same dimensions */}
+      <View
+        style={[
+          styles.button,
+          {
+            width,
+            height: h,
+            borderRadius,
+            backgroundColor: color,
+            top: -depth,
+          },
+        ]}
       >
+        {/* Top-half gloss */}
         {showGloss && (
-          <>
-            <View style={[styles.glossTop, { backgroundColor: glossColor }]} />
-            <View
-              style={[
-                styles.glossBottomFrame,
-                {
-                  backgroundColor: glossColor,
-                  borderBottomLeftRadius: borderRadius,
-                  borderBottomRightRadius: borderRadius,
-                  padding: borderWidth,
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.glossBottomCore,
-                  { backgroundColor: color, borderBottomLeftRadius: borderRadius, borderBottomRightRadius: borderRadius },
-                ]}
-              />
-            </View>
-          </>
+          <View
+            style={[
+              styles.gloss,
+              {
+                backgroundColor: glossColor,
+              },
+            ]}
+          />
         )}
       </View>
 
+      {/* Content */}
       {children && (
         <View style={styles.content} pointerEvents="none">
           {children}
@@ -129,30 +136,27 @@ export function DepthButton({
 }
 
 const styles = StyleSheet.create({
-  pressed: {
-    opacity: 0.85,
-  },
-  glossTop: {
+  button: {
     position: 'absolute',
     left: 0,
-    right: 0,
+    overflow: 'hidden',
+  },
+
+  gloss: {
+    position: 'absolute',
     top: 0,
+    left: 0,
+    right: 0,
     height: '50%',
   },
-  glossBottomFrame: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    top: '50%',
-  },
-  glossBottomCore: {
-    flex: 1,
-  },
+
   content: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 2,
+  },
+
+  pressed: {
+    opacity: 0.85,
   },
 });

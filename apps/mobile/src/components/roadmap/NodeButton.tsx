@@ -71,6 +71,11 @@ export default function NodeButton({ itemType, progress, loading = false, onPres
   const isCompleted = progress === 'completed';
 
   const mainFill = isLocked ? colors.surface.glassSoft : itemType === 'lesson' ? colors.error.DEFAULT : colors.primary.DEFAULT;
+  // DepthButton's shadow defaults to a fixed purple otherwise — every badge, lesson or quiz,
+  // would get that same hardcoded rim regardless of its own face colour. Derive it from the same
+  // family as `mainFill` instead (its `.dark` tone) so a red-faced lesson badge gets a red
+  // shadow and a purple-faced quiz badge gets a purple one.
+  const shadowFill = isLocked ? undefined : itemType === 'lesson' ? colors.error.dark : colors.primary.dark;
   const Icon = itemType === 'lesson' ? MonitorPlay : ClipboardCheck;
 
   return (
@@ -78,7 +83,14 @@ export default function NodeButton({ itemType, progress, loading = false, onPres
       <View style={styles.badgeArea}>
         {isCurrent && <CurrentPulse color={colors.primary.light} />}
 
-        <DepthButton width={NODE_BUTTON_SIZE} color={mainFill} onPress={onPress} disabled={isLocked || loading}>
+        <DepthButton
+          width={NODE_BUTTON_SIZE}
+          height={NODE_BUTTON_SIZE - 3}
+          color={mainFill}
+          shadowColor={shadowFill}
+          onPress={onPress}
+          disabled={isLocked || loading}
+        >
           {loading ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : isLocked ? (

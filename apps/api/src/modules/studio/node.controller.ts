@@ -1,14 +1,17 @@
 // Route handlers for Content Studio RoadmapNode CRUD. Thin layer — logic lives in node.service.ts.
 import { Request, Response } from 'express';
 import { sendSuccess } from '../../utils/response';
-import { catchAsync } from '../../utils/AppError';
+import { catchAsync, AppError } from '../../utils/AppError';
+import { resolveGradeSettings } from '../../utils/gradeSettings';
 import {
   createNode,
   updateNode,
   reorderNodes,
   deleteNode,
+  updateNodeItemGradeSettings,
   CreateNodeInput,
   UpdateNodeInput,
+  UpdateNodeItemGradeSettingsInput,
 } from './node.service';
 
 export const createNodeHandler = catchAsync(
@@ -43,5 +46,18 @@ export const deleteNodeHandler = catchAsync(
     const { nodeId } = req.params as { nodeId: string };
     await deleteNode(nodeId);
     sendSuccess(res, { message: 'Node deleted' });
+  }
+);
+
+// PATCH /api/dashboard/nodes/:nodeId/items/:itemId/grade-settings — responds with the item's
+// fully-resolved grade settings (never partial/undefined), not the whole node.
+export const updateNodeItemGradeSettingsHandler = catchAsync(
+  async (req: Request, res: Response): Promise<void> => {
+    const { nodeId, itemId } = req.params as { nodeId: string; itemId: string };
+    const input = req.body as UpdateNodeItemGradeSettingsInput;
+    const node = await updateNodeItemGradeSettings(nodeId, itemId, input);
+    const ref = node.items.find((i) => i.itemId.toString() === itemId);
+    if (!ref) throw new AppError('Item not found on this node', 404);
+    sendSuccess(res, resolveGradeSettings(ref.passingScore, ref.starThresholds));
   }
 );

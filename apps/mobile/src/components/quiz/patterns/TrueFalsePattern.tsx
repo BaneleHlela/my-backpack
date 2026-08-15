@@ -39,6 +39,12 @@ export const TrueFalsePattern = forwardRef(function TrueFalsePattern(
 
   useImperativeHandle(ref, () => ({ submit }));
 
+  // Reset per-question state whenever a new question loads — previously the prior selection
+  // carried over when the next question was also a true/false type.
+  useEffect(() => {
+    setSelected(null);
+  }, [content]);
+
   useEffect(() => {
     onReadyChange?.(selected !== null && !disabled);
     // eslint-disable-next-line react-hooks/exhaustive-deps

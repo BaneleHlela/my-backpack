@@ -173,6 +173,7 @@ export default function LessonEditorPage() {
 
   const [title, setTitle] = useState('');
   const [resources, setResources] = useState<WorkingResource[]>([]);
+  const [requireVideoWatch, setRequireVideoWatch] = useState(true);
   const [isTypeChooserOpen, setIsTypeChooserOpen] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
 
@@ -184,6 +185,7 @@ export default function LessonEditorPage() {
     if (!currentLesson) return;
     setTitle(currentLesson.title);
     setResources(currentLesson.resources.map((r) => ({ ...r, id: makeId() })));
+    setRequireVideoWatch(currentLesson.requireVideoWatch ?? true);
   }, [currentLesson]);
 
   if (isLoading && !currentLesson) {
@@ -196,12 +198,16 @@ export default function LessonEditorPage() {
 
   if (!currentLesson || !lessonId) return null;
 
+  const hasVideoResource = resources.some((r) => r.type === 'video');
+
   const handleSave = async () => {
     const payload: IResource[] = resources.map(({ id: _id, ...rest }, idx) => ({
       ...rest,
       position: idx + 1,
     }));
-    const result = await dispatch(updateLesson({ lessonId, input: { title: title.trim(), resources: payload } }));
+    const result = await dispatch(
+      updateLesson({ lessonId, input: { title: title.trim(), resources: payload, requireVideoWatch } })
+    );
     if (updateLesson.fulfilled.match(result)) {
       setJustSaved(true);
       setTimeout(() => setJustSaved(false), 2000);
@@ -280,6 +286,26 @@ export default function LessonEditorPage() {
           )}
         />
       </div>
+
+      {hasVideoResource && (
+        <label className="flex items-start gap-2.5 bg-white/30 backdrop-blur-sm rounded-2xl border border-white/40 p-3.5 mb-6 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={requireVideoWatch}
+            onChange={(e) => setRequireVideoWatch(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span className="text-sm text-gray-700">
+            <span className="font-medium">Require watching the video to complete</span>
+            <br />
+            <span className="text-xs text-gray-500">
+              When checked (default), "Mark As Completed" is hidden until every video on this
+              lesson has been watched, then completes automatically. Unchecked restores a
+              plain, always-tappable completion button.
+            </span>
+          </span>
+        </label>
+      )}
 
       <div className="flex justify-end items-center gap-3">
         {justSaved && <span className="text-xs text-green-600">Saved</span>}

@@ -11,15 +11,16 @@ import { IRoadmapNodeDocument, NodeItemType } from '../../models/learning/roadma
 import { ILessonDocument } from '../../models/learning/lesson.model';
 import { IQuizSessionDocument } from '../../models/learning/quizSession.model';
 import { IQuestionDocument } from '../../models/apps/language/vocabulary/question.model';
+import { IAssignedPlayMode } from '../../models/learning/quiz.model';
 
 export interface QuizItemSummary {
   _id: Types.ObjectId;
   title: string;
   questionCount: number;
-  // Mirrors Quiz.allowPlayModes — see quiz.model.ts. Kept in sync with
+  // Mirrors Quiz.assignedPlayMode — see quiz.model.ts. Kept in sync with
   // packages/shared/types/roadmap.ts's IQuizItemSummary, which this backend-local type
   // otherwise duplicates rather than importing.
-  allowPlayModes: boolean;
+  assignedPlayMode: IAssignedPlayMode | null;
 }
 
 export interface ResolvedLessonItem {

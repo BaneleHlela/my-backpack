@@ -306,6 +306,7 @@ export async function createQuizSession(
   const session = new QuizSession({
     profileId,
     miniAppId: quiz.miniAppId,
+    quizId: quiz._id,
     status: 'active',
     questionIds,
     settings,
@@ -710,4 +711,87 @@ export async function getSessionState(
       currentStreak,
     },
   };
+}
+
+export interface SessionReviewItem {
+  questionId: Types.ObjectId;
+  type: QuestionType;
+  content: IQuestionContent;
+  maxPoints: number;
+  attempted: boolean;
+  rawResponse: string | null;
+  selectedOptionIndex?: number;
+  isCorrect: boolean | null;
+  pointsAwarded: number;
+  wasSkipped: boolean;
+  wasTimedOut: boolean;
+  answeredAt: Date | null;
+  timeToAnswerMs: number | null;
+}
+
+export interface SessionReviewResult {
+  session: SessionSummary & { quizId?: Types.ObjectId };
+  items: SessionReviewItem[];
+}
+
+// Reconstructs a full per-question breakdown for a persisted (completed/abandoned) session —
+// every question in the session's authored order, zipped with the AnswerRecord for it if one
+// exists. A question the learner never reached (e.g. an abandoned session) comes back with
+// attempted: false rather than being omitted, so the review UI can still show "not attempted".
+export async function getSessionReview(
+  sessionId: string,
+  profileId: string
+): Promise<SessionReviewResult> {
+  const session = await QuizSession.findOne({ _id: sessionId, profileId });
+  if (!session) throw new Error('Session not found');
+
+  const [answerRecords, questions] = await Promise.all([
+    AnswerRecord.find({ sessionId, profileId }).lean(),
+    Question.find({ _id: { $in: session.questionIds } }).lean(),
+  ]);
+
+  const answerByQuestionId = new Map(answerRecords.map((a) => [a.questionId.toString(), a]));
+  const questionById = new Map(questions.map((q) => [q._id.toString(), q]));
+
+  const items: SessionReviewItem[] = session.questionIds
+    .map((qId): SessionReviewItem | null => {
+      const question = questionById.get(qId.toString());
+      if (!question) return null;
+
+      const answer = answerByQuestionId.get(qId.toString());
+      return {
+        questionId: question._id as Types.ObjectId,
+        type: question.type,
+        content: question.content as IQuestionContent,
+        maxPoints: question.maxPoints,
+        attempted: !!answer,
+        rawResponse: answer?.rawResponse ?? null,
+        selectedOptionIndex: answer?.selectedOptionIndex,
+        isCorrect: answer ? answer.isCorrect : null,
+        pointsAwarded: answer?.pointsAwarded ?? 0,
+        wasSkipped: answer?.wasSkipped ?? false,
+        wasTimedOut: answer?.wasTimedOut ?? false,
+        answeredAt: answer?.answeredAt ?? null,
+        timeToAnswerMs: answer?.timeToAnswerMs ?? null,
+      };
+    })
+    .filter((i): i is SessionReviewItem => i !== null);
+
+  const sessionObj = session.toObject() as {
+    _id: Types.ObjectId;
+    profileId: Types.ObjectId;
+    miniAppId: Types.ObjectId;
+    quizId?: Types.ObjectId;
+    status: SessionStatus;
+    questionIds: Types.ObjectId[];
+    settings: ISessionSettings;
+    results?: ISessionResults;
+    startedAt: Date;
+    completedAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+  };
+  const { questionIds: _qs, ...sessionSummary } = sessionObj;
+
+  return { session: sessionSummary, items };
 }

@@ -33,7 +33,7 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Lightbulb, Volume2 } from 'lucide-react-native';
-import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
+import { ASSETS, darkColors, lightColors, borderWidth, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
@@ -319,9 +319,9 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
     <View style={styles.container}>
       {promptText ? (
         <View style={styles.promptRow}>
-          {content.avatar?.dialogue && promptAvatarUrl ? (
+          {/* {content.avatar?.dialogue && promptAvatarUrl ? (
             <Image source={{ uri: promptAvatarUrl }} style={styles.promptAvatar} resizeMode="contain" />
-          ) : null}
+          ) : null} */}
 
           <View style={[styles.promptBubble, isChild && styles.promptBubbleChild]}>
             <Text style={[styles.promptText, isChild && styles.promptTextChild]}>{promptText}</Text>
@@ -409,15 +409,22 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
   dragAreaBackground: {
     flex: 1,
+    borderRadius: radii.md,
+    overflow: 'hidden',
   },
   container: {
     flex: 1,
     gap: spacing.md,
-    padding: spacing.md,
+    padding: spacing.sm,
+    overflow: 'hidden',
+    borderColor: colors.primary.dark,
+    borderWidth: borderWidth.lg,
+    borderRadius: radii.md,
   },
   promptRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    justifyContent: 'center',
     gap: spacing.sm,
   },
   promptAvatar: {
@@ -428,22 +435,24 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     flex: 1,
     backgroundColor: '#fff',
     borderRadius: radii.lg,
-    borderWidth: 2,
+    borderWidth: borderWidth.lg,
     borderColor: colors.primary.light,
-    padding: spacing.sm,
+    padding: spacing.md,
   },
   promptBubbleChild: {
     padding: spacing.md,
     borderWidth: 3,
   },
   promptText: {
-    fontSize: typography.body,
-    color: colors.text.primary,
+    fontSize: typography.heading,
+    color: lightColors.text.primary,
+    fontWeight: '700',
   },
   promptTextChild: {
     fontSize: typography.headingLg,
     fontWeight: '700',
     textAlign: 'center',
+    color: lightColors.text.primary,
   },
   promptButtons: {
     gap: spacing.xs,
@@ -455,6 +464,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.warning.light,
+    borderWidth: borderWidth.lg,
+    borderColor: colors.primary.light,
   },
   iconButtonDisabled: {
     opacity: 0.4,
@@ -498,14 +509,15 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   },
   dropZone: {
     flex: 1,
-    minHeight: 140,
     borderRadius: radii.lg,
-    borderWidth: 2,
+    borderWidth: borderWidth.lg,
     borderStyle: 'dashed',
     borderColor: colors.surface.border,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    aspectRatio: 2 / 1,
+    maxWidth: '100%',
   },
   dropZoneChild: {
     borderWidth: 3,

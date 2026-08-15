@@ -11,6 +11,7 @@ import { removeNodeItem } from './node.service';
 export interface CreateLessonInput {
   title: string;
   resources: IResource[];
+  requireVideoWatch?: boolean;
 }
 
 export async function createLesson(nodeId: string, input: CreateLessonInput): Promise<ILessonDocument> {
@@ -25,6 +26,7 @@ export async function createLesson(nodeId: string, input: CreateLessonInput): Pr
     position,
     title: input.title,
     resources: input.resources ?? [],
+    requireVideoWatch: input.requireVideoWatch ?? true,
   });
 
   await RoadmapNode.findByIdAndUpdate(node._id, {
@@ -37,6 +39,7 @@ export async function createLesson(nodeId: string, input: CreateLessonInput): Pr
 export interface UpdateLessonInput {
   title?: string;
   resources?: IResource[];
+  requireVideoWatch?: boolean;
 }
 
 export async function updateLesson(lessonId: string, input: UpdateLessonInput): Promise<ILessonDocument> {
@@ -45,6 +48,7 @@ export async function updateLesson(lessonId: string, input: UpdateLessonInput): 
 
   if (input.title !== undefined) lesson.title = input.title;
   if (input.resources !== undefined) lesson.resources = input.resources;
+  if (input.requireVideoWatch !== undefined) lesson.requireVideoWatch = input.requireVideoWatch;
 
   await lesson.save();
   return lesson;

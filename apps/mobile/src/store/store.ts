@@ -4,6 +4,7 @@ import contentReducer from '../features/content/contentSlice';
 import vocabReducer from '../features/vocab/vocabSlice';
 import roadmapReducer from '../features/roadmap/roadmapSlice';
 import quizReducer from '../features/quiz/quizSlice';
+import quizHistoryReducer from '../features/quizHistory/quizHistorySlice';
 import aiChatReducer from '../features/aiChat/aiChatSlice';
 
 export const store = configureStore({
@@ -13,6 +14,7 @@ export const store = configureStore({
     vocab: vocabReducer,
     roadmap: roadmapReducer,
     quiz: quizReducer,
+    quizHistory: quizHistoryReducer,
     aiChat: aiChatReducer,
   },
 });

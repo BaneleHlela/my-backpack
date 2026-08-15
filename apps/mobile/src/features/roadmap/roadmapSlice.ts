@@ -7,13 +7,23 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { AxiosError } from 'axios';
-import type { ApiResponse, RoadmapWithProgress, IRoadmapNode, ILesson } from '@my-backpack/shared';
+import type {
+  ApiResponse,
+  RoadmapWithProgress,
+  IRoadmapNode,
+  ILesson,
+  IItemProgressEntry,
+} from '@my-backpack/shared';
 import api from '../../lib/api';
 
 interface RoadmapState {
   currentRoadmap: RoadmapWithProgress | null;
   currentNode: IRoadmapNode | null;
   currentLesson: ILesson | null;
+  // Video-watch tracking (August 2026) — lets LessonModal tell an already-`completed` lesson
+  // apart from a fresh one on load, so it doesn't re-gate a revisit behind watching the video
+  // again. Cleared alongside currentLesson, same lifecycle.
+  currentLessonProgress: IItemProgressEntry | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -22,6 +32,7 @@ const initialState: RoadmapState = {
   currentRoadmap: null,
   currentNode: null,
   currentLesson: null,
+  currentLessonProgress: null,
   isLoading: false,
   error: null,
 };
@@ -47,8 +58,10 @@ export const fetchLesson = createAsyncThunk(
   'roadmap/fetchLesson',
   async (lessonId: string, { rejectWithValue }) => {
     try {
-      const res = await api.get<ApiResponse<{ lesson: ILesson }>>(`/roadmap/lesson/${lessonId}`);
-      return res.data.data.lesson;
+      const res = await api.get<ApiResponse<{ lesson: ILesson; progress: IItemProgressEntry | null }>>(
+        `/roadmap/lesson/${lessonId}`
+      );
+      return { lesson: res.data.data.lesson, progress: res.data.data.progress };
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error, 'Failed to fetch lesson'));
     }
@@ -66,9 +79,11 @@ const roadmapSlice = createSlice({
       state.currentRoadmap = null;
       state.currentNode = null;
       state.currentLesson = null;
+      state.currentLessonProgress = null;
     },
     clearLesson(state) {
       state.currentLesson = null;
+      state.currentLessonProgress = null;
     },
   },
   extraReducers: (builder) => {
@@ -91,7 +106,8 @@ const roadmapSlice = createSlice({
       })
       .addCase(fetchLesson.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.currentLesson = action.payload;
+        state.currentLesson = action.payload.lesson;
+        state.currentLessonProgress = action.payload.progress;
       })
       .addCase(fetchLesson.rejected, (state, action) => {
         state.isLoading = false;

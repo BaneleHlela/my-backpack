@@ -125,6 +125,27 @@ export const startQuizItemSession = createAsyncThunk(
   }
 );
 
+// Starts a quiz session directly from a quizId, bypassing the mini-app's default-quiz lookup —
+// used by Quiz History's retake flow, where the quiz being retaken may not be the mini-app's
+// default (e.g. a roadmap Topic quiz, or an older attempt whose quiz has since changed).
+export const startSessionByQuizId = createAsyncThunk(
+  'quiz/startSessionByQuizId',
+  async (
+    { quizId, settings }: { quizId: string; settings?: Partial<QuizSettings> },
+    { rejectWithValue }
+  ) => {
+    try {
+      const res = await axiosInstance.post('/quiz/session', { quizId, settings });
+      return res.data.data as {
+        session: { _id: string; questionIds: string[]; settings: { feedbackMode: FeedbackMode } };
+        firstQuestion: IQuestion | null;
+      };
+    } catch (err) {
+      return rejectWithValue(extractErrorMessage(err, 'Failed to start quiz'));
+    }
+  }
+);
+
 export const submitAnswer = createAsyncThunk(
   'quiz/submitAnswer',
   async (
@@ -256,6 +277,27 @@ const quizSlice = createSlice({
         state.status = action.payload.firstQuestion ? 'active' : 'completed';
       })
       .addCase(startQuizItemSession.rejected, (state, action) => {
+        state.status = 'error';
+        state.error = action.payload as string;
+      })
+      // startSessionByQuizId
+      .addCase(startSessionByQuizId.pending, (state) => {
+        state.status = 'starting';
+        state.error = null;
+      })
+      .addCase(startSessionByQuizId.fulfilled, (state, action) => {
+        state.sessionId = action.payload.session._id;
+        state.currentQuestion = action.payload.firstQuestion;
+        state.feedbackMode = action.payload.session.settings.feedbackMode;
+        state.answeredQuestions = [];
+        state.progress = {
+          answered: 0,
+          total: action.payload.session.questionIds.length,
+          correct: 0,
+        };
+        state.status = action.payload.firstQuestion ? 'active' : 'completed';
+      })
+      .addCase(startSessionByQuizId.rejected, (state, action) => {
         state.status = 'error';
         state.error = action.payload as string;
       })

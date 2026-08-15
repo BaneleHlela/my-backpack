@@ -368,8 +368,11 @@ button. All 6 vowels dnd_single quiz variants (isiZulu + English) set this to `t
 `shuffleDraggables` — DnD only: randomizes `content.draggables`' pool display order once per
 question load (`DndSinglePattern` shuffles client-side via `useState` initializer, reshuffled
 in the same effect that resets other per-question state — not re-shuffled on every re-render).
-Defaults to `false` (authored order). Set per-question via `content.defaultHelpers` — no
-teacher-facing toggle UI exists yet (schema + logic only).
+Defaults to `false` (authored order). Set per-question via `content.defaultHelpers` — editable
+from Content Studio's `QuestionEditorPage.tsx` (a checkbox in the DnD fields section; the page
+round-trips the question's full `defaultHelpers` object, not just this one field, so saving
+never silently drops other helper overrides a seed script may have set, e.g.
+`retryUntilCorrect`).
 
 **DnD answer capture:**
 `rawResponse = JSON.stringify({ placements: [{ draggableId, dropZoneId }] })`
@@ -418,7 +421,7 @@ answeredAt, timeToAnswerMs, wasTimedOut, attemptNumber, wasSkipped,
 confidenceBefore, confidenceAfter.
 
 ### QuizSession
-Groups answer records. Fields: profileId, miniAppId, status 
+Groups answer records. Fields: profileId, miniAppId, quizId (optional — see below), status
 ('active' | 'completed' | 'abandoned'), questionIds[], settings 
 { questionCount, timeLimit, questionTypes, bucketFilter, feedbackMode,
 shuffleQuestions }, results 
@@ -435,12 +438,21 @@ the `mode: 'dynamic'` adaptive-priority selection is resolved. No teacher-facing
 exists yet — schema + logic only, set directly on `Quiz.settings.shuffleQuestions`.
 `mode: 'fixed'` question order is preserved by mapping over `quiz.questionIds` rather than
 trusting `Question.find({ _id: { $in } })`'s return order, which MongoDB does not guarantee.
+`quizId` (added August 2026, backs Quiz History — see the API Routes Reference and Frontend Web
+entries below) traces a session back to the `Quiz` it was created from; optional since sessions
+created before this field existed have it undefined. Set unconditionally in `createQuizSession`,
+so every entry point (a roadmap quiz item's `/start`, Dictionary/pool's default-quiz lookup, and
+a direct retake by quizId) populates it the same way.
 
 ### Lesson
 A pure study-material container — one 'lesson'-type item inside a
 RoadmapNode.items[]. Fields: nodeId, roadmapId (denormalized),
 position (1-based within node), title, resources[] (ordered — see
-IResource below), isActive.
+IResource below), requireVideoWatch (boolean, default true — mobile-only
+video-watch completion gating, teacher-configurable per lesson from
+Content Studio's LessonEditorPage; no effect on a lesson with no 'video'
+resource either way — see mobile-architecture.md's "Video-watch tracking
+→ lesson completion gating" section), isActive.
 
 Quizzes are NOT wrapped in a Lesson — a 'quiz'-type item on
 RoadmapNode.items[] references a Quiz document directly (itemId =
@@ -470,15 +482,16 @@ A single step on a roadmap path — "Topic" in the UI/dashboard vocabulary. Fiel
 title, slug (unique per roadmapId), description, position, type
 ('lesson' | 'checkpoint' | 'practice'), curriculumTags 
 [{ curriculum, gradeLevel }], items [{ itemType: 'lesson' | 'quiz' | 'project', itemId,
-position, passingScore? }], unlockRequires[], linkedCourseIds[] (reserved for the deferred
-multi-provider-course feature — always empty today), rewards { xp, peanuts, badge? },
+position, passingScore?, starThresholds? }], unlockRequires[], linkedCourseIds[] (reserved for
+the deferred multi-provider-course feature — always empty today), rewards { xp, peanuts, badge? },
 isActive.
 
 `items[]` is heterogeneous and is the canonical ordering array — replaces
 the old `lessons[]`. `itemType: 'lesson'` → itemId points to a Lesson
 document (pure study material). `itemType: 'quiz'` → itemId points to a
-Quiz document directly (no wrapper Lesson); `passingScore` (0–1) lives on
-the item ref itself, not on the Quiz (a Quiz can be reused outside
+Quiz document directly (no wrapper Lesson); `passingScore` (0–1, minimum score ratio to pass)
+and `starThresholds` ([{ minScore, stars }], added August 2026 — see "Quiz grade settings"
+below) both live on the item ref itself, not on the Quiz (a Quiz can be reused outside
 roadmaps). `itemType` is a plain string union, extensible later to
 'resource' | 'notes' | 'chatbot' etc — not built yet. `'project'` (added August 2026, Phase B
 of the Course & Topic redesign) is reserved only — no Project model, resolution, or progress
@@ -503,7 +516,9 @@ or a Quiz. First item of a node is set to 'unlocked' when the node is
 unlocked. Subsequent items unlock when the previous item is completed.
 A 'quiz' item with `passingScore: 0` always passes (reproduces the old
 "practice lesson" auto-pass behavior); stars are awarded when the last
-item in `items[]` (by position) is passed.
+item in `items[]` (by position) is passed, using that item ref's
+`starThresholds` (teacher-configured via Content Studio's Grade Settings —
+see `RoadmapNode.items[]` below and `apps/api/src/utils/gradeSettings.ts`).
 
 ### ProfileSubjectEnrollment
 One per profile per subject. Fields: profileId, subjectId, fieldId 
@@ -671,12 +686,15 @@ GET    /api/vocab/dictionary/alphabet?miniAppId=
 
 ### Quiz
 ```
-POST  /api/quiz/session
+POST  /api/quiz/session                       — { miniAppId | quizId, settings? }; quizId starts/retakes that exact quiz directly, bypassing the miniAppId isDefault lookup
 GET   /api/quiz/session/:sessionId
 POST  /api/quiz/session/:sessionId/answer
 PATCH /api/quiz/session/:sessionId/complete
 PATCH /api/quiz/session/:sessionId/abandon
 GET   /api/quiz/session/:sessionId/results
+GET   /api/quiz/session/:sessionId/review     — full per-question breakdown (question + given answer + correct answer) for a persisted session, reconstructed from AnswerRecord + Question; enriched with the same course/topic context as one quiz-history entry (see below)
+GET   /api/quiz/history?contextId=&nodeId=&status=&page=&limit=  — Quiz History list, paginated, filterable by course/mini-app (contextId) and Topic (nodeId)
+GET   /api/quiz/history/filters               — course/topic filter dropdown options, scoped to what the profile has actually attempted
 ```
 
 ### Roadmap
@@ -730,13 +748,14 @@ PATCH  /api/dashboard/courses/:courseId/nodes/reorder        — { nodeIds: stri
 
 PATCH  /api/dashboard/nodes/:nodeId                          — title/description/curriculumTags/unlockRequires/rewards only
 DELETE /api/dashboard/nodes/:nodeId                          — soft delete; removes its entry from Roadmap.nodes[], renumbers the rest
-POST   /api/dashboard/nodes/:nodeId/lessons                  — { title, resources: IResource[] }
+POST   /api/dashboard/nodes/:nodeId/lessons                  — { title, resources: IResource[], requireVideoWatch? }
 POST   /api/dashboard/nodes/:nodeId/quizzes                  — { title, settings? }; always mode:'fixed', miniAppId: <course._id>
+PATCH  /api/dashboard/nodes/:nodeId/items/:itemId/grade-settings — { passingScore?, starThresholds? }; quiz items only, responds with the item's fully-resolved grade settings (see gradeSettings.ts)
 
-PATCH  /api/dashboard/lessons/:lessonId                       — title/resources only
+PATCH  /api/dashboard/lessons/:lessonId                       — title/resources/requireVideoWatch only
 DELETE /api/dashboard/lessons/:lessonId                       — soft delete; removes its entry from the parent node's items[], renumbers the rest
 
-GET    /api/dashboard/quizzes/:quizId                          — direct Quiz.findById, no course/miniAppId dependency
+GET    /api/dashboard/quizzes/:quizId                          — direct Quiz.findById, no course/miniAppId dependency; response is merged with the owning node item's gradeSettings/nodeId (see quiz.controller.ts's getQuizHandler)
 PATCH  /api/dashboard/quizzes/:quizId                          — title/settings only (not mode, not miniAppId)
 PATCH  /api/dashboard/quizzes/:quizId/questions                — { questionIds: string[] } full ordered replacement; keeps settings.questionCount in sync
 DELETE /api/dashboard/quizzes/:quizId                          — soft delete; removes its entry from the parent node's items[], renumbers the rest
@@ -1050,7 +1069,10 @@ my-backpack/
 - [x] Quiz session service (create, answer capture, complete, abandon)
 - [x] Shuffle support — `IQuestionHelpers.shuffleDraggables` (per-question, DnD pool order) and
       `Quiz.settings.shuffleQuestions`/`ISessionSettings.shuffleQuestions` (per-quiz, question
-      order at session-start); schema + logic only, no teacher-facing toggle UI yet
+      order at session-start); both have teacher-facing checkboxes in Content Studio
+      (`QuestionEditorPage.tsx` for `shuffleDraggables`, `QuizEditorPage.tsx` for
+      `shuffleQuestions`, August 2026). MCQ option order is separate from both of these — it's
+      always shuffled client-side now (not a toggle, see the Frontend Web/Mobile entries below)
 - [x] DnD answer evaluation (evaluateDnDAnswer in quizSession.service.ts)
 - [x] Answer record model (full capture including confidenceBefore/After)
 - [x] Roadmap system (Roadmap, RoadmapNode, ProfileRoadmapProgress models)
@@ -1148,9 +1170,11 @@ my-backpack/
       `quizSession.service.ts`). One `isDefault:true, mode:'pool'` Quiz is now auto-created per
       Course (`studio/course.service.ts`'s `createCourse`); existing courses backfilled via
       `seed/migrations/2026-08-quiz-modes-pool.ts`. Backs mobile's Quiz Modes "Game Quizzes".
-      Also added: `Quiz.allowPlayModes` (default `false`) — gates whether a `mode:'fixed'`
-      Topic quiz shows the mode grid at all; teacher-set from Content Studio, not read for
-      `'dynamic'`/`'pool'` quizzes. Full detail under Frontend Mobile's "Quiz Modes" entry below.
+      Also added: `Quiz.assignedPlayMode` (default `null`, superseded a since-removed
+      `allowPlayModes: boolean` — see the redesign entry below) — a teacher's fixed assignment
+      of exactly one Quiz Mode + its settings to a `mode:'fixed'` Topic quiz, set from Content
+      Studio; not read for `'dynamic'`/`'pool'` quizzes. Full detail under Frontend Mobile's
+      "Quiz Modes" entry below.
 - [x] Course Chat — AI Helper backend (August 2026) — new `AiChatMessage` model
       (`models/learning/`) and `modules/aiChat/` (routes/controller/service/types, mounted at
       `/api/ai-chat`, same thin-controller pattern as `modules/vocab/`). New
@@ -1167,6 +1191,61 @@ my-backpack/
       call succeeds — never an orphaned user message with no reply. This is the AI Helper half
       of Course Chat; the Classmates & Teacher half is UI-only (no backend) — see
       [docs/product/course-chat-vision.md](docs/product/course-chat-vision.md) for why.
+- [x] Quiz grade settings (August 2026) — a quiz item's `passingScore` (existing field, was
+      previously seed-only with no authoring UI) and a new `starThresholds`
+      (`{ minScore: number; stars: number }[]`, both on `INodeItemRef`/`nodeItemRefSchema` in
+      `roadmapNode.model.ts`, mirrored in `packages/shared/types/roadmap.ts`) are now
+      teacher-editable from Content Studio's `QuizEditorPage.tsx` ("Grade Settings" section: a
+      pass-percentage field + three star-tier percentage fields for 1★/2★/3★). New
+      `apps/api/src/utils/gradeSettings.ts` centralizes the fallback scale
+      (`defaultStarThresholds`, reproducing the old hardcoded 100%→3★/85%→2★/passingScore→1★
+      behavior exactly when a quiz item has no custom thresholds — no data migration needed) and
+      `computeStars(scoreRatio, passingScore, starThresholds)`, which
+      `roadmap.service.ts`'s `completeQuizItem` now calls instead of the old inline if/else
+      chain. New write endpoint `PATCH /api/dashboard/nodes/:nodeId/items/:itemId/grade-settings`
+      (`node.service.ts`'s `updateNodeItemGradeSettings`, quiz items only — validates
+      `passingScore`/`minScore` are 0–1 and `stars` is a 0–3 integer) responds with the item's
+      fully-resolved settings, not the whole node. Read side: rather than a second endpoint,
+      `GET /api/dashboard/quizzes/:quizId` (`quiz.controller.ts`'s `getQuizHandler`) now merges
+      in `nodeId`/`gradeSettings` by looking up the owning node via the existing
+      `findNodeByItemId` helper — QuizEditorPage already fetches the quiz by id, so this avoids
+      a second round-trip. Frontend state: `studioSlice.ts`'s `currentQuiz` is now `IQuizDetail`
+      (`IQuiz & { nodeId, gradeSettings }`); `updateQuiz`/`updateQuizQuestions`'s fulfilled
+      reducers merge onto the existing `currentQuiz` object (their PATCH responses don't include
+      `nodeId`/`gradeSettings`) rather than replacing it outright, or the Grade Settings section's
+      prefill would silently blank out on every ordinary "Save settings" click. Stars are still
+      only awarded when the node's last item is passed (unchanged structural rule) — a custom
+      scale whose lowest tier sits above `passingScore` can now award 0 stars on a passing score
+      that doesn't clear it, a deliberate widening from the old "always at least 1 star if
+      passed" guarantee, since that's what a teacher who sets it that way is asking for.
+- [x] Quiz History backend (August 2026) — a profile's past quiz attempts were previously
+      unreconstructable server-side: `QuizSession` had no way to trace back to the `Quiz`/Topic it
+      came from, and no endpoint could rebuild a "question + given answer + correct answer"
+      breakdown for a *persisted* session (the existing per-question breakdown was built entirely
+      from ephemeral in-session Redux state — see the Frontend Web entry below). `QuizSession`
+      gained an optional `quizId` field (see the model entry above), set unconditionally in
+      `createQuizSession` so every entry point populates it; new
+      `apps/api/src/modules/quiz/quizHistory.service.ts` (kept separate from
+      `quizSession.service.ts`'s lifecycle logic and `quiz.service.ts`'s Quiz-definition reads,
+      since it's the only place that needs to join across Course/MiniApp/Subject/Field/
+      RoadmapNode) exports `listQuizHistory` (paginated, filterable by `contextId` — a Course or
+      MiniApp `_id` — and `nodeId`/Topic), `getHistoryFilterOptions` (course/topic dropdown
+      options scoped to what the profile has actually attempted, via `QuizSession.distinct`), and
+      `getEntryContext` (the single-session version of the same enrichment, used to attach
+      course/topic context to a review response). New `getSessionReview` in
+      `quizSession.service.ts` (alongside `getSessionResults`/`getSessionState`) zips
+      `AnswerRecord`+`Question` docs in the session's authored `questionIds` order, marking a
+      question `attempted: false` if the learner never reached it (e.g. an abandoned session) —
+      the review data itself stays in the lifecycle file; only the course/topic enrichment lives
+      in `quizHistory.service.ts`, merged in in the controller (same "controller assembles the
+      final response shape" pattern as `studio/quiz.controller.ts`'s `getQuizHandler`). Resolving
+      a `miniAppId` to a Course vs. a MiniApp (no existing helper did this) tries `Course.findById`
+      first, falling back to `MiniApp` — the same "Course id space, no MiniApp document for
+      roadmap content" convention used throughout. Retake support piggybacks on the existing
+      `POST /api/quiz/session`: it now accepts an optional `quizId` that starts/retakes that exact
+      quiz directly, skipping the `miniAppId` + `isDefault` lookup the endpoint previously
+      required (which only ever resolved a mini-app's *default* quiz, not an arbitrary roadmap
+      Topic quiz). See the API Routes Reference above for the three new/changed routes.
 - [ ] XP and peanuts reward system (deferred)
 - [ ] Test readiness scoring (deferred)
 - [ ] Book/PDF upload pipeline (deferred)
@@ -1291,6 +1370,71 @@ my-backpack/
       `currentCourse`, with the same direct-link fallback fetch `CoursePage.tsx` already uses)
       rather than receiving it via route params, since React Router's `:courseSlug` segment
       doesn't carry extra data the way Expo Router's `router.push({ params })` does.
+- [x] Quiz-taking bug fixes + Content Studio shuffle toggles (August 2026) — five small,
+      independent fixes to the quiz-taking flow, shipped together:
+      (1) **Stale selected-answer bug** — `McqPattern.tsx`/`TrueFalsePattern.tsx` never reset
+      their `selected` state between questions (unlike `TypedInputPattern.tsx`/DnD patterns,
+      which already did via a `useEffect` keyed on `content`); tapping into a second
+      same-type question showed the previous question's selection still highlighted. Both now
+      reset on `content` change, matching the existing pattern elsewhere.
+      (2) **MCQ options always shuffled client-side** — `McqPattern.tsx` shuffles
+      `content.options` once per question load (same local-per-file Fisher-Yates convention as
+      `DndSinglePattern.tsx`'s `shuffle()`); safe because grading matches `rawResponse` text
+      against `content.correctAnswer` (`quizSession.service.ts`), never option index —
+      `selectedOptionIndex` sent to the backend just describes the shuffled position the
+      learner tapped, for analytics only.
+      (3) **Topic name during a roadmap quiz** — `QuizItemPlayerPage.tsx`'s `QuizPageShell`
+      previously had no title at all; now shows the RoadmapNode ("Topic") title above the quiz,
+      read from `state.roadmap.currentRoadmap` (already populated by `CoursePage` before
+      navigating here — no extra fetch). Mobile's `QuizSessionScreen.tsx` header previously
+      showed the humanized **course** slug for a roadmap-item session — now prefers the actual
+      topic title from the same Redux source, falling back to the humanized course slug only
+      when `currentRoadmap` isn't loaded (e.g. a cold deep link).
+      (4) **`AnswerFeedback` centered** — both apps' modal restructured from an icon-left/
+      text-left row into a centered column (icon → headline → points → feedback text →
+      correct-answer → explanation, all centered); the "Next question"/"Finish" button also got
+      explicit center text-alignment. Mobile's `SpokenText` usages needed a `containerStyle`
+      override (`spokenRow: { width: '100%', justifyContent: 'center' }`) since its internal
+      text element uses `flex: 1` and otherwise wouldn't get a definite width to center within
+      once pulled out of the old `flex: 1` sidecar column.
+      (5) **Content Studio shuffle toggles** — `QuestionEditorPage.tsx` gained a
+      "Shuffle draggable pool order" checkbox (DnD types only) that round-trips the question's
+      full `content.defaultHelpers` object, not just `shuffleDraggables` — a plain question-editor
+      edit no longer silently drops other helper overrides a seed script set (e.g.
+      `retryUntilCorrect`). `Quiz.settings.shuffleQuestions`'s checkbox already existed on
+      `QuizEditorPage.tsx` prior to this pass.
+- [x] Quiz History (web only, August 2026) — new "Quiz History" button on both `CoursePage.tsx`
+      (chip under the "Course Chat" button, `?contextId=<course._id>`) and
+      `DictionaryPage.tsx` (third chip in the existing My Bucket/Take Quiz row,
+      `?contextId=<miniApp._id>`), opening a global (not course/subject-nested) screen at
+      `/quiz-history` covering **every** quiz type — roadmap Topic quizzes and Dictionary
+      quizzes together, per the product decision to keep history in one place rather than split
+      per-context. New `features/quizHistory/quizHistorySlice.ts` (list/filters/pagination +
+      a nested per-session `review` slot) and `features/quizHistory/quizHistoryLinks.ts`
+      (`getRetakePath`, shared by the list and the review screen since both carry the same
+      course/topic context shape). Three new pages under `pages/quizHistory/`:
+      `QuizHistoryPage.tsx` (filter row styled after `BucketPage.tsx`'s status-tab + `<select>`
+      convention — Completed/Abandoned/All pills, course `<select>`, topic `<select>` scoped to
+      the selected course — entry cards with score badge, Review, and Retake, Prev/Next
+      pagination), `QuizHistoryReviewPage.tsx` (**read-only** review — every question in session
+      order with given vs. correct answer, points, explanation; the "Your answer" line is
+      skipped for DnD types, matching how `QuizResults.tsx`'s existing breakdown already treats
+      them, since a DnD `rawResponse` is a JSON placements blob, not human-readable), and
+      `QuizHistoryPlayPage.tsx` (a trimmed copy of `QuizPage.tsx`'s active-question loop, reusing
+      the same `QuestionRenderer`/`QuizProgress`/`AnswerFeedback`/`QuizResults` components, that
+      starts immediately via a new `startSessionByQuizId` thunk on `quizSlice.ts` instead of
+      showing `QuizStartScreen` — the fallback retake target for an entry with no roadmap node,
+      e.g. a course pool-mode session with no Topic, likely taken via mobile's Quiz Modes).
+      Retake deliberately does **not** introduce a fourth session-lifecycle path for the common
+      cases — a roadmap Topic quiz retakes through the existing `/subject/.../node/:nodeId/
+      quiz/:quizId` route (`QuizItemPlayerPage`, full progress/unlock tracking intact, since the
+      item is already unlocked from having been completed once) and a Dictionary quiz retakes
+      through the existing `/miniapp/.../quiz` route (`QuizPage`) — only the true fallback case
+      uses the new player. Per-attempt review is only possible at all because
+      `getSessionReview` reconstructs it server-side from persisted `AnswerRecord`+`Question`
+      docs — the live in-session breakdown (`quizSlice.ts`'s `answeredQuestions`) is ephemeral
+      Redux state, lost on navigation/refresh, and was never a source Quiz History could read
+      from. Mobile was explicitly out of scope for this pass — see the Backend entry above.
 - [ ] Profile management screens
 
 ### Frontend Mobile (apps/mobile)
@@ -1467,6 +1611,58 @@ my-backpack/
       `dnd_single` entries above). See
       [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Course &
       Topic redesign, Phase C" section for full detail.
+      **Addendum (August 2026): video-watch tracking → lesson completion gating** —
+      `LessonModal`'s "Mark As Completed" was an unconditional tap; a lesson with at least one
+      `'video'` resource now requires actually watching it first (a lesson with none is
+      unchanged). `LessonVideo.tsx` gained an optional `onWatched?: () => void`, fired at most
+      once per mount (`hasFiredRef` guard) via two new `useEventListener` (from `expo`)
+      subscriptions on top of its existing `useVideoPlayer(null, ...)`/`useEvent` setup:
+      `playToEnd` (primary signal) and `timeUpdate` (backstop, ≥90% of duration —
+      `player.timeUpdateEventInterval = 1` set once in the player's setup callback, persisting
+      across the later `player.replace(url)` call). No anti-scrub enforcement, no custom video
+      controls. `LessonModal.tsx` tracks watched state per video resource in a
+      `Set<number>` keyed by `resource.position`; once every video is watched it calls the
+      existing `handleMarkCompleted()` automatically (no tap), showing a "Watch the video to
+      continue" hint (reuses the file's existing `emptyText` style) until then, plus a 90s
+      fallback timer that reveals a manual "Continue anyway" link if a watched-event never
+      resolves. `roadmapSlice.ts`'s `fetchLesson` thunk now also threads through `progress`
+      (already returned by `getLessonWithProgress` but previously dropped) into a new sibling
+      `currentLessonProgress: IItemProgressEntry | null` field, so revisiting an
+      already-`completed` lesson skips all gating — free playback/review, no button, nothing to
+      re-watch. `ResourcesModal.tsx` (course-wide video browsing, no lessonId/completion concept)
+      needed no changes — `onWatched` is optional and that call site simply doesn't pass it. No
+      backend or shared-type changes; `apps/web`'s lesson player is untouched. Verified via
+      `tsc --noEmit` (clean) — not yet confirmed on a real device/emulator. See
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s
+      "Video-watch tracking → lesson completion gating" subsection for full detail.
+      **Second addendum (August 2026): real-device follow-up** — real-device testing of the above
+      surfaced a bug and two requests. (1) **Bug**: native `VideoView` controls (pause/resume/
+      fullscreen) were untappable during playback — `LessonVideo.tsx`'s translucent `isLoading`
+      overlay had no `pointerEvents` set and silently absorbed touches whenever `statusChange`
+      failed to reach `'readyToPlay'` (a flakiness this file's own comment already documented),
+      even though the video was visibly playing underneath it. Fixed with `pointerEvents="none"`
+      on that overlay plus a new `onFirstFrameRender` callback (a direct native "a frame actually
+      drew" signal) that permanently retires the overlay regardless of what `status` does
+      afterward; `nativeControls`/`fullscreenOptions={{ enable: true }}` are now also passed
+      explicitly (matching the library's own defaults, just documented). (2) **Watched
+      indicator**: `LessonVideo.tsx` gained a `watched?: boolean` prop showing a small green
+      `CheckCircle` badge (`pointerEvents="none"`) once a video's been watched — independent of
+      gating, so it still reflects real progress even on a lesson where gating is off. (3)
+      **Teacher opt-out**: new `Lesson.requireVideoWatch: boolean` (`lesson.model.ts` +
+      `packages/shared/types/roadmap.ts`, default `true` — Mongoose applies the default on read,
+      no backfill needed). `LessonModal`'s gating (hidden button/auto-fire/fallback link) now
+      only applies when `videoResources.length > 0 && (currentLesson?.requireVideoWatch ?? true)`;
+      unchecking it per-lesson restores the plain always-tappable button. Editable from Content
+      Studio's `LessonEditorPage.tsx` — a checkbox shown only when the draft has a `'video'`
+      resource — round-tripped through `studioSlice.ts`'s `CreateLessonInput`/`UpdateLessonInput`
+      and the matching server-side `lesson.service.ts` interfaces; `PATCH
+      /api/dashboard/lessons/:lessonId` now accepts `requireVideoWatch` alongside title/resources.
+      Deliberately opt-**out**, not opt-in (an explicit choice — see the doc link below) — every
+      pre-existing lesson with video content keeps the just-shipped gating behavior by default.
+      Verified via `tsc --noEmit` across `apps/api`/`apps/web`/`apps/mobile` (all clean) — the
+      controls fix and opt-out are not yet re-confirmed on a real device. See
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s same
+      subsection (extended) for full detail.
 - [x] Shared `Menubar` + select-profile dark-mode fix (August 2026) — `src/components/Menubar.tsx`
       (new) ports Figma's "Menubar" component (back chevron + caps label on the left, Peanuts/XP/
       profile-avatar cluster on the right — the same Figma frame Phase C's research pulled) and
@@ -1485,9 +1681,11 @@ my-backpack/
       `colors.background`. See
       [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Shared
       Menubar" section for full detail.
-- [x] Quiz Modes (August 2026) — a Quiz Mode Select screen (grid of 7 mode cards: Classic/
-      Hearts/Time Run/Streak/Perfect/Endless/Survival) sits ahead of the existing quiz-taking
-      flow for all three entry points: Dictionary's "Take Quiz", a roadmap quiz item, and the
+- [x] Quiz Modes (August 2026) — a Quiz Mode Select screen (grid of mode cards: Classic/Hearts/
+      Time Run/Streak/Perfect/Endless/Survival, later joined by an 8th, Mastery — see below)
+      sits ahead of the existing quiz-taking flow for all three entry points: Dictionary's
+      "Take Quiz", a roadmap quiz item (superseded for Topic quizzes by the teacher-assigned
+      redesign below), and the
       Course screen's "Quizzes" FAB (previously "Coming soon" — now opens a `QuizPickerModal`
       course-wide picker with two tabs: "Course Quizzes", the original per-node quiz list, and
       "Game Quizzes", the mode grid embedded directly in the tab). Shipped in two passes — the
@@ -1555,25 +1753,54 @@ my-backpack/
         question" button too (`deleteQuestion` existed in `studioSlice.ts`, previously unwired
         to any button).
       - **Correction (August 2026): Topic quizzes no longer show Quiz Mode Select by
-        default.** The original "grid always shows" decision was wrong for `mode: 'fixed'`
-        roadmap/node quizzes — a new `Quiz.allowPlayModes` field (default `false`) now gates
-        this per quiz, teacher-controlled from a checkbox on `QuizEditorPage.tsx` ("Allow Quiz
-        Modes … for this quiz on mobile"). Tapping a Topic quiz (on the path or via
-        `QuizPickerModal`'s "Course Quizzes" tab) goes straight into the ordinary session unless
-        its `allowPlayModes` is `true`, in which case it behaves exactly as before (mode grid,
-        then the chosen mode's mechanics). Carried onto `IQuizItemSummary`
-        (`packages/shared/types/roadmap.ts`) so mobile can decide the route with no extra API
-        call — `roadmap.service.ts`'s node-item resolution selects/returns it alongside
-        `questionCount`. **Not read for `mode: 'dynamic'`/`'pool'` quizzes** — Dictionary's quiz
-        and every course's auto-created practice pool always show the grid regardless, since
-        those are inherently "game" surfaces, not curated lesson content. No migration needed —
-        existing Topic quizzes simply take the schema default (`false`), which is the corrected
-        behavior. One gotcha hit while wiring this: `apps/api/src/modules/roadmap/
-        roadmap.types.ts` has its own backend-local `QuizItemSummary` duplicating the shared
-        `IQuizItemSummary` shape — both needed the field, or the object literal in
-        `roadmap.service.ts` fails to compile.
+        default** — superseded by the teacher-assigned-mode redesign directly below, which
+        replaced the `allowPlayModes: boolean` opt-in this bullet originally introduced. Left
+        here for history: the "grid always shows" decision was wrong for `mode: 'fixed'`
+        roadmap/node quizzes, so a `Quiz.allowPlayModes` field (default `false`) gated the grid
+        per quiz, teacher-controlled from a checkbox on `QuizEditorPage.tsx`.
+      - **Redesign (August 2026): teacher assigns one specific mode, learner just plays.**
+        The opt-in above still let the *learner* pick which of 7 modes to play once a teacher
+        turned the grid on; that wasn't quite what a Topic quiz needed — a teacher grading a
+        lesson wants to choose the mode too, not just whether one is offered. `Quiz.allowPlayModes`
+        was replaced outright with `Quiz.assignedPlayMode: { id, settings } | null` (default
+        `null`) — `QuizEditorPage.tsx`'s checkbox became a "Quiz Mode" dropdown (all 8 modes,
+        see the Mastery entry below) plus that mode's one settings control, sourced from a new
+        shared catalog (`packages/shared/constants/quizPlayModes.ts` — `QUIZ_PLAY_MODES`,
+        `getQuizPlayMode`, `formatModeSettingPill`, `IAssignedPlayMode`; the single source of
+        truth both `apps/web`'s dropdown and `apps/mobile`'s mode grid/settings-modal now read,
+        replacing what used to be a mobile-only, icon-bearing local file — mobile's
+        `quizPlayModes.ts` now re-exports the shared catalog and layers only
+        `lucide-react-native` icons + Expo Router param helpers on top locally). When a mode is
+        assigned, tapping the quiz on mobile (the path, `QuizPickerModal`'s "Course Quizzes"
+        tab, or the Course screen) routes straight to `/quiz/[itemId]` with that assignment
+        JSON-encoded into the same `play` param a learner-chosen mode always used
+        (`encodeAssignedPlayMode` in `quizPlayModes.ts`) — **no mode-select screen is ever shown
+        for a Topic quiz**, assigned or not. `QuizModeSelectScreen` narrowed to miniApp-only
+        (Dictionary/pool "Game Quizzes" are still learner-chosen, unchanged) and
+        `app/quiz/modes/[itemId].tsx` (the old roadmapItem wrapper route) was deleted as dead
+        code. `IQuizItemSummary` (`packages/shared/types/roadmap.ts`) carries `assignedPlayMode`
+        in place of the old boolean, populated the same way (`roadmap.service.ts`'s node-item
+        resolution). No migration needed — Mongoose returns `assignedPlayMode: null` for
+        pre-existing documents, identical in effect to the old `allowPlayModes: false` default.
+      - **New mode: Mastery** (`QuizPlayModeId: 'mastery'`) — pass by answering correctly a set
+        number of times **in a row** (`streakTarget`, default 5, options 3/5/7/10), not by
+        overall score. A wrong answer resets the streak to zero but never ends the run (unlike
+        every other early-ending mode); running out of questions before reaching the target
+        doesn't end it either — the run quietly reshuffles and repeats. Implemented in
+        `QuizSessionScreen.tsx` as **chained `QuizSession` documents**, not one long session: an
+        exhausted-but-not-yet-mastered leg is finalized via the ordinary `completeSession` call
+        (its answers are already real, already persisted) while a `masteryContinuingRef` flag
+        suppresses the results screen and the roadmap item-complete gating call for that
+        intermediate leg (shown to the learner as a brief "Reshuffling questions…" spinner
+        instead), then a fresh session silently starts on the same quiz — reshuffled if the
+        teacher enabled `Quiz.settings.shuffleQuestions`. Reaching the target mid-leg is a
+        genuine finish, handled exactly like Hearts/Perfect's existing early-end pattern. No
+        backend changes were needed for the looping mechanic itself — `completeSession`/
+        `startQuizItem` are just called more than once per learner-visible "run"; the roadmap
+        gating call only ever sees the *final* leg's score (a deliberate v1 simplification, not
+        an aggregate across every leg).
       - See [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s
-        "Quiz Modes" section and
+        "Topic quizzes: teacher-assigned mode" and "Mastery mode" sections and
         [docs/content/content-studio-design.md](docs/content/content-studio-design.md) for full
         detail.
 - [x] Course Chat (August 2026) — a new "Chat" floating action button on the Course screen,
@@ -1606,6 +1833,54 @@ my-backpack/
       --platform android` — **not yet confirmed on a real device/emulator or against a live
       Anthropic call/Atlas database**, per this project's established "flag what's unverified"
       convention.
+- [x] Quiz-taking bug fixes (August 2026) — mobile's half of the cross-app pass documented under
+      Frontend Web's "Quiz-taking bug fixes + Content Studio shuffle toggles" entry above:
+      `McqPattern.tsx`/`TrueFalsePattern.tsx` reset their `selected` state on question change
+      (previously carried a prior selection into the next same-type question);
+      `McqPattern.tsx` always shuffles `content.options` client-side (imports the existing
+      `shuffle()` from `./DndTile.tsx`, matching `DndBuildPattern.tsx`/`DndCountPattern.tsx`'s
+      own import of it); `QuizSessionScreen.tsx`'s header now prefers the roadmap Topic
+      (RoadmapNode) title over the humanized course slug for a `roadmapItem` session, read from
+      `state.roadmap.currentRoadmap`; `AnswerFeedback.tsx` restructured to a centered column.
+- [x] Quiz History (mobile, August 2026) — the mobile half of the Quiz History feature
+      documented under Frontend Web's own entry above (backend is fully shared/platform-agnostic,
+      not touched again here except one addition — see below). New "Quiz History" entry points:
+      a text link (`History` icon + label) under the subheading on `QuizModeSelectScreen.tsx`
+      (Dictionary's "Take Quiz" and, via `QuizPickerModal`'s "Game Quizzes" tab, a course's
+      practice pool), and the same link below the tab bar on `QuizPickerModal.tsx` (the "Quizzes"
+      FAB's modal on the Course screen) — deliberately **not** a third tab alongside "Course
+      Quizzes"/"Game Quizzes", since a tab that immediately closes the modal and navigates away
+      would look broken mid-selection; both close the modal/screen and route to
+      `/(app)/quiz-history?contextId=<miniAppId|courseId>`. New `features/quizHistory/
+      quizHistorySlice.ts` ports web's slice 1:1 (same thunks/state shape, swapped onto `api`'s
+      `ApiResponse<T>` unwrap convention). Two new **ordinary nested routes inside `(app)`**
+      (`app/(app)/quiz-history/index.tsx`, `[sessionId].tsx`) — same reasoning as Course Chat's
+      hub: a browsing screen, not a full-screen quiz player, so it doesn't need a root-level
+      `fullScreenModal` registration like the quiz-player routes. The list screen ports
+      `BucketScreen.tsx`'s status-tab convention for Completed/Abandoned/All, but swaps `<select>`
+      (a web-only element) for horizontally-scrollable chip rows for the course and topic
+      filters — RN has no native equivalent. The review screen is a straight port of web's
+      breakdown UI (`GlassCard` per question, DnD types skip the "Your answer" line same as web).
+      **Retake reuses the two existing session-start entry points rather than adding a third**
+      (`quizSlice.ts` intentionally only ports the thunks the real screens call — see its own
+      module comment — so no `startSessionByQuizId` thunk exists here, unlike web's fallback
+      player): new `components/quiz/quizHistoryLinks.ts`'s `canRetake`/`navigateToRetake` route a
+      roadmap Topic quiz (`quizMode:'fixed'` + a resolved `nodeId`) through the same
+      `/quiz/[itemId]` route a normal tap would use, and a Dictionary/course-pool quiz
+      (`quizMode:'dynamic'`/`'pool'`) through Quiz Mode Select
+      (`/quiz/modes/dictionary/[miniAppId]`) — anything else (an orphaned fixed quiz whose node
+      was later deleted, or a pre-`quizId` session) has no retake target and the button is
+      disabled, same graceful-degradation rule web follows. **Backend addition**: the roadmap
+      retake path needed to carry the teacher's `Quiz.assignedPlayMode` — omitting it would have
+      made a retake of a Hearts/Timer-assigned Topic quiz silently start as an ordinary session
+      instead of reproducing the same experience a normal tap gives — so `QuizHistoryEntry` and
+      `SessionReviewResult.session` both gained `assignedPlayMode: IAssignedPlayMode | null`
+      (`quizHistory.service.ts`'s existing `Quiz.find`/`Quiz.findById` calls already fetched the
+      full document, so this was a zero-extra-query addition); `navigateToRetake` passes it
+      through `encodeAssignedPlayMode` exactly like `RoadmapPath`/`QuizPickerModal` already do for
+      an ordinary tap. Verified via `tsc --noEmit` and a clean `expo export --platform android`
+      (3951 modules) — not yet confirmed on a real device/emulator, per this project's established
+      "flag what's unverified" convention.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens

@@ -18,6 +18,19 @@
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
 import { BucketFilter } from './quizSession.model';
 
+// Mirrors packages/shared/constants/quizPlayModes.ts's QuizPlayModeId — kept as a local,
+// manually-synced string union (same convention as QuizMode/FeedbackMode below) rather than an
+// import, since this file otherwise declares its own mirrored types throughout.
+export type QuizPlayModeId =
+  | 'classic'
+  | 'hearts'
+  | 'time_run'
+  | 'streak'
+  | 'perfect'
+  | 'endless'
+  | 'survival'
+  | 'mastery';
+
 export type QuizMode = 'dynamic' | 'fixed' | 'pool';
 
 // 'immediate' shows correctness/points right after each question (a submit-per-question
@@ -34,6 +47,26 @@ export interface IQuizSettings {
                              // using the quiz's authored/selected order
 }
 
+// A mode's mode-specific numeric setting(s) — only the field matching that mode's settingKey
+// (see packages/shared/constants/quizPlayModes.ts's QuizPlayModeSettingKey) is ever meaningful
+// for a given assignment; the rest stay undefined. Kept loose/all-optional rather than a
+// discriminated union — this is authored once from Content Studio's dropdown-driven form, not
+// hand-constructed, so the extra type safety isn't worth the schema complexity.
+export interface IQuizPlayModeSettings {
+  questionCount?: number;
+  duration?: number;
+  hearts?: number;
+  mistakeLimit?: number;
+  streakTarget?: number; // Mastery — consecutive correct answers required to pass
+}
+
+// A teacher's fixed assignment of exactly one Quiz Mode + its settings to this (mode:'fixed')
+// quiz — see packages/shared/constants/quizPlayModes.ts's IAssignedPlayMode, which this mirrors.
+export interface IAssignedPlayMode {
+  id: QuizPlayModeId;
+  settings: IQuizPlayModeSettings;
+}
+
 export interface IQuizDocument extends Document {
   _id: Types.ObjectId;
   miniAppId: Types.ObjectId;
@@ -44,15 +77,16 @@ export interface IQuizDocument extends Document {
   settings: IQuizSettings;
   isUserAdjustable: boolean;
   isDefault: boolean;
-  // Whether mobile's Quiz Mode Select screen (Classic/Hearts/Time Run/…) is reachable for this
-  // quiz at all. Default false — a mode:'fixed' roadmap/node quiz ("Topic quiz") only ever gets
-  // the mode grid if a teacher explicitly opts it in via Content Studio's QuizEditorPage; until
-  // then, tapping it goes straight to the ordinary session, exactly as before Quiz Modes
-  // existed. Not read for mode:'dynamic'/'pool' quizzes (Dictionary's quiz, a course's
-  // auto-created practice pool) — those are inherently "game" surfaces and always show the
-  // grid regardless of this flag. See docs/technical/mobile-architecture.md's "Quiz Modes"
-  // section.
-  allowPlayModes: boolean;
+  // A teacher's fixed assignment of exactly one Quiz Mode (Classic/Hearts/Time Run/…) + its
+  // settings, for a mode:'fixed' roadmap/node quiz ("Topic quiz"). null by default — the quiz
+  // plays as an ordinary session, exactly as before Quiz Modes existed. When set (via Content
+  // Studio's QuizEditorPage), mobile skips Quiz Mode Select entirely — no grid, no settings
+  // pill, nothing for the learner to choose — and starts the session straight into that exact
+  // mode/settings. Not read for mode:'dynamic'/'pool' quizzes (Dictionary's quiz, a course's
+  // auto-created practice pool) — those are inherently "game" surfaces and always show the mode
+  // grid for the learner to pick from, regardless of this field. See
+  // docs/technical/mobile-architecture.md's "Quiz Modes" section.
+  assignedPlayMode: IAssignedPlayMode | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -78,6 +112,24 @@ const quizSettingsSchema = new Schema<IQuizSettings>(
   { _id: false }
 );
 
+const assignedPlayModeSchema = new Schema<IAssignedPlayMode>(
+  {
+    id: {
+      type: String,
+      enum: ['classic', 'hearts', 'time_run', 'streak', 'perfect', 'endless', 'survival', 'mastery'],
+      required: true,
+    },
+    settings: {
+      questionCount: { type: Number },
+      duration: { type: Number },
+      hearts: { type: Number },
+      mistakeLimit: { type: Number },
+      streakTarget: { type: Number },
+    },
+  },
+  { _id: false }
+);
+
 const quizSchema = new Schema<IQuizDocument>(
   {
     miniAppId: { type: Schema.Types.ObjectId, ref: 'MiniApp', required: true },
@@ -88,7 +140,7 @@ const quizSchema = new Schema<IQuizDocument>(
     settings: { type: quizSettingsSchema, required: true },
     isUserAdjustable: { type: Boolean, default: false },
     isDefault: { type: Boolean, default: false },
-    allowPlayModes: { type: Boolean, default: false },
+    assignedPlayMode: { type: assignedPlayModeSchema, default: null },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

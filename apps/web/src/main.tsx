@@ -27,6 +27,9 @@ import CourseChatAiHelperPage from './pages/course/CourseChatAiHelperPage';
 import LessonPlayerPage from './pages/lesson/LessonPlayerPage';
 import QuizItemPlayerPage from './pages/lesson/QuizItemPlayerPage';
 import MiniAppPage from './pages/miniapp/MiniAppPage';
+import QuizHistoryPage from './pages/quizHistory/QuizHistoryPage';
+import QuizHistoryReviewPage from './pages/quizHistory/QuizHistoryReviewPage';
+import QuizHistoryPlayPage from './pages/quizHistory/QuizHistoryPlayPage';
 import StudioLayout from './pages/studio/StudioLayout';
 import CoursesListPage from './pages/studio/CoursesListPage';
 import CourseDetailPage from './pages/studio/CourseDetailPage';
@@ -36,6 +39,7 @@ import QuizEditorPage from './pages/studio/QuizEditorPage';
 import QuestionEditorPage from './pages/studio/QuestionEditorPage';
 
 import './index.css';
+import Scribbler from './pages/Scribbler';
 
 injectStore(store);
 
@@ -128,6 +132,15 @@ function AppRoutes() {
             path="/field/:fieldSlug/subject/:subjectSlug/miniapp/:miniAppSlug/quiz"
             element={<MiniAppPage />}
           />
+          <Route
+            path="/scribbler"
+            element={<Scribbler />}
+          />
+
+          {/* Quiz History — global, reached from CoursePage/DictionaryPage buttons */}
+          <Route path="/quiz-history" element={<QuizHistoryPage />} />
+          <Route path="/quiz-history/play/:quizId" element={<QuizHistoryPlayPage />} />
+          <Route path="/quiz-history/:sessionId" element={<QuizHistoryReviewPage />} />
 
           {/* Content Studio — platform-admin only, gated inside StudioLayout itself */}
           <Route path="/studio" element={<StudioLayout />}>

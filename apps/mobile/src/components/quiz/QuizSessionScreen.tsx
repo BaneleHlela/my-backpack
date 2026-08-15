@@ -11,12 +11,21 @@
 // sessionId/status without becoming a dependency — this covers hardware back and swipe-back
 // for free, since both unmount this screen exactly like a normal `router.back()` would.
 //
-// Quiz Modes gameplay mechanics (hearts/timer/streak/mistake-limit/perfect-run) are layered on
-// top via the optional `playMode` prop — orthogonal to `session` (which quiz/questions) and
-// universal (applies whether `session` is a curated roadmap-lesson quiz or a course's pool
-// quiz). See the "mode rule" effect below and docs/technical/mobile-architecture.md's "Quiz
-// Modes" section for the full writeup, including the race this design deliberately avoids
-// between the mode-rule effect and the existing feedbackMode:'end' auto-advance effect.
+// Quiz Modes gameplay mechanics (hearts/timer/streak/mistake-limit/perfect-run/mastery) are
+// layered on top via the optional `playMode` prop — orthogonal to `session` (which
+// quiz/questions) and universal (applies whether `session` is a curated roadmap-lesson quiz or
+// a course's pool quiz). See the "mode rule" effect below and
+// docs/technical/mobile-architecture.md's "Quiz Modes" section for the full writeup, including
+// the race this design deliberately avoids between the mode-rule effect and the existing
+// feedbackMode:'end' auto-advance effect.
+//
+// Mastery mode is the one mode that never "ends early" on a mistake — instead it never really
+// "ends late" either: reaching the streak target can happen mid-leg, and running out of
+// questions before reaching it doesn't end the run, it quietly finalizes the current
+// QuizSession (all its answers are real, already persisted) and starts a fresh one on the same
+// quiz (reshuffled if the teacher enabled Quiz.settings.shuffleQuestions), carrying the
+// client-side streak count across that boundary. See the "Mastery" comments on the mode-rule
+// effect and the dedicated continuation effect below.
 //
 // Full-height/full-width question restyle (see docs/technical/mobile-architecture.md): the
 // screen is now five stacked rows instead of a menubar + boxed "question card":
@@ -39,7 +48,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useWindowDi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { BookOpen, Flame, Heart, SkipForward, Timer, X } from 'lucide-react-native';
+import { BookOpen, Flame, Heart, SkipForward, Target, Timer, X } from 'lucide-react-native';
 import { resolveHelpers, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, ApiResponse, ItemCompletionResult } from '@my-backpack/shared';
 import api from '../../lib/api';
@@ -60,7 +69,13 @@ import { QuestionRenderer } from './QuestionRenderer';
 import { QuizProgress } from './QuizProgress';
 import { AnswerFeedback } from './AnswerFeedback';
 import { QuizResults } from './QuizResults';
-import { getQuizPlayMode, toSessionSettingsOverride, type QuizPlayModeId, type QuizPlayModeSettings } from './quizPlayModes';
+import {
+  getQuizPlayMode,
+  toSessionSettingsOverride,
+  QUIZ_PLAY_MODE_ICONS,
+  type QuizPlayModeId,
+  type QuizPlayModeSettings,
+} from './quizPlayModes';
 import type { QuestionPatternHandle } from './patterns/questionPatternTypes';
 import type { AppDispatch, RootState } from '../../store/store';
 
@@ -78,7 +93,7 @@ export interface QuizPlayModeChoice {
   settings: QuizPlayModeSettings;
 }
 
-type EndedEarlyReason = 'hearts' | 'time' | 'mistakes' | 'perfect' | null;
+type EndedEarlyReason = 'hearts' | 'time' | 'mistakes' | 'perfect' | 'mastery' | null;
 
 interface QuizSessionScreenProps {
   session: QuizSessionSource;
@@ -112,6 +127,15 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   const quiz = useSelector((state: RootState) => state.quiz);
   const activeProfile = useSelector((state: RootState) => state.auth.activeProfile);
   const ageGroup: AgeGroup = activeProfile?.ageGroup ?? 'adult';
+  // Topic (RoadmapNode) name for the header — read from whatever roadmap the learner already
+  // has loaded in Redux (populated by the Course screen before they navigated here). Falls
+  // back to the humanized course slug below on a direct link/refresh, where currentRoadmap
+  // hasn't been fetched yet.
+  const currentRoadmap = useSelector((state: RootState) => state.roadmap.currentRoadmap);
+  const topicTitle =
+    session.source === 'roadmapItem'
+      ? currentRoadmap?.nodes.find((n) => n._id === session.nodeId)?.title
+      : undefined;
 
   const questionStartedAt = useRef<number>(Date.now());
   const itemCompletionRequested = useRef(false);
@@ -138,11 +162,20 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
     playMode?.id === 'time_run' ? (playMode.settings.duration ?? playModeDef?.defaultSettings.duration ?? 60) * 1000 : null
   );
   const [endedEarlyReason, setEndedEarlyReason] = useState<EndedEarlyReason>(null);
+  const masteryTarget = playMode?.settings.streakTarget ?? playModeDef?.defaultSettings.streakTarget ?? 5;
   // Synchronously readable (unlike React state) so the feedbackMode:'end' auto-advance effect
   // below — which fires in the SAME commit as the mode-rule effect whenever a new answer
   // arrives — can tell an early-end decision was just made and skip its own advance/complete
-  // dispatch instead of racing it. See the module comment.
-  const endedEarlyRef = useRef<EndedEarlyReason>(null);
+  // dispatch instead of racing it. See the module comment. 'mastery_continue' is a third,
+  // Mastery-only value: it blocks the same downstream effects as a real early-end, but is never
+  // shown to the learner (no EndedEarlyReason case for it) — see masteryContinuingRef below.
+  const endedEarlyRef = useRef<EndedEarlyReason | 'mastery_continue'>(null);
+  // True for the stretch between "this leg's question pool ran out before Mastery's streak
+  // target was reached" and "the next leg's session has actually started" — read directly
+  // during render (not just inside effects) to suppress the results screen and the roadmap
+  // item-complete gating call for what is really just an internal continuation, not a genuine
+  // finish. See the dedicated Mastery continuation effect below.
+  const masteryContinuingRef = useRef(false);
 
   const startQuiz = () => {
     if (session.source === 'roadmapItem') {
@@ -253,13 +286,35 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
         setEndedEarlyReason('mistakes');
         dispatch(completeSession(quiz.sessionId));
       }
-    } else if (playMode.id === 'streak') {
+    } else if (playMode.id === 'streak' || playMode.id === 'mastery') {
       if (wrong) {
         setStreak(0);
+        // Mastery only: the pool ran dry on a wrong answer before the target was reached —
+        // this leg is done either way, so finalize it (all its answers are real, already
+        // persisted) and let the continuation effect below silently start a fresh one.
+        if (playMode.id === 'mastery' && quiz.lastAnswer.sessionComplete) {
+          endedEarlyRef.current = 'mastery_continue';
+          masteryContinuingRef.current = true;
+          dispatch(completeSession(quiz.sessionId));
+        }
       } else {
         const next = streak + 1;
         setStreak(next);
         setBestStreak((prev) => Math.max(prev, next));
+        if (playMode.id === 'mastery') {
+          if (next >= masteryTarget) {
+            // Target reached — a genuine finish, wherever it happens to land in the pool.
+            endedEarlyRef.current = 'mastery';
+            setEndedEarlyReason('mastery');
+            dispatch(completeSession(quiz.sessionId));
+          } else if (quiz.lastAnswer.sessionComplete) {
+            // Correct, but on the pool's last question with the target still unmet — same
+            // quiet finalize-and-continue as the wrong-answer case above.
+            endedEarlyRef.current = 'mastery_continue';
+            masteryContinuingRef.current = true;
+            dispatch(completeSession(quiz.sessionId));
+          }
+        }
       }
     }
     // classic / time_run: no per-answer rule — time_run ends via the timer effect below.
@@ -275,6 +330,33 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
       dispatch(advanceQuestion());
     }
   }, [quiz.status, quiz.feedbackMode, quiz.lastAnswer, quiz.sessionId, dispatch]);
+
+  // Mastery continuation: the mode-rule effect above finalized an intermediate leg
+  // (masteryContinuingRef.current === true) — once that finalize round-trip actually lands
+  // (status flips to 'completed'), silently start a fresh session on the same quiz and keep
+  // counting the streak client-side. Declared before the roadmap item-complete effect below so,
+  // within this same 'completed' commit, that effect still reads masteryContinuingRef as true
+  // and skips firing the roadmap gating call for what is only an internal continuation — the
+  // ref is deliberately NOT reset here (that would flip it before the later effect runs); it
+  // resets itself once the new leg's session actually starts (see the following effect).
+  useEffect(() => {
+    if (playMode?.id !== 'mastery' || !masteryContinuingRef.current) return;
+    if (quiz.status !== 'completed') return;
+    dispatch(resetQuiz());
+    startQuiz();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quiz.status]);
+
+  useEffect(() => {
+    if (
+      playMode?.id === 'mastery' &&
+      masteryContinuingRef.current &&
+      quiz.status !== 'completed' &&
+      quiz.status !== 'completing'
+    ) {
+      masteryContinuingRef.current = false;
+    }
+  }, [quiz.status]);
 
   // Time Run: an independent countdown, separate from the answer flow above — it can end the
   // session mid-question. The ticking effect only restarts on status/mode changes (the interval
@@ -309,6 +391,10 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
     if (session.source !== 'roadmapItem') return;
     if (quiz.status !== 'completed' || !quiz.results || itemCompletionRequested.current) return;
     if (!quiz.sessionId) return;
+    // Mastery: this "completed" session is really just an intermediate leg being finalized
+    // before a silent restart, not the learner's actual finish — see the continuation effect
+    // above.
+    if (playMode?.id === 'mastery' && masteryContinuingRef.current) return;
     itemCompletionRequested.current = true;
     const { nodeId, itemId } = session;
     api
@@ -392,6 +478,7 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
     setItemCompletion(null);
     // Reset Quiz Modes gameplay state for the new run.
     endedEarlyRef.current = null;
+    masteryContinuingRef.current = false;
     setEndedEarlyReason(null);
     setHearts(playMode?.settings.hearts ?? playModeDef?.defaultSettings.hearts ?? 3);
     setMistakes(0);
@@ -417,7 +504,8 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   const currentHelpers = quiz.currentQuestion
     ? resolveHelpers(quiz.currentQuestion.content.defaultHelpers, undefined)
     : null;
-  const title = session.source === 'miniApp' ? (session.title ?? 'Quiz') : humanizeSlug(session.courseSlug);
+  const title =
+    session.source === 'miniApp' ? (session.title ?? 'Quiz') : (topicTitle ?? humanizeSlug(session.courseSlug));
   // Dictionary has exactly one mini-app, seeded under English — no isiZulu dictionary exists
   // yet, so that path is hardcoded rather than plumbing subjectSlug through the mini-app quiz
   // route. Revisit if a non-English dictionary is ever seeded.
@@ -427,13 +515,15 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   // is an ordinary roadmap Topic quiz with no mode chosen), a right-aligned stat on the right.
   // Modes with nothing per-answer worth showing (Classic/Perfect) and the no-play-mode case both
   // fall back to "Question N of M" — the text QuizProgress itself no longer renders.
-  const ModeIcon = playModeDef?.icon;
+  const ModeIcon = playMode ? QUIZ_PLAY_MODE_ICONS[playMode.id] : undefined;
   const modeLabel = playModeDef?.label ?? 'Quiz';
   let modeStat: { Icon?: typeof Heart; text: string };
   if (playMode?.id === 'hearts' || playMode?.id === 'survival') {
     modeStat = { Icon: Heart, text: `${Math.max(hearts, 0)}` };
   } else if (playMode?.id === 'streak') {
     modeStat = { Icon: Flame, text: `${streak}` };
+  } else if (playMode?.id === 'mastery') {
+    modeStat = { Icon: Target, text: `${streak}/${masteryTarget}` };
   } else if (playMode?.id === 'endless') {
     const limit = playMode.settings.mistakeLimit ?? playModeDef?.defaultSettings.mistakeLimit ?? 5;
     modeStat = { text: `${mistakes}/${limit} mistakes` };
@@ -452,7 +542,12 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   else if (endedEarlyReason === 'time') resultsBanner = "Time's up!";
   else if (endedEarlyReason === 'mistakes') resultsBanner = 'Too many mistakes!';
   else if (endedEarlyReason === 'perfect') resultsBanner = 'Perfect run ended.';
+  else if (endedEarlyReason === 'mastery') resultsBanner = `Mastery achieved! ${masteryTarget} in a row 🎉`;
   else if (playMode?.id === 'streak') resultsBanner = `Best streak: ${bestStreak}`;
+
+  // True only for the visible sliver between a Mastery leg's pool-exhausted finalize and the
+  // next leg's session actually starting — see masteryContinuingRef's declaration.
+  const isMasteryContinuing = playMode?.id === 'mastery' && masteryContinuingRef.current;
 
   const isQuestionActive =
     hasContent === true &&
@@ -556,13 +651,14 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
           </View>
         )}
 
-        {hasContent === true && quiz.status === 'completing' && (
+        {hasContent === true && (quiz.status === 'completing' || (quiz.status === 'completed' && isMasteryContinuing)) && (
           <View style={styles.center}>
             <ActivityIndicator color={colors.primary.DEFAULT} />
+            {isMasteryContinuing && <Text style={styles.emptyBody}>Reshuffling questions…</Text>}
           </View>
         )}
 
-        {hasContent === true && quiz.status === 'completed' && quiz.results && (
+        {hasContent === true && quiz.status === 'completed' && quiz.results && !isMasteryContinuing && (
           <ScrollView contentContainerStyle={styles.resultsWrapper}>
             <QuizResults
               results={quiz.results}

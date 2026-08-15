@@ -4,9 +4,9 @@
 
 ## The Problem
 
-South Africa has 18 million school-going learners. The majority of them attend under-resourced schools with overcrowded classrooms, undertrained teachers, and textbooks that don't arrive until March. In 2023, fewer than 40% of Grade 12 learners achieved university entrance. Millions more never make it to Grade 12 at all.
+South Africa has 18 million school-going learners. The majority of them attend under-resourced schools with overcrowded classrooms, undertrained teachers, and textbooks that don't arrive until March. In 2023, fewer than 40% of Grade 12 learners achieved university entrance. Millions more never make it to Grade 12 at all. 
 
-The problem is not that South Africans can't learn. The problem is that the system is built around averages — average class size, average pace, average exam date — and the average doesn't exist. Every learner is different. Every home is different. And in a country with 11 official languages, teaching one learner and teaching another can require entirely different approaches.
+The problem is not that students can't learn. The problem is that the system is (user_feedback: inefficient - built to service everone the same way when everyone is different.) built around averages — average class size, average pace, average exam date — and the average doesn't exist. Every learner is different. Every home is different. 
 
 Existing digital tools don't fix this. Duolingo teaches Zulu as a foreign language for Americans. Khan Academy is brilliant but American-focused, passive, and not built for our curriculum. Google Classroom is a file-sharing system, not a learning engine.
 

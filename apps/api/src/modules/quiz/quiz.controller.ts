@@ -9,25 +9,37 @@ import {
   abandonSession,
   getSessionResults,
   getSessionState,
+  getSessionReview,
 } from '../../services/quizSession.service';
 import { listQuizzes, hasQuizContent } from './quiz.service';
+import { listQuizHistory, getHistoryFilterOptions, getEntryContext } from './quizHistory.service';
 import Quiz from '../../models/learning/quiz.model';
-import { CreateSessionDto, CaptureAnswerDto, ListQuizzesQuery, HasQuizContentQuery } from './quiz.types';
+import {
+  CreateSessionDto,
+  CaptureAnswerDto,
+  ListQuizzesQuery,
+  HasQuizContentQuery,
+  QuizHistoryQuery,
+} from './quiz.types';
 
 export const createSessionHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
   const profileId = req.profile?._id.toString();
   if (!profileId) throw new AppError('Unauthorized', 401);
 
-  const { miniAppId, settings } = req.body as Partial<CreateSessionDto>;
-  if (!miniAppId) throw new AppError('miniAppId is required', 400);
+  const { miniAppId, quizId, settings } = req.body as Partial<CreateSessionDto>;
+  if (!miniAppId && !quizId) throw new AppError('miniAppId or quizId is required', 400);
 
-  const quiz = await Quiz.findOne({ miniAppId, isDefault: true, isActive: true });
-  if (!quiz) throw new AppError('No default quiz configured for this mini-app', 404);
+  let resolvedQuizId = quizId;
+  if (!resolvedQuizId) {
+    const quiz = await Quiz.findOne({ miniAppId, isDefault: true, isActive: true });
+    if (!quiz) throw new AppError('No default quiz configured for this mini-app', 404);
+    resolvedQuizId = quiz._id.toString();
+  }
 
   try {
     const { session, firstQuestion } = await createQuizSession(
       profileId,
-      quiz._id.toString(),
+      resolvedQuizId,
       settings ?? {}
     );
     sendSuccess(res, { session, firstQuestion }, 201);
@@ -141,4 +153,44 @@ export const getSessionStateHandler = catchAsync(async (req: Request, res: Respo
   } catch (err) {
     throw new AppError(err instanceof Error ? err.message : 'Failed to fetch session', 404);
   }
+});
+
+export const getSessionReviewHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
+  const profileId = req.profile?._id.toString();
+  if (!profileId) throw new AppError('Unauthorized', 401);
+
+  const sessionId = req.params['sessionId'] as string;
+
+  try {
+    const result = await getSessionReview(sessionId, profileId);
+    // Enrich with the same course/topic context listQuizHistory attaches to each entry, so the
+    // review screen can build a retake link without a second round-trip.
+    const context = await getEntryContext(result.session);
+    sendSuccess(res, { ...result, session: { ...result.session, ...context } });
+  } catch (err) {
+    throw new AppError(err instanceof Error ? err.message : 'Failed to fetch session review', 404);
+  }
+});
+
+export const listQuizHistoryHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
+  const profileId = req.profile?._id.toString();
+  if (!profileId) throw new AppError('Unauthorized', 401);
+
+  const { contextId, nodeId, status, page, limit } = req.query as Partial<QuizHistoryQuery>;
+
+  const result = await listQuizHistory(
+    profileId,
+    { contextId, nodeId, status },
+    page ? parseInt(page, 10) : undefined,
+    limit ? parseInt(limit, 10) : undefined
+  );
+  sendSuccess(res, result);
+});
+
+export const getHistoryFilterOptionsHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
+  const profileId = req.profile?._id.toString();
+  if (!profileId) throw new AppError('Unauthorized', 401);
+
+  const result = await getHistoryFilterOptions(profileId);
+  sendSuccess(res, result);
 });

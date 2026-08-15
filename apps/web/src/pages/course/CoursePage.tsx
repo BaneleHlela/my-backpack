@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Loader2, MessagesSquare } from 'lucide-react';
+import { ChevronLeft, Loader2, MessagesSquare, History } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../../app/store';
 import { fetchCourseBySlug } from '../../features/courses/coursesSlice';
@@ -114,6 +114,17 @@ export default function CoursePage() {
           <MessagesSquare className="w-4 h-4" />
           Course Chat
         </button>
+
+        {course && (
+          <button
+            type="button"
+            onClick={() => navigate(`/quiz-history?contextId=${course._id}`)}
+            className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-xl bg-white/40 backdrop-blur border border-white/50 text-sm font-medium text-gray-700 hover:bg-white/60 transition-colors"
+          >
+            <History className="w-4 h-4" />
+            Quiz History
+          </button>
+        )}
 
         {linkedMiniApps.length > 0 && (
           <div className="flex items-center gap-2 mt-4 flex-wrap">

@@ -81,60 +81,58 @@ export default function AnswerFeedback({
             </div>
           )}
 
-          <div className="flex items-start gap-3">
+          <div className="flex flex-col items-center text-center gap-1.5">
             {wasSkipped ? (
-              <SkipForward className="w-7 h-7 text-gray-400 flex-shrink-0" />
+              <SkipForward className="w-7 h-7 text-gray-400" />
             ) : isCorrect ? (
-              <CheckCircle2 className="w-7 h-7 text-emerald-500 flex-shrink-0" />
+              <CheckCircle2 className="w-7 h-7 text-emerald-500" />
             ) : (
-              <XCircle className="w-7 h-7 text-rose-500 flex-shrink-0" />
+              <XCircle className="w-7 h-7 text-rose-500" />
             )}
-            <div className="flex-1">
-              <p
-                className={`font-semibold ${isChild ? 'text-xl' : 'text-lg'} ${
-                  wasSkipped ? 'text-gray-600' : isCorrect ? 'text-emerald-700' : 'text-rose-700'
-                }`}
-              >
-                {headline}
+            <p
+              className={`font-semibold ${isChild ? 'text-xl' : 'text-lg'} ${
+                wasSkipped ? 'text-gray-600' : isCorrect ? 'text-emerald-700' : 'text-rose-700'
+              }`}
+            >
+              {headline}
+            </p>
+            <p className="text-sm text-gray-600">
+              {pointsAwarded} / {maxPoints} points
+            </p>
+
+            {!wasSkipped && feedback?.text && (
+              feedback.audioUrl ? (
+                <div className="flex items-center justify-center gap-2 mt-1.5">
+                  <p className="text-sm text-gray-700">{feedback.text}</p>
+                  <button
+                    type="button"
+                    onClick={() => playAudio(feedback.audioUrl)}
+                    aria-label="Play audio"
+                    className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-lg bg-white/40 border border-white/50 hover:bg-white/60 transition-colors"
+                  >
+                    <Volume2 className="w-3.5 h-3.5 text-gray-600" />
+                  </button>
+                </div>
+              ) : (
+                <SpokenText text={feedback.text} lang={lang} className="text-sm text-gray-700 mt-1.5 text-center" />
+              )
+            )}
+
+            {!isCorrect && content.correctAnswer && (
+              <p className="text-sm text-gray-700 mt-1.5 text-center">
+                Correct answer: <span className="font-semibold">{content.correctAnswer}</span>
               </p>
-              <p className="text-sm text-gray-600 mt-0.5">
-                {pointsAwarded} / {maxPoints} points
-              </p>
+            )}
 
-              {!wasSkipped && feedback?.text && (
-                feedback.audioUrl ? (
-                  <div className="flex items-center gap-2 mt-3">
-                    <p className="text-sm text-gray-700">{feedback.text}</p>
-                    <button
-                      type="button"
-                      onClick={() => playAudio(feedback.audioUrl)}
-                      aria-label="Play audio"
-                      className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-lg bg-white/40 border border-white/50 hover:bg-white/60 transition-colors"
-                    >
-                      <Volume2 className="w-3.5 h-3.5 text-gray-600" />
-                    </button>
-                  </div>
-                ) : (
-                  <SpokenText text={feedback.text} lang={lang} className="text-sm text-gray-700 mt-3" />
-                )
-              )}
-
-              {!isCorrect && content.correctAnswer && (
-                <p className="text-sm text-gray-700 mt-3">
-                  Correct answer: <span className="font-semibold">{content.correctAnswer}</span>
-                </p>
-              )}
-
-              {!wasSkipped && content.explanation && (
-                <SpokenText text={content.explanation} lang={lang} className="text-sm text-gray-600 mt-2" />
-              )}
-            </div>
+            {!wasSkipped && content.explanation && (
+              <SpokenText text={content.explanation} lang={lang} className="text-sm text-gray-600 mt-1 text-center" />
+            )}
           </div>
 
           <button
             type="button"
             onClick={onAdvance}
-            className={`w-full mt-5 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 transition-colors ${
+            className={`w-full mt-5 rounded-2xl bg-violet-500 text-white font-semibold text-center hover:bg-violet-600 transition-colors ${
               isChild ? 'py-4 text-lg' : 'py-3'
             }`}
           >

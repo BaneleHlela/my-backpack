@@ -1,35 +1,38 @@
 // Quiz Mode Select screen — full-screen grid of QuizModeCards (Classic/Hearts/Time Run/Streak/
-// Perfect/Endless/Survival), inserted ahead of QuizSessionScreen for both quiz entry points
-// (Dictionary "Take Quiz" and a roadmap quiz item). The grid/settings-modal wiring itself lives
-// in QuizModeGrid, shared with QuizPickerModal's "Game Quizzes" tab — this component is just
-// that grid plus the screen chrome (Menubar, heading, ScreenBackground) and the
-// target-specific "where does starting a mode actually go" logic. See CLAUDE.md's "Quiz Modes
-// (mobile)" entry and docs/technical/mobile-architecture.md for the full writeup.
+// Perfect/Endless/Survival/Mastery), inserted ahead of QuizSessionScreen for mode:'dynamic'/
+// 'pool' quiz entry points (Dictionary "Take Quiz" and a course's Game Quizzes). The
+// grid/settings-modal wiring itself lives in QuizModeGrid, shared with QuizPickerModal's "Game
+// Quizzes" tab — this component is just that grid plus the screen chrome (Menubar, heading,
+// ScreenBackground) and the "where does starting a mode actually go" logic. See CLAUDE.md's
+// "Quiz Modes" entry and docs/technical/mobile-architecture.md for the full writeup.
+//
+// miniApp-only: a Topic (roadmap item) quiz never reaches this screen — a teacher assigns at
+// most one specific mode from Content Studio (Quiz.assignedPlayMode), and RoadmapPath/
+// QuizPickerModal/the Course screen route straight to /quiz/[itemId] with that assignment (or
+// none) already encoded, no selection step. This screen used to also handle a 'roadmapItem'
+// target (opted in per-quiz via the now-removed Quiz.allowPlayModes) — see git history /
+// mobile-architecture.md if that context is ever needed again.
 //
 // The chosen mode + settings ride along as a JSON-encoded `play` param (encodePlayModeParam) —
-// the *same* QuizSessionScreen destination the two existing routes always used, just now
-// carrying real Quiz Modes gameplay mechanics (hearts/timer/streak/mistake-limit/perfect-run —
-// see QuizSessionScreen's module comment). Sourcing is unchanged: a roadmapItem session still
-// plays its curated quiz's own questions, a miniApp session still plays that quiz's own
-// pool/bucket — mode mechanics are a layer on top, not a different question source.
+// the same QuizSessionScreen destination the mode-less flow always used, just now carrying real
+// Quiz Modes gameplay mechanics (hearts/timer/streak/mistake-limit/perfect-run/mastery — see
+// QuizSessionScreen's module comment).
 //
-// Settings-pill gating: `target.source === 'miniApp'` stands in for Quiz.isUserAdjustable
-// (true for the seeded "General Dictionary Quiz" *and* every course's auto-created mode:'pool'
-// practice quiz — both are seeded isUserAdjustable:true) without a new API call — every
-// roadmapItem-sourced quiz is seeded isUserAdjustable:false. Revisit with a real per-quiz flag
-// if that ever stops holding (e.g. a future adjustable roadmap quiz).
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+// Settings-pill gating: always `true` here — every quiz reachable via this screen is seeded
+// isUserAdjustable:true (Dictionary's "General Dictionary Quiz" and every course's
+// auto-created mode:'pool' practice quiz).
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { History } from 'lucide-react-native';
 import { spacing, typography } from '@my-backpack/shared';
 import { ScreenBackground } from '../ScreenBackground';
 import { Menubar } from '../Menubar';
 import { useTheme } from '../../theme/ThemeContext';
 import { QuizModeGrid } from './QuizModeGrid';
 import { encodePlayModeParam, type QuizPlayModeId, type QuizPlayModeSettings } from './quizPlayModes';
-import type { QuizSessionSource } from './QuizSessionScreen';
 
 interface QuizModeSelectScreenProps {
-  target: QuizSessionSource;
+  target: { miniAppId: string; title?: string };
   backLabel: string;
 }
 
@@ -39,28 +42,13 @@ export function QuizModeSelectScreen({ target, backLabel }: QuizModeSelectScreen
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
-  const settingsAdjustable = target.source === 'miniApp';
 
-  // Same destination either existing route always used — see module comment above.
   const startSession = (modeId: QuizPlayModeId, settings: QuizPlayModeSettings) => {
     const play = encodePlayModeParam(modeId, settings);
-    if (target.source === 'roadmapItem') {
-      router.replace({
-        pathname: '/quiz/[itemId]',
-        params: {
-          itemId: target.itemId,
-          nodeId: target.nodeId,
-          subjectSlug: target.subjectSlug,
-          courseSlug: target.courseSlug,
-          play,
-        },
-      });
-    } else {
-      router.replace({
-        pathname: '/quiz/dictionary/[miniAppId]',
-        params: { miniAppId: target.miniAppId, name: target.title, play },
-      });
-    }
+    router.replace({
+      pathname: '/quiz/dictionary/[miniAppId]',
+      params: { miniAppId: target.miniAppId, name: target.title, play },
+    });
   };
 
   return (
@@ -69,10 +57,20 @@ export function QuizModeSelectScreen({ target, backLabel }: QuizModeSelectScreen
         <Menubar label={backLabel} onBackPress={() => router.back()} />
         <Text style={styles.heading}>Quiz Modes</Text>
         <Text style={styles.subheading}>Pick how you want to play.</Text>
+        <Pressable
+          onPress={() =>
+            router.push({ pathname: '/(app)/quiz-history', params: { contextId: target.miniAppId } })
+          }
+          style={styles.historyLink}
+          hitSlop={8}
+        >
+          <History size={14} color={colors.primary.DEFAULT} />
+          <Text style={styles.historyLinkText}>Quiz History</Text>
+        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.gridScroll}>
-        <QuizModeGrid settingsAdjustable={settingsAdjustable} onStart={startSession} />
+        <QuizModeGrid settingsAdjustable onStart={startSession} />
       </ScrollView>
     </ScreenBackground>
   );
@@ -96,6 +94,19 @@ function createStyles(colors: ThemeColors) {
       fontSize: typography.small,
       color: colors.text.muted,
       marginBottom: spacing.xs,
+    },
+    historyLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 4,
+      marginBottom: spacing.xs,
+    },
+    historyLinkText: {
+      fontFamily: 'Fredoka_500Medium',
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.primary.DEFAULT,
     },
     gridScroll: {
       paddingHorizontal: spacing.md,

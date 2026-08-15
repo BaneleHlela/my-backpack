@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { sendSuccess } from '../../utils/response';
 import { catchAsync } from '../../utils/AppError';
+import { resolveGradeSettings } from '../../utils/gradeSettings';
 import {
   createQuiz,
   getQuiz,
@@ -11,6 +12,7 @@ import {
   CreateQuizInput,
   UpdateQuizInput,
 } from './quiz.service';
+import { findNodeByItemId } from './node.service';
 
 export const createQuizHandler = catchAsync(
   async (req: Request, res: Response): Promise<void> => {
@@ -21,11 +23,22 @@ export const createQuizHandler = catchAsync(
   }
 );
 
+// Merges the owning node item's grade settings (passingScore/starThresholds — see
+// gradeSettings.ts) into the quiz response, resolved to always-defined values. These fields
+// live on the RoadmapNode item ref, not on the Quiz document itself (a Quiz can be reused
+// outside roadmaps), but QuizEditorPage edits both together as one "Grade Settings" section, so
+// it's fetched together here rather than adding a second round-trip on the frontend.
+// `nodeId`/`itemId` are null when this quiz isn't attached to any node item (shouldn't happen
+// for anything reachable from QuizEditorPage, but the mode:'dynamic'/'pool' quizzes this
+// endpoint could technically also be pointed at aren't node items).
 export const getQuizHandler = catchAsync(
   async (req: Request, res: Response): Promise<void> => {
     const { quizId } = req.params as { quizId: string };
     const quiz = await getQuiz(quizId);
-    sendSuccess(res, quiz);
+    const node = await findNodeByItemId(quizId);
+    const ref = node?.items.find((i) => i.itemId.toString() === quizId);
+    const gradeSettings = ref ? resolveGradeSettings(ref.passingScore, ref.starThresholds) : null;
+    sendSuccess(res, { ...quiz.toObject(), nodeId: node?._id ?? null, gradeSettings });
   }
 );
 

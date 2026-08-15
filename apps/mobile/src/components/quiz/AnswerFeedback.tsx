@@ -96,7 +96,7 @@ export function AnswerFeedback({
             />
           ) : null}
 
-          <View style={styles.headerRow}>
+          <View style={styles.headerColumn}>
             {wasSkipped ? (
               <SkipForward size={28} color={colors.glassText.muted} />
             ) : isCorrect ? (
@@ -104,41 +104,49 @@ export function AnswerFeedback({
             ) : (
               <XCircle size={28} color={colors.error.DEFAULT} />
             )}
-            <View style={styles.headerText}>
-              <Text style={[styles.headline, { color: headlineColor }, isChild && styles.headlineChild]}>
-                {headline}
+            <Text style={[styles.headline, { color: headlineColor }, isChild && styles.headlineChild]}>
+              {headline}
+            </Text>
+            <Text style={styles.pointsText}>
+              {pointsAwarded} / {maxPoints} points
+            </Text>
+
+            {!wasSkipped && feedback?.text ? (
+              feedback.audioUrl ? (
+                <View style={styles.feedbackTextRow}>
+                  <Text style={styles.feedbackText}>{feedback.text}</Text>
+                  <Pressable
+                    onPress={() => playAudioUrl(resolveAssetUrl(feedback.audioUrl)!)}
+                    hitSlop={8}
+                    style={styles.audioButton}
+                  >
+                    <Volume2 size={14} color={colors.glassText.secondary} />
+                  </Pressable>
+                </View>
+              ) : (
+                <SpokenText
+                  text={feedback.text}
+                  lang={lang}
+                  textStyle={styles.feedbackText}
+                  containerStyle={styles.spokenRow}
+                />
+              )
+            ) : null}
+
+            {!isCorrect && content.correctAnswer ? (
+              <Text style={styles.correctAnswerText}>
+                Correct answer: <Text style={styles.correctAnswerValue}>{content.correctAnswer}</Text>
               </Text>
-              <Text style={styles.pointsText}>
-                {pointsAwarded} / {maxPoints} points
-              </Text>
+            ) : null}
 
-              {!wasSkipped && feedback?.text ? (
-                feedback.audioUrl ? (
-                  <View style={styles.feedbackTextRow}>
-                    <Text style={styles.feedbackText}>{feedback.text}</Text>
-                    <Pressable
-                      onPress={() => playAudioUrl(resolveAssetUrl(feedback.audioUrl)!)}
-                      hitSlop={8}
-                      style={styles.audioButton}
-                    >
-                      <Volume2 size={14} color={colors.glassText.secondary} />
-                    </Pressable>
-                  </View>
-                ) : (
-                  <SpokenText text={feedback.text} lang={lang} textStyle={styles.feedbackText} />
-                )
-              ) : null}
-
-              {!isCorrect && content.correctAnswer ? (
-                <Text style={styles.correctAnswerText}>
-                  Correct answer: <Text style={styles.correctAnswerValue}>{content.correctAnswer}</Text>
-                </Text>
-              ) : null}
-
-              {!wasSkipped && content.explanation ? (
-                <SpokenText text={content.explanation} lang={lang} textStyle={styles.explanationText} />
-              ) : null}
-            </View>
+            {!wasSkipped && content.explanation ? (
+              <SpokenText
+                text={content.explanation}
+                lang={lang}
+                textStyle={styles.explanationText}
+                containerStyle={styles.spokenRow}
+              />
+            ) : null}
           </View>
 
           <DepthButton
@@ -179,17 +187,14 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       width: 80,
       height: 80,
     },
-    headerRow: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-    },
-    headerText: {
-      flex: 1,
+    headerColumn: {
+      alignItems: 'center',
       gap: 4,
     },
     headline: {
       fontSize: typography.heading,
       fontWeight: '700',
+      textAlign: 'center',
     },
     headlineChild: {
       fontSize: typography.headingLg,
@@ -197,10 +202,12 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     pointsText: {
       fontSize: typography.small,
       color: colors.glassText.secondary,
+      textAlign: 'center',
     },
     feedbackTextRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
       gap: spacing.xs,
       marginTop: spacing.xs,
     },
@@ -208,7 +215,13 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontSize: typography.small,
       color: colors.glassText.secondary,
       marginTop: spacing.xs,
-      flexShrink: 1,
+      textAlign: 'center',
+    },
+    // Widened to the full card so SpokenText's row (text + its own read-aloud button) wraps and
+    // centers instead of shrink-wrapping around whatever width its content happens to need.
+    spokenRow: {
+      width: '100%',
+      justifyContent: 'center',
     },
     audioButton: {
       width: 24,
@@ -225,6 +238,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontSize: typography.small,
       color: colors.glassText.secondary,
       marginTop: spacing.xs,
+      textAlign: 'center',
     },
     correctAnswerValue: {
       fontWeight: '700',
@@ -234,6 +248,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontSize: typography.small,
       color: colors.glassText.secondary,
       marginTop: spacing.xs,
+      textAlign: 'center',
     },
     advanceButton: {
       alignSelf: 'center',

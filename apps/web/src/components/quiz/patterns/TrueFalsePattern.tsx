@@ -5,7 +5,7 @@
 // Selecting an option never submits immediately — the learner always confirms
 // with the dedicated Submit button, regardless of helpers.autoSubmit (that flag
 // is reserved for DnD interaction patterns, not click-to-select ones).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, X, Loader2, Volume2 } from 'lucide-react';
 import { ASSETS } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
@@ -32,6 +32,12 @@ function playAudio(path?: string) {
 
 export default function TrueFalsePattern({ content, lang, disabled, isSubmitting, onAnswer }: TrueFalsePatternProps) {
   const [selected, setSelected] = useState<'True' | 'False' | null>(null);
+
+  // Reset per-question state whenever a new question loads — previously the prior selection
+  // carried over when the next question was also a true/false type.
+  useEffect(() => {
+    setSelected(null);
+  }, [content]);
 
   const choose = (value: 'True' | 'False') => {
     if (disabled) return;

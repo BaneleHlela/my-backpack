@@ -11,6 +11,9 @@ import {
   abandonSessionHandler,
   getSessionResultsHandler,
   getSessionStateHandler,
+  getSessionReviewHandler,
+  listQuizHistoryHandler,
+  getHistoryFilterOptionsHandler,
 } from './quiz.controller';
 
 const router: IRouter = Router();
@@ -21,7 +24,13 @@ router.get('/quizzes', requireProfile, listQuizzesHandler);
 // GET /api/quiz/has-content?miniAppId=
 router.get('/has-content', requireProfile, hasQuizContentHandler);
 
-// POST /api/quiz/session  { miniAppId, settings? }
+// GET /api/quiz/history?contextId=&nodeId=&status=&page=&limit= — Quiz History list
+router.get('/history', requireProfile, listQuizHistoryHandler);
+
+// GET /api/quiz/history/filters — Quiz History filter dropdown options
+router.get('/history/filters', requireProfile, getHistoryFilterOptionsHandler);
+
+// POST /api/quiz/session  { miniAppId | quizId, settings? }
 router.post('/session', requireProfile, createSessionHandler);
 
 // POST /api/quiz/session/:sessionId/answer
@@ -38,5 +47,8 @@ router.get('/session/:sessionId', requireProfile, getSessionStateHandler);
 
 // GET /api/quiz/session/:sessionId/results
 router.get('/session/:sessionId/results', requireProfile, getSessionResultsHandler);
+
+// GET /api/quiz/session/:sessionId/review — full per-question breakdown for Quiz History
+router.get('/session/:sessionId/review', requireProfile, getSessionReviewHandler);
 
 export default router;

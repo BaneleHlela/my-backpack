@@ -3,7 +3,7 @@
 // content — see docs/content/content-studio-design.md). questionCount always tracks
 // questionIds.length rather than being its own editable field, for mode:'fixed' quizzes.
 import { Types } from 'mongoose';
-import Quiz, { IQuizDocument, IQuizSettings } from '../../models/learning/quiz.model';
+import Quiz, { IQuizDocument, IQuizSettings, IAssignedPlayMode } from '../../models/learning/quiz.model';
 import RoadmapNode from '../../models/learning/roadmapNode.model';
 import Course from '../../models/core/course.model';
 import Question from '../../models/apps/language/vocabulary/question.model';
@@ -58,10 +58,11 @@ export async function getQuiz(quizId: string): Promise<IQuizDocument> {
 export interface UpdateQuizInput {
   title?: string;
   settings?: Partial<IQuizSettings>;
-  // Teacher opt-in for mobile's Quiz Mode Select screen — see quiz.model.ts's allowPlayModes
-  // comment. Every quiz reachable from QuizEditorPage is mode:'fixed', so this is the only
-  // place in the app that can ever set it true.
-  allowPlayModes?: boolean;
+  // Teacher-assigned Quiz Mode — see quiz.model.ts's assignedPlayMode comment. Every quiz
+  // reachable from QuizEditorPage is mode:'fixed', so this is the only place in the app that
+  // can ever set it. `null` clears an existing assignment back to an ordinary session;
+  // `undefined` (the field simply absent from the request body) leaves it untouched.
+  assignedPlayMode?: IAssignedPlayMode | null;
 }
 
 export async function updateQuiz(quizId: string, input: UpdateQuizInput): Promise<IQuizDocument> {
@@ -72,7 +73,7 @@ export async function updateQuiz(quizId: string, input: UpdateQuizInput): Promis
   if (input.settings !== undefined) {
     quiz.settings = { ...quiz.settings, ...input.settings, questionCount: quiz.questionIds.length };
   }
-  if (input.allowPlayModes !== undefined) quiz.allowPlayModes = input.allowPlayModes;
+  if (input.assignedPlayMode !== undefined) quiz.assignedPlayMode = input.assignedPlayMode;
 
   await quiz.save();
   return quiz;

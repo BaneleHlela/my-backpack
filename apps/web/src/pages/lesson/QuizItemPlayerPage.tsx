@@ -48,6 +48,13 @@ export default function QuizItemPlayerPage() {
   const ageGroup = activeProfile?.ageGroup ?? 'adult';
   const lang = subjectSlugToLangCode(subjectSlug);
 
+  // Topic (RoadmapNode) name for the header — read from whatever roadmap the learner already
+  // has loaded in Redux (populated by CoursePage before they navigated here). Falls back to
+  // nothing on a direct link/refresh, where currentRoadmap hasn't been fetched yet — not worth
+  // a dedicated network round-trip just for a header label.
+  const currentRoadmap = useSelector((state: RootState) => state.roadmap.currentRoadmap);
+  const topicTitle = currentRoadmap?.nodes.find((n) => n._id === nodeId)?.title;
+
   const questionStartedAt = useRef<number>(Date.now());
   const itemCompletionRequested = useRef(false);
   const [itemCompletion, setItemCompletion] = useState<ItemCompletionResult | null>(null);
@@ -183,7 +190,16 @@ export default function QuizItemPlayerPage() {
   const isDndQuestion = quiz.currentQuestion?.type === 'dnd_single';
 
   return (
-    <QuizPageShell onBack={() => navigate(`/subject/${subjectSlug}/course/${courseSlug}`)}>
+    <QuizPageShell
+      onBack={() => navigate(`/subject/${subjectSlug}/course/${courseSlug}`)}
+      title={
+        topicTitle ? (
+          <p className="text-xs font-semibold text-violet-500 uppercase tracking-wide mb-3">
+            {topicTitle}
+          </p>
+        ) : undefined
+      }
+    >
       <AnimatePresence mode="wait">
         {(quiz.status === 'idle' || quiz.status === 'starting') && (
           <motion.div key="loading" className="flex justify-center py-16">

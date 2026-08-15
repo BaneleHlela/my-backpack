@@ -10,7 +10,12 @@ import { Settings2 } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
 import { useTheme } from '../../theme/ThemeContext';
-import { formatModeSettingPill, type QuizPlayModeDef, type QuizPlayModeSettings } from './quizPlayModes';
+import {
+  formatModeSettingPill,
+  QUIZ_PLAY_MODE_ICONS,
+  type QuizPlayModeDef,
+  type QuizPlayModeSettings,
+} from './quizPlayModes';
 
 interface QuizModeCardProps {
   mode: QuizPlayModeDef;
@@ -25,7 +30,7 @@ type ThemeColors = ReturnType<typeof useTheme>['colors'];
 export function QuizModeCard({ mode, settings, settingsAdjustable, onPress, onSettingsPress }: QuizModeCardProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-  const Icon = mode.icon;
+  const Icon = QUIZ_PLAY_MODE_ICONS[mode.id];
   const showAdjustablePill = settingsAdjustable && mode.settingKey !== 'none';
 
   return (
@@ -70,9 +75,22 @@ function createStyles(colors: ThemeColors) {
       width: 48,
       height: 48,
       borderRadius: radii.full,
+      alignSelf: 'center',
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.surface.glassSoft,
+    },
+    pill: {
+      width: '90%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-evenly',
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 5,
+      borderRadius: radii.full,
+      backgroundColor: colors.surface.glassStrong,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
     },
     title: {
       fontFamily: 'Fredoka_600SemiBold',
@@ -86,17 +104,6 @@ function createStyles(colors: ThemeColors) {
       color: colors.text.secondary,
       textAlign: 'center',
       flex: 1,
-    },
-    pill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      paddingHorizontal: spacing.xs,
-      paddingVertical: 5,
-      borderRadius: radii.full,
-      backgroundColor: colors.surface.glassStrong,
-      borderWidth: 1,
-      borderColor: colors.surface.border,
     },
     pillStatic: {
       backgroundColor: colors.surface.glassSoft,

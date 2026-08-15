@@ -24,11 +24,19 @@ export interface INodeRewards {
   badge?: string;
 }
 
+// One tier of a quiz item's star-grading scale — see packages/shared/types/roadmap.ts's
+// IStarThreshold (mirrored here) for the full writeup.
+export interface IStarThreshold {
+  minScore: number;
+  stars: number;
+}
+
 export interface INodeItemRef {
   itemType: NodeItemType;
   itemId: Types.ObjectId; // Lesson._id or Quiz._id depending on itemType
   position: number;
   passingScore?: number;  // only meaningful when itemType === 'quiz'
+  starThresholds?: IStarThreshold[]; // only meaningful when itemType === 'quiz' — see IStarThreshold
 }
 
 export interface IRoadmapNodeDocument extends Document {
@@ -64,6 +72,14 @@ const curriculumTagSchema = new Schema<ICurriculumTag>(
   { _id: false }
 );
 
+const starThresholdSchema = new Schema<IStarThreshold>(
+  {
+    minScore: { type: Number, required: true, min: 0, max: 1 },
+    stars: { type: Number, required: true, min: 0, max: 3 },
+  },
+  { _id: false }
+);
+
 const nodeItemRefSchema = new Schema<INodeItemRef>(
   {
     itemType: { type: String, enum: ['lesson', 'quiz', 'project'], required: true },
@@ -72,6 +88,7 @@ const nodeItemRefSchema = new Schema<INodeItemRef>(
     itemId: { type: Schema.Types.ObjectId, required: true },
     position: { type: Number, required: true },
     passingScore: { type: Number, min: 0, max: 1 },
+    starThresholds: { type: [starThresholdSchema], default: undefined },
   },
   { _id: false }
 );
