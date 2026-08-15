@@ -10,7 +10,8 @@
 // gesture recipe extracted for reuse by the two new patterns, not a replacement.
 import { forwardRef, useImperativeHandle } from 'react';
 import type { Ref } from 'react';
-import { Image, StyleSheet, Text } from 'react-native';
+import { Image, StyleSheet } from 'react-native';
+import { Text } from '../../AppText';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { radii, typography } from '@my-backpack/shared';

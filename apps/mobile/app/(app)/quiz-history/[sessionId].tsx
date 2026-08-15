@@ -2,7 +2,8 @@
 // answer, correct answer, points, and explanation, reconstructed server-side from persisted
 // AnswerRecord + Question documents. Ports apps/web's pages/quizHistory/QuizHistoryReviewPage.tsx.
 import { useEffect } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../../../src/components/AppText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { CheckCircle2, HelpCircle, RotateCcw, SkipForward, XCircle } from 'lucide-react-native';
@@ -167,11 +168,11 @@ export default function QuizHistoryReviewScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     flex: { flex: 1 },
-    header: { padding: spacing.lg, paddingBottom: spacing.sm },
+    header: { padding: spacing.md, paddingBottom: spacing.sm },
     loading: { paddingVertical: spacing.xl },
     margin: { marginHorizontal: spacing.lg },
     errorText: { fontSize: typography.small, color: colors.error.dark, textAlign: 'center' },
-    content: { padding: spacing.lg, paddingTop: 0, gap: spacing.md },
+    content: { padding: spacing.md, paddingTop: 0, gap: spacing.md },
     summaryCard: { alignItems: 'center' },
     eyebrow: {
       fontSize: 11,

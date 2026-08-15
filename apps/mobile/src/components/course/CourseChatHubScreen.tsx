@@ -2,7 +2,8 @@
 // Teacher (visibly present but disabled — no teacher accounts or class/cohort model exist yet,
 // see docs/product/course-chat-vision.md). Non-interactive by design: the explanation is
 // already shown on the tile itself, so no extra tap/toast is needed on top of that.
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { useRouter } from 'expo-router';
 import { BotMessageSquare, ChevronRight, Users } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
@@ -87,7 +88,7 @@ export function CourseChatHubScreen({
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
     screen: { flex: 1 },
-    content: { padding: spacing.lg, gap: spacing.md },
+    content: { padding: spacing.md, gap: spacing.md },
     heading: {
       fontSize: typography.headingLg,
       fontWeight: '700',

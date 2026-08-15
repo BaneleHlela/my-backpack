@@ -7,7 +7,8 @@
 // Course Chat's hub: a browsing screen, not a full-screen player, so AppLayout's ScreenBackground/
 // ProtectedRoute wrapping already covers it with no extra chrome needed here.
 import { useEffect } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../../../src/components/AppText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Eye, History as HistoryIcon, RotateCcw } from 'lucide-react-native';
@@ -263,7 +264,7 @@ export default function QuizHistoryScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     flex: { flex: 1 },
-    header: { padding: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
+    header: { padding: spacing.md, paddingBottom: spacing.sm, gap: spacing.sm },
     title: { fontSize: typography.headingLg, fontWeight: '700', color: colors.text.primary },
     tabs: {
       flexDirection: 'row',
@@ -294,7 +295,7 @@ function createStyles(colors: ThemeColors) {
     emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.xs },
     emptyTitle: { fontSize: typography.body, fontWeight: '700', color: colors.text.primary },
     emptyBody: { fontSize: typography.small, color: colors.text.secondary, textAlign: 'center', maxWidth: 280 },
-    listContent: { padding: spacing.lg, paddingTop: 0 },
+    listContent: { padding: spacing.md, paddingTop: 0 },
     separator: { height: spacing.sm },
     rowTop: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
     rowTextWrap: { flex: 1 },

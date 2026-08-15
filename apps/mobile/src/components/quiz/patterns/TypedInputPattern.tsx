@@ -13,7 +13,8 @@
 // use the "audio:" prefix, that takes priority.
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import type { Ref } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Text } from '../../AppText';
 import { Volume2 } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers, QuestionType } from '@my-backpack/shared';

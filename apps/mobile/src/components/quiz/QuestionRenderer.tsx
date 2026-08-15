@@ -10,7 +10,8 @@
 // itself.
 import { forwardRef } from 'react';
 import type { Ref } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IQuestion, IQuestionHelpers } from '@my-backpack/shared';
 import { McqPattern } from './patterns/McqPattern';

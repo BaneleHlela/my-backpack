@@ -21,6 +21,7 @@ export interface ProfileSummary {
   ageGroup: AgeGroup;
   isOwner: boolean;
   isSetupComplete: boolean;
+  isGuest: boolean;
   hasPin: boolean;
 }
 
@@ -54,7 +55,17 @@ export interface SelectProfileResult {
   accessToken: string;
 }
 
-function toProfileSummary(profile: IProfileDocument): ProfileSummary {
+export interface GuestSignupResult {
+  accessToken: string;
+  refreshToken: string;
+  profile: ProfileSummary;
+}
+
+export interface ClaimAccountResult {
+  email: string;
+}
+
+function toProfileSummary(profile: IProfileDocument, isGuest: boolean): ProfileSummary {
   return {
     id: profile._id.toString(),
     displayName: profile.displayName,
@@ -62,6 +73,7 @@ function toProfileSummary(profile: IProfileDocument): ProfileSummary {
     ageGroup: profile.ageGroup,
     isOwner: profile.isOwner,
     isSetupComplete: profile.isSetupComplete,
+    isGuest,
     hasPin: !!profile.pin,
   };
 }
@@ -120,7 +132,7 @@ export async function loginLocal(
   return {
     partialToken,
     refreshToken,
-    profiles: profiles.map(toProfileSummary),
+    profiles: profiles.map((p) => toProfileSummary(p, account.isGuest)),
   };
 }
 
@@ -227,11 +239,90 @@ export async function upsertOAuthAccount(
   return { account, isNew: true };
 }
 
+// A guest is a real Account + Profile with no email/password — not a parallel local-only
+// system. Modeled directly on upsertOAuthAccount above, but skips the partial-token/
+// select-profile round trip entirely (signFullToken directly) since there's exactly one
+// profile and nothing to verify. ageGroup defaults to 'adult' per the product decision
+// (content doesn't meaningfully differ by age group yet, and it's changeable later via
+// PATCH /api/profiles/me).
+export async function createGuestAccount(
+  displayName?: string,
+  ageGroup: AgeGroup = 'adult'
+): Promise<GuestSignupResult> {
+  const account = new Account({
+    isGuest: true,
+    authProviders: [{ provider: 'guest', providerId: crypto.randomBytes(16).toString('hex') }],
+  });
+  await account.save();
+
+  const profile = new Profile({
+    accountId: account._id,
+    displayName: displayName?.trim() || 'Guest',
+    ageGroup,
+    isOwner: true,
+    // Guests skip the dateOfBirth/education setup step indefinitely — see
+    // claimAccount below and CLAUDE.md's "Core Concept: Account → Profiles" for why.
+    isSetupComplete: true,
+  });
+  await profile.save();
+
+  account.profiles.push(profile._id);
+  account.activeProfile = profile._id;
+  await account.save();
+
+  const accessToken = signFullToken({
+    accountId: account._id.toString(),
+    profileId: profile._id.toString(),
+    ageGroup: profile.ageGroup,
+  });
+  const refreshToken = signRefreshToken({ accountId: account._id.toString() });
+
+  return {
+    accessToken,
+    refreshToken,
+    profile: toProfileSummary(profile, true),
+  };
+}
+
+// Adds email/password credentials to an existing guest Account — the account, its profiles,
+// and all of its progress are untouched; this only ever changes whether the account can be
+// logged into with a password afterward.
+export async function claimAccount(
+  accountId: string,
+  email: string,
+  password: string
+): Promise<ClaimAccountResult> {
+  const account = await Account.findById(accountId);
+  if (!account) throw new Error('Account not found');
+
+  if (account.email || account.password) {
+    throw new Error('This account already has sign-in credentials');
+  }
+
+  const existing = await Account.findOne({ email: email.toLowerCase() });
+  if (existing) throw new Error('An account with this email already exists');
+
+  account.email = email;
+  account.password = password; // pre-save hook hashes it
+  account.isGuest = false;
+  account.authProviders.push({ provider: 'local', providerId: email.toLowerCase() });
+
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  account.verificationToken = verificationToken;
+  account.verificationTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  await account.save();
+
+  const verificationUrl = `${process.env.CLIENT_URL ?? 'http://localhost:5173'}/verify-email?token=${verificationToken}`;
+  //await sendVerificationEmail(email, verificationUrl);
+
+  return { email };
+}
+
 export async function getProfilesForAccount(accountId: string): Promise<ProfileSummary[]> {
   const account = await Account.findById(accountId);
   if (!account) throw new Error('Account not found');
   const profiles = await Profile.find({ _id: { $in: account.profiles } });
-  return profiles.map(toProfileSummary);
+  return profiles.map((p) => toProfileSummary(p, account.isGuest));
 }
 
 export async function sendVerificationCode(accountId: string): Promise<void> {

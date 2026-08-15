@@ -5,11 +5,13 @@
 // than fetched); otherwise it renders as a static, non-pressable label so a fixed roadmap/course
 // quiz still communicates its (non-editable) mode-specific value without inviting a tap that
 // would do nothing.
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { Settings2 } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
 import { useTheme } from '../../theme/ThemeContext';
+import { fonts } from '../../theme/fonts';
 import {
   formatModeSettingPill,
   QUIZ_PLAY_MODE_ICONS,
@@ -93,13 +95,13 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.surface.border,
     },
     title: {
-      fontFamily: 'Fredoka_600SemiBold',
+      fontFamily: fonts.display.semibold,
       fontSize: typography.body,
       color: colors.text.primary,
       textAlign: 'center',
     },
     blurb: {
-      fontFamily: 'Fredoka_400Regular',
+      fontFamily: fonts.display.regular,
       fontSize: typography.small,
       color: colors.text.secondary,
       textAlign: 'center',
@@ -109,7 +111,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surface.glassSoft,
     },
     pillText: {
-      fontFamily: 'Fredoka_500Medium',
+      fontFamily: fonts.display.medium,
       fontSize: typography.small,
       color: colors.primary.dark,
     },

@@ -7,7 +7,9 @@
 // logoutAsync, fetchActiveProfile, completeProfileSetup) — forgotPassword/
 // resetPassword/verifyEmail/resendVerification have no mobile screen yet
 // (see docs/technical/mobile-architecture.md) so aren't ported until one
-// exists.
+// exists. Guest mode (August 2026, see docs/technical/guest-mode.md) added
+// two more: continueAsGuest and claimAccount — web has no guest mode yet,
+// so these are mobile-only, not ports of anything on web.
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type {
@@ -16,8 +18,11 @@ import type {
   LoginResponse,
   RegisterResponse,
   SelectProfileResponse,
+  GuestSignupResponse,
+  ClaimAccountResponse,
   ApiResponse,
   IProfile,
+  AgeGroup,
   ProfileSetupDto,
 } from '@my-backpack/shared';
 import type { AxiosError } from 'axios';
@@ -167,6 +172,42 @@ export const selectProfile = createAsyncThunk(
   }
 );
 
+// POST /api/auth/guest — skips the partial-token/select-profile round trip entirely (there's
+// exactly one profile, nothing to verify). The response's `profile` is only ProfileSummary-
+// shaped (not the full IProfile activeProfile needs — no accountId/education/preferences/
+// progress), so this thunk only sets the token half of the session; the caller (Login screen)
+// dispatches fetchActiveProfile() right after, same two-step pattern already used by
+// ProfileSwitcherModal's/select-profile.tsx's doSelectAndNavigate.
+export const continueAsGuest = createAsyncThunk(
+  'auth/continueAsGuest',
+  async (payload: { displayName?: string; ageGroup?: AgeGroup } | undefined, { rejectWithValue }) => {
+    try {
+      const { data } = await api.post<ApiResponse<GuestSignupResponse>>('/auth/guest', payload ?? {});
+      if (data.data.refreshToken) {
+        await saveRefreshToken(data.data.refreshToken);
+      }
+      return data.data;
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error, 'Failed to continue as guest'));
+    }
+  }
+);
+
+// POST /api/auth/claim — adds email/password credentials to the guest account already in use.
+// No logout/re-login: the caller keeps its current session, this just flips isGuest off locally
+// once the server confirms it.
+export const claimAccount = createAsyncThunk(
+  'auth/claimAccount',
+  async ({ email, password }: { email: string; password: string }, { rejectWithValue }) => {
+    try {
+      const { data } = await api.post<ApiResponse<ClaimAccountResponse>>('/auth/claim', { email, password });
+      return data.data;
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error, 'Failed to save progress'));
+    }
+  }
+);
+
 export const logoutAsync = createAsyncThunk('auth/logoutAsync', async () => {
   try {
     await api.post('/auth/logout');
@@ -297,6 +338,37 @@ const authSlice = createSlice({
         state.partialToken = null;
       })
       .addCase(selectProfile.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      // continueAsGuest
+      .addCase(continueAsGuest.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(continueAsGuest.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.accessToken = action.payload.accessToken;
+        state.isAuthenticated = true;
+        state.partialToken = null;
+      })
+      .addCase(continueAsGuest.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      // claimAccount
+      .addCase(claimAccount.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(claimAccount.fulfilled, (state, action) => {
+        state.isLoading = false;
+        if (state.activeProfile) {
+          state.activeProfile = { ...state.activeProfile, isGuest: false };
+        }
+        state.successMessage = `Progress saved! A verification link was sent to ${action.payload.email}.`;
+      })
+      .addCase(claimAccount.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       })

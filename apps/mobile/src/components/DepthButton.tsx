@@ -51,7 +51,7 @@ interface DepthButtonProps {
 }
 
 const DEFAULT_BORDER_RADIUS = radii.full;
-const DEFAULT_DEPTH = 4;
+const DEFAULT_DEPTH = 7;
 const DEFAULT_SHADOW_COLOR = '#7045B8';
 const DEFAULT_GLOSS_OPACITY = 0.28;
 

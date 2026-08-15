@@ -9,6 +9,7 @@ import { Platform } from 'react-native';
 
 const REFRESH_TOKEN_KEY = 'refreshToken';
 const LAST_ROUTE_KEY_PREFIX = 'lastRoute_';
+const GUEST_NUDGE_KEY_PREFIX = 'guestNudgeShown_';
 
 export async function saveRefreshToken(token: string): Promise<void> {
   if (Platform.OS === 'web') return;
@@ -39,4 +40,19 @@ export async function saveLastRoute(profileId: string, route: string): Promise<v
 export async function getLastRoute(profileId: string): Promise<string | null> {
   if (Platform.OS === 'web') return null;
   return SecureStore.getItemAsync(`${LAST_ROUTE_KEY_PREFIX}${profileId}`);
+}
+
+// Tracks whether a guest profile has already seen the one-time "save your progress" nudge
+// (GuestProgressNudge, shown after their first completed quiz session) so it never repeats on
+// later sessions. Keyed by profileId, same reasoning as lastRoute above — a shared device could
+// hold more than one guest profile in principle.
+export async function hasShownGuestNudge(profileId: string): Promise<boolean> {
+  if (Platform.OS === 'web') return true;
+  const value = await SecureStore.getItemAsync(`${GUEST_NUDGE_KEY_PREFIX}${profileId}`);
+  return value === '1';
+}
+
+export async function markGuestNudgeShown(profileId: string): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await SecureStore.setItemAsync(`${GUEST_NUDGE_KEY_PREFIX}${profileId}`, '1');
 }

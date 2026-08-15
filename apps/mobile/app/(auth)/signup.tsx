@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '../../src/components/AppText';
 import { Link } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { spacing, typography } from '@my-backpack/shared';
@@ -122,7 +123,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     center: {
       alignItems: 'center',
       justifyContent: 'center',
-      padding: spacing.lg,
+      padding: spacing.md,
     },
     card: {
       width: '100%',

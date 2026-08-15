@@ -1564,6 +1564,48 @@ every course's auto-created pool quiz) is seeded `isUserAdjustable: true` — th
 `target.source === 'miniApp' ? true : false` derivation collapsed to a constant once the
 `roadmapItem` branch was removed.
 
+### Fonts: Fredoka + Nunito Sans (app-wide, August 2026)
+
+Superseded the entry below — Chewy + Fredoka were originally loaded scoped to the Quiz Modes
+screens only (see the old text preserved just below for history). This pass replaced Chewy with
+Fredoka everywhere and made both fonts genuinely app-wide, matching apps/web's equivalent change
+(see its own "Fonts" note in the web docs / `apps/web/tailwind.config.ts`+`src/index.css`).
+
+`packages/shared/constants/theme.ts`'s `fontFamilies` (`{ display: 'Fredoka', body: 'Nunito
+Sans' }`) is the single source of truth for both apps — plain CSS-shaped family-name strings,
+which is exactly what apps/web's Tailwind config needs directly. RN has no such thing as a
+family + weight pairing for a statically-loaded font (`@expo-google-fonts/*` registers one fixed
+file per weight under its own weight-suffixed name, e.g. `Fredoka_700Bold`), so apps/mobile maps
+those same two families to the exact loaded names in `src/theme/fonts.ts` (`fonts.display.*` /
+`fonts.body.*`) — kept in sync by hand with the weights loaded in `app/_layout.tsx`'s
+`useFonts()` call (now `Fredoka_400/500/600/700` + `NunitoSans_400/500/600/700`,
+`@expo-google-fonts/chewy` removed from `package.json` entirely).
+
+**Making Nunito Sans the real app-wide default** is the part apps/web gets for free (Tailwind
+Preflight cascades `font-family` from `html` down through every element) and apps/mobile
+doesn't — RN's `<Text>` has no font inheritance at all, and (confirmed by reading RN 0.86's
+`Text.js` directly) it no longer reads `Text.defaultProps` either, so the old "monkey-patch
+`Text.defaultProps`" trick doesn't work on this RN version. The fix is
+`src/components/AppText.tsx` — a `forwardRef` wrapper around RN's `Text` that applies
+`fonts.body.regular` as a default style, overridable per-instance since array-style flattening
+lets an explicit `fontFamily` in a passed `style` win over the default. Every file that imports
+`Text` from `'react-native'` now imports it from this wrapper instead (a codemod swapped all 47
+call sites in one pass — `git log` for the exact commit if the mechanism ever needs revisiting);
+`AppText.tsx` itself is the one file still importing the real RN `Text`. `Text.tsx` usages that
+already had their own explicit `fontFamily` (Fredoka display text, mostly in the Quiz Modes
+files below) are untouched — the wrapper's default only fills in where nothing was set.
+
+Fredoka (display) is applied explicitly per-instance, same as before — there is no RN
+equivalent of apps/web's free `h1`-`h6` CSS rule, so it stays wherever it was already used
+(Quiz Modes' card titles/pills/headings, now referencing `fonts.display.*` instead of hardcoded
+`'Fredoka_600SemiBold'`-style strings) plus the one heading that previously used Chewy
+(`QuizModeSelectScreen`'s "Quiz Modes" page title, now `fonts.display.bold`) and `Menubar`'s
+back-button label (previously plain system-font caps with a comment explaining Chewy wasn't
+loaded — now genuinely Fredoka, since it's loaded app-wide today).
+
+<details>
+<summary>Original entry (superseded, kept for history)</summary>
+
 ### Fonts: Chewy + Fredoka (new screens only)
 
 Neither font was loaded anywhere in the app before this. `expo-font` +
@@ -1574,6 +1616,8 @@ text in the wrong font for one frame. Chewy (`Chewy_400Regular`) is used sparing
 big page-level heading per new screen ("Quiz Modes"); Fredoka (400/500/600) covers card titles,
 blurbs, pills, and modal body text. This is scoped to the Quiz Modes screens only — not an
 app-wide font sweep.
+
+</details>
 
 ### Theme: dark (the app's current shipped default)
 

@@ -6,13 +6,18 @@ import { StatusBar } from 'expo-status-bar';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
-import { Chewy_400Regular } from '@expo-google-fonts/chewy';
 import {
   Fredoka_400Regular,
   Fredoka_500Medium,
   Fredoka_600SemiBold,
   Fredoka_700Bold,
 } from '@expo-google-fonts/fredoka';
+import {
+  NunitoSans_400Regular,
+  NunitoSans_500Medium,
+  NunitoSans_600SemiBold,
+  NunitoSans_700Bold,
+} from '@expo-google-fonts/nunito-sans';
 import { store } from '../src/store/store';
 import type { AppDispatch, RootState } from '../src/store/store';
 import { injectStore } from '../src/lib/api';
@@ -33,15 +38,19 @@ function AuthBootstrap() {
   // ThemeContext's ACTIVE_THEME note — no toggle exists yet, dark is the only active theme).
   const statusBarStyle = theme === 'dark' ? 'light' : 'dark';
   const [nativeSplashHidden, setNativeSplashHidden] = useState(false);
-  // Chewy (display headings) + Fredoka (body/labels) — Quiz Modes screens only for now, see
-  // docs/technical/mobile-architecture.md's "Fonts (Quiz Modes)" section. [loaded, error] mirrors
+  // Fredoka (display/headings, see src/theme/fonts.ts) + Nunito Sans (body — the app-wide
+  // default applied via src/components/AppText.tsx) — the app's two brand fonts, see
+  // docs/technical/mobile-architecture.md's "Fonts" section. [loaded, error] mirrors
   // expo-font's useFonts contract; either outcome unblocks the splash hand-off below.
   const [fontsLoaded, fontError] = useFonts({
-    Chewy_400Regular,
     Fredoka_400Regular,
     Fredoka_500Medium,
     Fredoka_600SemiBold,
     Fredoka_700Bold,
+    NunitoSans_400Regular,
+    NunitoSans_500Medium,
+    NunitoSans_600SemiBold,
+    NunitoSans_700Bold,
   });
   const fontsReady = fontsLoaded || !!fontError;
 

@@ -4,7 +4,8 @@
 // never used where a prerecorded audioUrl already exists; playback is manual (icon button),
 // never autoplay. One accepted regression from web: no live word-by-word highlighting —
 // expo-speech's documented API has no word-boundary callback to drive it.
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 import { Volume2 } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';

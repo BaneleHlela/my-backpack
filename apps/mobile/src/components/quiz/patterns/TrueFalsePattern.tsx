@@ -6,7 +6,8 @@
 // QuizSessionScreen, see questionPatternTypes.ts), not a button local to this pattern.
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import type { Ref } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../../AppText';
 import { Check, Volume2, X } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';

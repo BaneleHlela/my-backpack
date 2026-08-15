@@ -3,7 +3,8 @@
 // as a natural fallback while the image is loading or if it fails to fetch (offline, DiceBear
 // down) — RN's <Image> paints nothing over the initials in either case, unlike a plain <img>
 // on web which shows a broken-image icon.
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
+import { Text } from './AppText';
 import type { AgeGroup } from '@my-backpack/shared';
 import { dicebearAvatarUrl } from '../lib/avatar';
 import { useTheme } from '../theme/ThemeContext';

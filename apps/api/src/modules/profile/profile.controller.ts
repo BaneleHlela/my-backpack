@@ -14,6 +14,15 @@ import {
 import { sendSuccess } from '../../utils/response';
 import { AppError, catchAsync } from '../../utils/AppError';
 import { CreateProfileDto, UpdateProfileDto, ProfileSetupDto } from './profile.types';
+import { IProfileDocument } from '../../models/core/profile.model';
+
+// GET /profiles/me, PATCH /profiles/me, and PATCH /profiles/me/setup all hand the full profile
+// document back to the client as IProfile, which (unlike the Profile model itself) carries
+// isGuest — a fact that lives on the parent Account, not the Profile. `requireProfile` has
+// already loaded that account onto req.account, so this is a free join, not a second query.
+function withIsGuest(profile: IProfileDocument, req: Request): Record<string, unknown> {
+  return { ...profile.toObject(), isGuest: req.account?.isGuest ?? false };
+}
 
 export const listProfiles = catchAsync(async (req: Request, res: Response): Promise<void> => {
   const accountId = req.account?._id.toString();
@@ -48,7 +57,7 @@ export const getMe = catchAsync(async (req: Request, res: Response): Promise<voi
 
   try {
     const profile = await getProfileById(profileId);
-    sendSuccess(res, profile);
+    sendSuccess(res, withIsGuest(profile, req));
   } catch (err) {
     throw new AppError(err instanceof Error ? err.message : 'Failed to fetch profile', 500);
   }
@@ -61,7 +70,7 @@ export const updateMe = catchAsync(async (req: Request, res: Response): Promise<
   try {
     const data = req.body as UpdateProfileDto;
     const profile = await updateProfile(profileId, data);
-    sendSuccess(res, profile);
+    sendSuccess(res, withIsGuest(profile, req));
   } catch (err) {
     throw new AppError(err instanceof Error ? err.message : 'Failed to update profile', 400);
   }
@@ -78,7 +87,7 @@ export const setupMe = catchAsync(async (req: Request, res: Response): Promise<v
 
   try {
     const profile = await completeProfileSetup(profileId, data);
-    sendSuccess(res, profile);
+    sendSuccess(res, withIsGuest(profile, req));
   } catch (err) {
     throw new AppError(err instanceof Error ? err.message : 'Failed to complete setup', 400);
   }

@@ -29,7 +29,8 @@
 // when `activeLessonId` transitions from null to a value, so every open is a fresh mount — this
 // component's own state never needs a lessonId-keyed reset effect.
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { useDispatch, useSelector } from 'react-redux';
 import { BookOpen, Video, X } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';

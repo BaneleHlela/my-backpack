@@ -6,6 +6,7 @@ const colors = {
     highlight: '#DCC8FF',
 }
 
+
 const Scribbler = () => {
     return (
         <div className="w-full h-screen bg-amber-600 flex justify-center items-center">
@@ -14,8 +15,8 @@ const Scribbler = () => {
                 style={{ backgroundColor: colors.shadow }}
                 className="
                     relative z-2
-                    w-[100px] h-[98px]
-                    rounded-full
+                    w-[200px] h-[200px]
+                    rounded-[50%]
                     overflow-visible
                 "
             >
@@ -26,7 +27,7 @@ const Scribbler = () => {
                         absolute
                         bottom-10 left-0
                         w-full h-full
-                        rounded-full
+                        rounded-[10%]
                         overflow-hidden
                         border-4
                         border-[#B58CFF]

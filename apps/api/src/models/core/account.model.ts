@@ -3,7 +3,7 @@ import mongoose, { Document, Schema, Model, Types } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IAuthProvider {
-  provider: 'local' | 'google' | 'facebook';
+  provider: 'local' | 'google' | 'facebook' | 'guest';
   providerId: string;
 }
 
@@ -15,6 +15,7 @@ export interface IAccountDocument extends Document {
   profiles: Types.ObjectId[];
   activeProfile?: Types.ObjectId;
   isEmailVerified: boolean;
+  isGuest: boolean;
   verificationToken?: string;
   verificationTokenExpiresAt?: Date;
   passwordResetToken?: string;
@@ -26,7 +27,7 @@ export interface IAccountDocument extends Document {
 
 const authProviderSchema = new Schema<IAuthProvider>(
   {
-    provider: { type: String, enum: ['local', 'google', 'facebook'], required: true },
+    provider: { type: String, enum: ['local', 'google', 'facebook', 'guest'], required: true },
     providerId: { type: String, required: true },
   },
   { _id: false }
@@ -40,6 +41,7 @@ const accountSchema = new Schema<IAccountDocument>(
     profiles: [{ type: Schema.Types.ObjectId, ref: 'Profile' }],
     activeProfile: { type: Schema.Types.ObjectId, ref: 'Profile' },
     isEmailVerified: { type: Boolean, default: false },
+    isGuest: { type: Boolean, default: false },
     verificationToken: { type: String },
     verificationTokenExpiresAt: { type: Date },
     passwordResetToken: { type: String },

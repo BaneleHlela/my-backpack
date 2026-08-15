@@ -43,8 +43,15 @@
 //      longer lives inside each pattern — QuestionRenderer forwards a ref
 //      (QuestionPatternHandle, see questionPatternTypes.ts) this screen calls directly, and
 //      each pattern reports its own submittable-ness via onReadyChange.
+//
+// Guest mode (August 2026, see docs/technical/guest-mode.md): a one-time GuestProgressNudge
+// fires the first time a guest profile completes a session here — the "genuine achievement
+// moment" this feature's product decisions call for, as opposed to a timer or launch-screen
+// interruption. Orthogonal to everything else in this file (Quiz Modes, roadmap completion) —
+// it only reads quiz.status/quiz.results, never gates or delays them.
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Text } from '../AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -53,9 +60,12 @@ import { resolveHelpers, radii, spacing, typography } from '@my-backpack/shared'
 import type { AgeGroup, ApiResponse, ItemCompletionResult } from '@my-backpack/shared';
 import api from '../../lib/api';
 import { subjectSlugToLangCode } from '../../lib/lang';
+import { hasShownGuestNudge, markGuestNudgeShown } from '../../lib/secureStore';
 import { useTheme } from '../../theme/ThemeContext';
+import { ClaimAccountModal } from '../ClaimAccountModal';
 import { DepthView } from '../DepthView';
 import { DepthButton } from '../DepthButton';
+import { GuestProgressNudge } from './GuestProgressNudge';
 import {
   startQuizItemSession,
   startMiniAppQuizSession,
@@ -148,7 +158,14 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   // answer — see questionPatternTypes.ts and QuestionRenderer's pass-through.
   const patternRef = useRef<QuestionPatternHandle>(null);
   const [patternReady, setPatternReady] = useState(false);
-  const [bottomBarWidth, setBottomBarWidth] = useState(windowWidth - spacing.lg * 2);
+  const [bottomBarWidth, setBottomBarWidth] = useState(windowWidth - spacing.md * 2);
+
+  // Guest mode: a one-time, dismissible nudge after a guest's first completed session — see
+  // GuestProgressNudge's module comment and docs/technical/guest-mode.md. Gated on a
+  // SecureStore flag (not just a ref) so it stays "shown once" across app restarts, not just
+  // within this screen instance.
+  const [showGuestNudge, setShowGuestNudge] = useState(false);
+  const [showClaimModal, setShowClaimModal] = useState(false);
 
   // Quiz Modes gameplay state — see module comment. playModeDef supplies fallback defaults
   // (buildInitialSettings in QuizModeGrid always seeds full settings, so these fallbacks are a
@@ -434,6 +451,28 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemCompletion]);
 
+  // Guest mode: fire the one-time nudge once this session has genuinely finished (not an
+  // intermediate Mastery leg — isMasteryContinuing below covers that the same way the roadmap
+  // completion effect above does). The SecureStore check/write is fire-and-forget; a guest who
+  // completes two sessions in quick succession before the flag round-trips at worst sees the
+  // nudge twice, an acceptable edge case for a purely cosmetic dismissible prompt.
+  useEffect(() => {
+    if (quiz.status !== 'completed' || !quiz.results) return;
+    if (!activeProfile || !activeProfile.isGuest) return;
+    if (playMode?.id === 'mastery' && masteryContinuingRef.current) return;
+    const profileId = activeProfile._id;
+    let cancelled = false;
+    hasShownGuestNudge(profileId).then((seen) => {
+      if (cancelled || seen) return;
+      setShowGuestNudge(true);
+      void markGuestNudgeShown(profileId);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quiz.status, quiz.results]);
+
   const handleAnswer = (rawResponse: string, selectedOptionIndex?: number) => {
     if (!quiz.sessionId || !quiz.currentQuestion) return;
     dispatch(
@@ -716,6 +755,16 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
         </View>
         </View>
       )}
+
+      <GuestProgressNudge
+        visible={showGuestNudge}
+        onSave={() => {
+          setShowGuestNudge(false);
+          setShowClaimModal(true);
+        }}
+        onDismiss={() => setShowGuestNudge(false)}
+      />
+      <ClaimAccountModal visible={showClaimModal} onClose={() => setShowClaimModal(false)} />
     </View>
   );
 }

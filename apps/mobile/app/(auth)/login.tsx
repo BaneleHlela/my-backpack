@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../../src/components/AppText';
 import { Link, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { spacing, typography } from '@my-backpack/shared';
@@ -7,7 +8,7 @@ import { GlassCard } from '../../src/components/GlassCard';
 import { PrimaryButton } from '../../src/components/PrimaryButton';
 import { ScreenBackground } from '../../src/components/ScreenBackground';
 import { TextField } from '../../src/components/TextField';
-import { login, clearError } from '../../src/features/auth/authSlice';
+import { login, continueAsGuest, fetchActiveProfile, clearError } from '../../src/features/auth/authSlice';
 import type { AppDispatch, RootState } from '../../src/store/store';
 import { useTheme } from '../../src/theme/ThemeContext';
 
@@ -21,6 +22,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [isGuestLoading, setIsGuestLoading] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -40,6 +42,23 @@ export default function LoginScreen() {
         setUnverifiedEmail(payload.email ?? email);
       }
     }
+  };
+
+  // "Continue as guest" — a real Account + Profile with no email/password, created and
+  // signed into in one call. No /select-profile hop: continueAsGuest already returns a full
+  // access token, so this goes straight from tap to Home. fetchActiveProfile is a second
+  // round trip because the guest-signup response only carries a ProfileSummary (not the full
+  // IProfile state.activeProfile needs) — same two-step shape doSelectAndNavigate already uses
+  // elsewhere (select-profile.tsx, ProfileSwitcherModal.tsx). See docs/technical/guest-mode.md.
+  const handleGuest = async () => {
+    dispatch(clearError());
+    setIsGuestLoading(true);
+    const result = await dispatch(continueAsGuest(undefined));
+    if (continueAsGuest.fulfilled.match(result)) {
+      await dispatch(fetchActiveProfile());
+      router.replace('/(app)/home');
+    }
+    setIsGuestLoading(false);
   };
 
   return (
@@ -88,6 +107,14 @@ export default function LoginScreen() {
             Sign up
           </Link>
         </View>
+
+        <Pressable onPress={() => void handleGuest()} disabled={isGuestLoading} style={styles.guestRow} hitSlop={8}>
+          {isGuestLoading ? (
+            <ActivityIndicator size="small" color={colors.text.secondary} />
+          ) : (
+            <Text style={styles.guestText}>Continue as guest</Text>
+          )}
+        </Pressable>
       </GlassCard>
     </ScreenBackground>
   );
@@ -98,7 +125,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     center: {
       alignItems: 'center',
       justifyContent: 'center',
-      padding: spacing.lg,
+      padding: spacing.md,
     },
     card: {
       width: '100%',
@@ -136,6 +163,18 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontSize: typography.small,
       fontWeight: '600',
       color: colors.primary.darker,
+    },
+    // Visually secondary to "Sign in" — this is the fast path, not the primary one, so it
+    // reads as a plain text link rather than a second button competing for attention.
+    guestRow: {
+      alignItems: 'center',
+      marginTop: spacing.md,
+    },
+    guestText: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.text.muted,
+      textDecorationLine: 'underline',
     },
   });
 }

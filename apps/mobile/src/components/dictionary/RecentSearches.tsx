@@ -1,7 +1,8 @@
 // Ports apps/web's RecentSearches.tsx — same shape as TrendingTerms,
 // different data source, wrapped chips instead of a horizontal scroll.
 import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { History } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { radii, spacing, typography } from '@my-backpack/shared';

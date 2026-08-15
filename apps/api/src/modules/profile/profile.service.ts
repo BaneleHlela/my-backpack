@@ -15,7 +15,7 @@ import {
 
 const MAX_PROFILES = 6;
 
-function toProfileSummary(profile: IProfileDocument): ProfileSummary {
+function toProfileSummary(profile: IProfileDocument, isGuest: boolean): ProfileSummary {
   return {
     id: profile._id.toString(),
     displayName: profile.displayName,
@@ -23,6 +23,7 @@ function toProfileSummary(profile: IProfileDocument): ProfileSummary {
     ageGroup: profile.ageGroup,
     isOwner: profile.isOwner,
     isSetupComplete: profile.isSetupComplete,
+    isGuest,
     hasPin: !!profile.pin,
   };
 }
@@ -37,7 +38,7 @@ export async function getProfilesByAccountId(accountId: string): Promise<Profile
   const account = await Account.findById(accountId);
   if (!account) throw new Error('Account not found');
   const profiles = await Profile.find({ _id: { $in: account.profiles } });
-  return profiles.map(toProfileSummary);
+  return profiles.map((p) => toProfileSummary(p, account.isGuest));
 }
 
 export async function createProfile(

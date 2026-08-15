@@ -87,7 +87,7 @@ export const lightColors: IThemeColors = {
 // the white-based glass opacities were designed to sit over a wallpaper
 // image in both modes, not the flat `background` colour.
 export const darkColors: IThemeColors = {
-  background: '#101828', // gray-900
+  background: '#171515', // gray-900
 
   primary: {
     light: '#a78bfa', // violet-400 — unchanged from light mode
@@ -144,12 +144,13 @@ export const radii = {
   md: 16,
   lg: 24, // the brand's default card radius (web's rounded-3xl)
   full: 9999,
+  fullPercentage: '100%',
 } as const;
 
 export const spacing = {
   xs: 4,
   sm: 8,
-  md: 16,
+  md: 12,
   lg: 24,
   xl: 32,
 } as const;
@@ -157,9 +158,36 @@ export const spacing = {
 export const typography = {
   bodyChild: 18, // brand-guide.md: minimum 18px body text for children
   body: 16,
-  small: 13,
+  small: 14,
   heading: 24,
   headingLg: 28,
+} as const;
+
+// The two brand fonts (brand-guide.md: "no decorative fonts for reading content — reserve
+// these for headings or labels only"). Fredoka is a rounded display font — headings, page
+// titles, and short prominent labels (it replaced Chewy, the previous decorative font, app-wide
+// in August 2026). Nunito Sans is the body font — everything else, applied as the default
+// reading typeface across both apps.
+//
+// These are plain family-name strings — CSS-shaped, which is exactly what apps/web needs
+// (Tailwind's `fontFamily` config in apps/web/tailwind.config.ts reads these directly). RN has
+// no such thing as a separate font-family + font-weight pairing for a statically-loaded font —
+// expo-font loads one fixed file per weight under a weight-suffixed name (e.g.
+// `Fredoka_700Bold`) — so apps/mobile does not import fontFamilies/fontWeights directly; it
+// maps these same two families to the exact loaded names in its own
+// src/theme/fonts.ts (kept in sync with the weights loaded in app/_layout.tsx) and every
+// mobile `Text` gets the body-regular default via src/components/AppText.tsx. See
+// docs/design/brand-guide.md and docs/technical/mobile-architecture.md's "Fonts" section.
+export const fontFamilies = {
+  display: 'Fredoka',
+  body: 'Nunito Sans',
+} as const;
+
+export const fontWeights = {
+  regular: '400',
+  medium: '500',
+  semibold: '600',
+  bold: '700',
 } as const;
 
 export const borderWidth = {

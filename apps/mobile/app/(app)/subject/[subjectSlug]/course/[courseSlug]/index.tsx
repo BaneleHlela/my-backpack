@@ -7,7 +7,8 @@
 // A separate fetchCourseDetail call still runs to populate course.miniAppIds (the list endpoint
 // only returns plain id strings — see contentSlice.ts).
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../../../../../../src/components/AppText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { radii, spacing, typography } from '@my-backpack/shared';
@@ -228,7 +229,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     flex: 1,
   },
   content: {
-    padding: spacing.lg,
+    padding: spacing.md,
     paddingBottom: 160,
     gap: spacing.md,
   },

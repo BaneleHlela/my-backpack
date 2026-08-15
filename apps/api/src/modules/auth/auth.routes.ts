@@ -14,6 +14,8 @@ import {
   resetPasswordHandler,
   deleteAccountHandler,
   resendVerificationEmailHandler,
+  guestSignup,
+  claimAccountHandler,
 } from './auth.controller';
 import { requireAccount } from './auth.middleware';
 import { IAccountDocument } from '../../models/core/account.model';
@@ -27,6 +29,11 @@ router.post('/login', login);
 router.post('/select-profile', requireAccount, selectProfileHandler);
 router.post('/logout', logout);
 router.post('/refresh', refresh);
+
+// Guest mode — a real Account + Profile with no email/password; /claim later adds credentials
+// to the same account without touching its profiles or progress
+router.post('/guest', guestSignup);
+router.post('/claim', requireAccount, claimAccountHandler);
 
 // Email verification
 router.post('/send-verification', requireAccount, sendVerificationHandler);

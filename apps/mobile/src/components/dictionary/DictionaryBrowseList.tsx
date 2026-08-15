@@ -6,7 +6,8 @@
 // FlatList, so pagination via onEndReached works against the real scroll
 // container.
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { Volume2 } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { radii, spacing, typography } from '@my-backpack/shared';

@@ -15,12 +15,13 @@
 // `<View/>` left in the back button's place still gets `justifyContent: 'space-between'` to push
 // that cluster to the right exactly as if a real back button were there.
 //
-// Figma's back-button label ("SUBJECT") is set via CSS caps in a decorative font (Chewy) this
-// app doesn't load — `textTransform: 'uppercase'` on the existing system-font style gets the
-// same visual effect without pulling in a new font asset, so callers can keep passing natural-
-// case labels (e.g. "Home", subjectName) unchanged.
+// Figma's back-button label ("SUBJECT") is set via CSS caps in a decorative font — Fredoka,
+// the app's display font (see ../theme/fonts.ts), now that it's loaded app-wide.
+// `textTransform: 'uppercase'` still does the case conversion so callers can keep passing
+// natural-case labels (e.g. "Home", subjectName) unchanged.
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Text } from './AppText';
 import { useSelector } from 'react-redux';
 import { ChevronLeft, Gem, Nut } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
@@ -28,6 +29,8 @@ import { Avatar } from './Avatar';
 import { ProfileSwitcherModal } from './ProfileSwitcherModal';
 import type { RootState } from '../store/store';
 import { useTheme } from '../theme/ThemeContext';
+import { fonts } from '../theme/fonts';
+import PeanutIcon from '../../assets/icons/peanut.svg';
 
 interface MenubarProps {
   label?: string;
@@ -36,8 +39,8 @@ interface MenubarProps {
 }
 
 // Fixed placeholders — see module comment above.
-const PEANUTS_PLACEHOLDER = '0';
-const XP_PLACEHOLDER = '0';
+const PEANUTS_PLACEHOLDER = '2.4k';
+const XP_PLACEHOLDER = '82.04k';
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
@@ -51,7 +54,7 @@ export function Menubar({ label, onBackPress, style }: MenubarProps) {
     <View style={[styles.container, style]}>
       {onBackPress ? (
         <Pressable onPress={onBackPress} style={styles.backButton} hitSlop={8}>
-          <ChevronLeft size={18} color={colors.text.secondary} />
+          <ChevronLeft size={24} color={colors.text.secondary} />
           <Text style={styles.backText} numberOfLines={1}>
             {label}
           </Text>
@@ -62,7 +65,7 @@ export function Menubar({ label, onBackPress, style }: MenubarProps) {
 
       <View style={styles.rightContent}>
         <View style={styles.statChip}>
-          <Nut size={16} color={colors.warning.DEFAULT} />
+          <PeanutIcon />
           <Text style={styles.statText}>{PEANUTS_PLACEHOLDER}</Text>
         </View>
         <View style={styles.statChip}>
@@ -75,7 +78,7 @@ export function Menubar({ label, onBackPress, style }: MenubarProps) {
               displayName={activeProfile.displayName}
               ageGroup={activeProfile.ageGroup}
               avatarUrl={activeProfile.avatarUrl}
-              size={28}
+              size={36}
             />
           </Pressable>
         ) : null}
@@ -101,8 +104,8 @@ function createStyles(colors: ThemeColors) {
       gap: 2,
     },
     backText: {
-      fontSize: typography.small,
-      fontWeight: '700',
+      fontFamily: fonts.display.bold,
+      fontSize: typography.body,
       color: colors.text.secondary,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
@@ -119,12 +122,12 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: spacing.xs,
       paddingVertical: 4,
       borderRadius: radii.full,
-      backgroundColor: colors.surface.glassSoft,
     },
     statText: {
-      fontSize: typography.small,
+      fontSize: typography.body,
       fontWeight: '700',
       color: colors.text.primary,
+      fontFamily: fonts.display.medium,
     },
   });
 }

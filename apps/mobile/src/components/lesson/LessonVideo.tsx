@@ -5,7 +5,8 @@
 // No autoplay beyond that tap, matching web's plain <video controls> with no autoPlay attribute;
 // VideoView shows native platform controls once playback starts.
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEvent, useEventListener } from 'expo';
 import { CheckCircle, Play, RotateCcw } from 'lucide-react-native';

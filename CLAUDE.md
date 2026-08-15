@@ -85,7 +85,7 @@ Never push directly to main. Always merge develop → main via PR.
 
 ## Core Concept: Account → Profiles
 
-One **Account** handles authentication (email, password, OAuth).
+One **Account** handles authentication (email, password, OAuth, or guest — see below).
 An Account can have up to **6 Profiles**. Each Profile is what actually 
 uses the app — has its own progress, settings, age-appropriate content, 
 and learning data. Think Netflix-style profile switching.
@@ -94,7 +94,18 @@ and learning data. Think Netflix-style profile switching.
   gets full access token
 - Child profiles can be PIN-protected
 - Only the owner profile can create, edit, or delete other profiles
-- Maximum 6 profiles per account — enforced at service level
+- Maximum 6 profiles per account — enforced at service level (guest accounts are not capped
+  below this — `POST /api/profiles` doesn't care whether the account has credentials)
+
+### Guest mode (mobile only — see [docs/technical/guest-mode.md](docs/technical/guest-mode.md))
+A guest is a real Account + Profile with no email/password (`Account.isGuest: true`) — not a
+parallel local-only system. `POST /api/auth/guest` creates one and returns a full access token
+directly, skipping the partial-token/select-profile round trip entirely (there's exactly one
+profile, nothing to verify). Every existing `requireProfile`-gated route already works for it
+unchanged. `POST /api/auth/claim` later adds email/password credentials to that same account
+(same profiles, same progress, no logout) — mobile surfaces this as "Save your progress" in
+`ProfileSwitcherModal` plus a one-time nudge after a guest's first completed quiz. Web has no
+guest entry point yet — a deliberately separate, later pass.
 
 ### Auth Flow
 1. Register/Login → partial JWT (accountId only) + refresh token in 
@@ -102,6 +113,7 @@ and learning data. Think Netflix-style profile switching.
 2. Select profile → full JWT (accountId + profileId + ageGroup)
 3. All protected routes require full JWT
 4. Access token: 15 minutes | Refresh token: 7 days
+5. Guest (mobile only): `POST /api/auth/guest` → full JWT directly, no partial-token step
 
 ### Middleware
 - `requireAccount` — verifies JWT, works with partial token
@@ -237,7 +249,13 @@ apps/api/src/models/
 
 ### Account
 Authentication only. Fields: email, password (bcrypt, cost 12), 
-authProviders[], profiles[], activeProfile, isEmailVerified.
+authProviders[] (provider: 'local' | 'google' | 'facebook' | 'guest'), profiles[],
+activeProfile, isEmailVerified, isGuest.
+
+`isGuest` (default `false`) marks a credential-less account created via `POST /api/auth/guest`
+(mobile only — see [docs/technical/guest-mode.md](docs/technical/guest-mode.md)). `POST
+/api/auth/claim` later sets `email`/`password` and flips it back to `false` without touching
+`profiles`/`activeProfile`.
 
 ### Profile
 App usage entity. Fields: accountId, displayName, avatarUrl, ageGroup, 
@@ -641,6 +659,12 @@ POST /api/auth/login
 POST /api/auth/select-profile
 POST /api/auth/logout
 POST /api/auth/refresh
+POST /api/auth/guest      — { displayName?, ageGroup? }; creates a credential-less Account +
+                             owner Profile and returns a full access token directly (mobile only
+                             today — see docs/technical/guest-mode.md)
+POST /api/auth/claim      — { email, password }; requireAccount only (not requireOwner, same
+                             precedent as DELETE /auth/account); adds credentials to the calling
+                             account without touching profiles/activeProfile
 GET  /api/auth/google
 GET  /api/auth/google/callback
 GET  /api/auth/facebook
@@ -1014,12 +1038,16 @@ my-backpack/
 │   │   ├── constants/
 │   │   │   ├── assets.ts
 │   │   │   └── theme.ts        # lightColors/darkColors (IThemeColors) + spacing/radius/
-│   │   │                        # typography — canonical design-token source for both
-│   │   │                        # apps/web and apps/mobile; keep in sync with
-│   │   │                        # docs/design/brand-guide.md. apps/mobile consumes both
-│   │   │                        # colour objects via src/theme/ThemeContext.tsx
-│   │   │                        # (dark is the default active theme); apps/web still
-│   │   │                        # hardcodes Tailwind classes, no theme system there yet
+│   │   │                        # typography/fontFamilies/fontWeights — canonical design-token
+│   │   │                        # source for both apps/web and apps/mobile; keep in sync with
+│   │   │                        # docs/design/brand-guide.md. apps/mobile consumes the colour
+│   │   │                        # objects via src/theme/ThemeContext.tsx (dark is the default
+│   │   │                        # active theme) and fontFamilies via its own
+│   │   │                        # src/theme/fonts.ts weight-name mapping (RN needs the exact
+│   │   │                        # expo-font-loaded name, e.g. Fredoka_700Bold — see
+│   │   │                        # src/components/AppText.tsx); apps/web reads fontFamilies
+│   │   │                        # directly in tailwind.config.ts but still hardcodes Tailwind
+│   │   │                        # colour classes, no colour theme system there yet
 │   │   └── types/
 │           ├── account.ts
 │           ├── profile.ts
@@ -1246,6 +1274,29 @@ my-backpack/
       quiz directly, skipping the `miniAppId` + `isDefault` lookup the endpoint previously
       required (which only ever resolved a mini-app's *default* quiz, not an arbitrary roadmap
       Topic quiz). See the API Routes Reference above for the three new/changed routes.
+- [x] Guest mode backend (August 2026) — `Account.isGuest: boolean` (default `false`) +
+      `IAuthProvider` gained `'guest'`; `POST /api/auth/guest` (`createGuestAccount` in
+      `auth.service.ts`, modeled on `upsertOAuthAccount`) creates a credential-less Account +
+      owner Profile (`isSetupComplete: true` at creation — the dateOfBirth/education step is
+      deferred, not asked) and returns a full access token directly, skipping the
+      partial-token/select-profile round trip; `POST /api/auth/claim` (`requireAccount`, not
+      `requireOwner` — same precedent as `DELETE /auth/account`) later adds `email`/`password`
+      to that same account and flips `isGuest` back to `false` without touching
+      `profiles`/`activeProfile`. Every existing `requireProfile`-gated route needed zero
+      changes — it only checks `Account.findById`/`Profile.findById`, never credential
+      presence — confirmed against the real dev database (guest created → second profile
+      added, 6-profile cap intact → a real quiz session started/lifecycle-completed → claim
+      flipped `isGuest` off → re-claim correctly rejected), not new code; see
+      [docs/technical/guest-mode.md](docs/technical/guest-mode.md)'s "Verification performed"
+      for the full run and one unrelated pre-existing issue it surfaced. `isGuest` is joined onto every client-facing profile shape
+      (`ProfileSummary`, `IProfile`) from the parent `Account` at the point each is built
+      (`toProfileSummary` in both `auth.service.ts`/`profile.service.ts`; `GET /profiles/me`,
+      `PATCH /profiles/me`, `PATCH /profiles/me/setup` via a `withIsGuest()` controller helper
+      reading the already-loaded `req.account`) — it isn't stored on `Profile` itself. A second,
+      stricter rate limiter (20/hour) sits on `/api/auth/register` and `/api/auth/guest`
+      specifically, layered on top of the existing blanket `authLimiter`. Mobile-only for now —
+      `apps/web` has no guest entry point yet. See
+      [docs/technical/guest-mode.md](docs/technical/guest-mode.md).
 - [ ] XP and peanuts reward system (deferred)
 - [ ] Test readiness scoring (deferred)
 - [ ] Book/PDF upload pipeline (deferred)
@@ -1435,6 +1486,19 @@ my-backpack/
       docs — the live in-session breakdown (`quizSlice.ts`'s `answeredQuestions`) is ephemeral
       Redux state, lost on navigation/refresh, and was never a source Quiz History could read
       from. Mobile was explicitly out of scope for this pass — see the Backend entry above.
+- [x] Brand fonts — Fredoka + Nunito Sans, app-wide (August 2026) — see the Conventions section's
+      "Two brand fonts" entry and `packages/shared/constants/theme.ts`'s `fontFamilies` for the
+      cross-app source of truth. web-specific part: `@fontsource/fredoka` +
+      `@fontsource/nunito-sans` (self-hosted, no external Google Fonts request — matches
+      apps/mobile's `@expo-google-fonts/*` "bundled, not CDN" approach) installed and imported in
+      `src/index.css`; `tailwind.config.ts`'s `fontFamily.sans`/`fontFamily.display` read
+      `fontFamilies` from the shared package directly. Because Tailwind Preflight sets
+      `font-family` on `html` from `theme('fontFamily.sans')`, Nunito Sans becomes the whole
+      app's body font with **zero component changes** — this is the one advantage apps/web has
+      over apps/mobile here (see that app's own entry below for why it needs a wrapper
+      component instead). Fredoka is applied the same zero-touch way, via a `@layer base` rule
+      in `index.css` targeting every `h1`-`h6`; nothing web-specific needed touching beyond
+      those three files. See `docs/design/brand-guide.md`'s Typography section.
 - [ ] Profile management screens
 
 ### Frontend Mobile (apps/mobile)
@@ -1918,6 +1982,63 @@ my-backpack/
       screen in the Menubar rollout above that never got one. Verified via `tsc --noEmit` and a
       clean `expo export --platform android` (3955 modules) — not yet confirmed on a real
       device/emulator.
+- [x] Guest mode (August 2026) — "Continue as guest" added to the existing `(auth)/login.tsx`
+      as a visually secondary text link (not a new screen — `LaunchScreen.tsx` already owns the
+      "first impression while loading" concern). `continueAsGuest` (new `authSlice.ts` thunk)
+      posts to `/auth/guest` and sets `accessToken`/`isAuthenticated` directly, skipping
+      `/select-profile` entirely; it doesn't set `activeProfile` itself (the response's
+      `profile` is only `ProfileSummary`-shaped, missing fields the full `IProfile` needs), so
+      the Login screen dispatches `fetchActiveProfile()` right after — the same two-step
+      "select → fetch full profile" shape `select-profile.tsx`/`ProfileSwitcherModal.tsx`'s
+      `doSelectAndNavigate` already use. Claiming (adding email/password to the same
+      account, no logout) is a new `ClaimAccountModal` (mirrors `PinEntryModal.tsx`'s focused
+      centered-`Modal` pattern) backed by a new `claimAccount` thunk, reachable from two
+      places: a "Save your progress" row in `ProfileSwitcherModal.tsx` (shown only when
+      `activeProfile.isGuest`), and a new one-time, dismissible `GuestProgressNudge` shown
+      from `QuizSessionScreen.tsx` after a guest's first completed quiz session — "shown once"
+      is tracked per-profile in `expo-secure-store` (`hasShownGuestNudge`/
+      `markGuestNudgeShown` in `secureStore.ts`), consistent with
+      [docs/business/monetisation.md](docs/business/monetisation.md)'s "no dark patterns"
+      stance (tied to an achievement moment, never blocks navigation). Guest accounts are not
+      capped below the normal 6-profile limit; "Add Profile" stays exactly as much of a dead
+      end for a guest as it already was for a real account (not fixed here). Backend is fully
+      shared/platform-agnostic — `apps/web` has no guest entry point yet, a deliberately
+      separate later pass. See [docs/technical/guest-mode.md](docs/technical/guest-mode.md).
+- [x] Brand fonts — Fredoka + Nunito Sans, app-wide (August 2026) — Chewy removed entirely,
+      Fredoka takes over its old display-heading role; Nunito Sans is new, and is now the app's
+      real default body font everywhere (previously nothing was — every `<Text>` fell back to
+      the OS default). `packages/shared/constants/theme.ts`'s `fontFamilies` is the shared
+      source of truth (see the Conventions entry below and apps/web's mirrored entry above);
+      `src/theme/fonts.ts` maps `display`/`body` to the exact expo-font-loaded names (RN needs
+      the weight baked into the family string, e.g. `Fredoka_700Bold` — there's no family+weight
+      pairing for a statically-loaded font the way CSS has). `app/_layout.tsx`'s `useFonts()`
+      swapped `Chewy_400Regular` for `NunitoSans_400Regular/500Medium/600SemiBold/700Bold`
+      alongside the existing `Fredoka_400Regular/500Medium/600SemiBold/700Bold`;
+      `@expo-google-fonts/chewy` removed from `package.json`.
+      Unlike apps/web (Tailwind Preflight cascades `font-family` from `html` for free), RN's
+      `<Text>` has zero font inheritance — and (confirmed by reading RN 0.86's `Text.js`
+      directly, since this app is on a very new RN/React 19 combination) it no longer reads
+      `Text.defaultProps` either, so the classic "monkey-patch `Text.defaultProps`" trick for a
+      global default font doesn't work on this version. The fix: new
+      `src/components/AppText.tsx`, a `forwardRef` wrapper around RN's real `Text` that applies
+      `fonts.body.regular` as a default style (an explicit `fontFamily` in a passed `style`
+      still wins — array-style flattening applies later entries over earlier ones for the same
+      key). A one-off codemod script swapped every file importing `Text` from `'react-native'`
+      to import it from this wrapper instead (47 files, `AppText.tsx` itself is the one
+      exception) — mechanical import-line changes only, no JSX touched. Fredoka stays
+      explicit/per-instance (no RN equivalent of web's free `h1`-`h6` rule): the four Quiz Modes
+      files that already hardcoded `'Fredoka_400Regular'`-style string literals
+      (`QuizModeSelectScreen.tsx`, `QuizModeCard.tsx`, `QuizSettingsModal.tsx`,
+      `QuizPickerModal.tsx`) now reference `fonts.display.*` instead — same fonts, just
+      centralized, no visual change — plus two real swaps: `QuizModeSelectScreen`'s page
+      heading (previously the app's one Chewy usage) is now `fonts.display.bold`, and
+      `Menubar`'s back-button label (previously plain system-font caps, with a comment
+      explicitly noting Chewy wasn't loaded) is now genuinely Fredoka, since it's loaded
+      app-wide today. Verified via `tsc --noEmit` (clean) and a clean `expo export --platform
+      android` (3974 modules) — not yet confirmed on a real device/emulator, per this project's
+      established "flag what's unverified" convention. See
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Fonts"
+      section for full detail.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens
@@ -1958,10 +2079,23 @@ my-backpack/
   JSON body (alongside the existing httpOnly cookie) and `/auth/refresh` accepts `{ refreshToken }`
   in the body ahead of the cookie — web's cookie-only flow is unchanged when the header is absent
 - `packages/shared/constants/theme.ts` is the canonical design-token source (colour/spacing/radius/
-  typography) for both apps/web and apps/mobile — keep it in sync with docs/design/brand-guide.md.
-  `lightColors`/`darkColors` are the two colour objects (no plain `colors` export); apps/mobile
-  resolves the active one through `src/theme/ThemeContext.tsx`'s `useTheme()` — never import
-  `lightColors`/`darkColors` directly in a mobile component, always go through the hook
+  typography/fontFamilies/fontWeights) for both apps/web and apps/mobile — keep it in sync with
+  docs/design/brand-guide.md. `lightColors`/`darkColors` are the two colour objects (no plain
+  `colors` export); apps/mobile resolves the active one through `src/theme/ThemeContext.tsx`'s
+  `useTheme()` — never import `lightColors`/`darkColors` directly in a mobile component, always
+  go through the hook
+- Two brand fonts, app-wide on both apps: **Fredoka** (display/headings/short prominent labels)
+  and **Nunito Sans** (body copy — the default everywhere else), replacing the old Chewy (August
+  2026). `fontFamilies` in `theme.ts` is the single source of truth. apps/web wires
+  `fontFamilies.body` in as Tailwind's `sans` default (`tailwind.config.ts`) so it cascades
+  app-wide for free via Preflight, and `fontFamilies.display` to every `h1`-`h6` in
+  `src/index.css` — no per-component changes needed there. apps/mobile has no such CSS
+  cascade: `src/theme/fonts.ts` maps the two families to the exact expo-font-loaded names
+  (`Fredoka_700Bold`, `NunitoSans_400Regular`, etc.), and every mobile `Text` must come from
+  `src/components/AppText.tsx` (a thin wrapper defaulting to `fonts.body.regular`) instead of
+  `'react-native'` directly — that's the "one place" the Nunito Sans default lives, since RN
+  `<Text>` has no font inheritance and no working `Text.defaultProps` on this RN version. Use
+  `fonts.display.*` explicitly for Fredoka headings/labels on mobile.
 - In `apps/mobile`, any `StyleSheet.create` that references theme `colors` must be built by a
   `createStyles(colors)` function called inside the component body (colors come from
   `useTheme()`, a hook, so the styles can't be computed at module scope anymore) — see any

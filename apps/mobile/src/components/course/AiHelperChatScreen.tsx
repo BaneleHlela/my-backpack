@@ -4,17 +4,8 @@
 // sendChatMessage), the pending bubble is cleared and the real pair renders from Redux instead.
 // On failure the pending bubble stays with an inline "tap to retry" chip.
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Text } from '../AppText';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Send } from 'lucide-react-native';
@@ -164,10 +155,10 @@ export function AiHelperChatScreen({ courseId, courseName }: AiHelperChatScreenP
 function createStyles(colors: ReturnType<typeof useTheme>['colors'], isChild: boolean) {
   return StyleSheet.create({
     screen: { flex: 1 },
-    menubar: { paddingHorizontal: spacing.md, paddingTop: spacing.lg },
+    menubar: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
     messageList: { flex: 1 },
     messageListContent: {
-      padding: spacing.lg,
+      padding: spacing.md,
       gap: spacing.sm,
       flexGrow: 1,
     },
@@ -204,7 +195,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors'], isChild: bo
       flexDirection: 'row',
       alignItems: 'flex-end',
       gap: spacing.sm,
-      padding: spacing.lg,
+      padding: spacing.md,
       paddingTop: spacing.sm,
     },
     input: {

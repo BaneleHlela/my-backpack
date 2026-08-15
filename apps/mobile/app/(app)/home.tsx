@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../../src/components/AppText';
 import { useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
@@ -160,13 +161,13 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       flex: 1,
     },
     menubarPadded: {
-      padding: spacing.lg,
+      padding: spacing.md,
     },
     center: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      padding: spacing.lg,
+      padding: spacing.md,
     },
     emptyEmoji: {
       fontSize: 64,
@@ -188,7 +189,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       minWidth: 180,
     },
     listContent: {
-      padding: spacing.lg,
+      padding: spacing.md,
       gap: spacing.lg,
     },
     subjectCard: {

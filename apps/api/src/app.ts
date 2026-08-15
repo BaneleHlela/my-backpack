@@ -55,6 +55,18 @@ const authLimiter = rateLimit({
 });
 app.use('/api/auth', authLimiter);
 
+// Stricter limit on the two unauthenticated, zero-cost-to-call endpoints that create a new
+// database record — layered on top of authLimiter above, not a replacement for it.
+const creationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please try again later' },
+});
+app.use('/api/auth/register', creationLimiter);
+app.use('/api/auth/guest', creationLimiter);
+
 // Routes
 app.use('/api/auth', authRouter);
 app.use('/api/profiles', profileRouter);

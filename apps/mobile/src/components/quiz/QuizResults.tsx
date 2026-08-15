@@ -3,7 +3,8 @@
 // QuizSessionScreen, so the return action is generic (onReturn/returnLabel) rather than
 // roadmap-specific — mirrors web's onReturnToDictionary/returnLabel props. When feedbackMode
 // was 'end', answeredQuestions carries a per-question breakdown withheld during the quiz.
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { BookOpen, CheckCircle2, RotateCcw, SkipForward, Trophy, XCircle } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { SessionResults } from '@my-backpack/shared';

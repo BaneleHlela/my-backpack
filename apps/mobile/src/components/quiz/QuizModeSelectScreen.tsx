@@ -21,13 +21,15 @@
 // Settings-pill gating: always `true` here — every quiz reachable via this screen is seeded
 // isUserAdjustable:true (Dictionary's "General Dictionary Quiz" and every course's
 // auto-created mode:'pool' practice quiz).
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { useRouter } from 'expo-router';
 import { History } from 'lucide-react-native';
 import { spacing, typography } from '@my-backpack/shared';
 import { ScreenBackground } from '../ScreenBackground';
 import { Menubar } from '../Menubar';
 import { useTheme } from '../../theme/ThemeContext';
+import { fonts } from '../../theme/fonts';
 import { QuizModeGrid } from './QuizModeGrid';
 import { encodePlayModeParam, type QuizPlayModeId, type QuizPlayModeSettings } from './quizPlayModes';
 
@@ -80,17 +82,17 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     topSection: {
       paddingHorizontal: spacing.md,
-      paddingTop: spacing.lg,
+      paddingTop: spacing.md,
       gap: spacing.xs,
     },
     heading: {
-      fontFamily: 'Chewy_400Regular',
+      fontFamily: fonts.display.bold, // replaces the old Chewy display heading — see fonts.ts
       fontSize: typography.headingLg,
       color: colors.text.primary,
       marginTop: spacing.sm,
     },
     subheading: {
-      fontFamily: 'Fredoka_400Regular',
+      fontFamily: fonts.display.regular,
       fontSize: typography.small,
       color: colors.text.muted,
       marginBottom: spacing.xs,
@@ -103,7 +105,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: spacing.xs,
     },
     historyLinkText: {
-      fontFamily: 'Fredoka_500Medium',
+      fontFamily: fonts.display.medium,
       fontSize: typography.small,
       fontWeight: '600',
       color: colors.primary.DEFAULT,

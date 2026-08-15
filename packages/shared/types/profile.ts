@@ -52,6 +52,7 @@ export interface IProfile {
   isOwner: boolean;
   isPlatformAdmin: boolean;
   isSetupComplete: boolean;
+  isGuest: boolean;
   education: IEducation;
   preferences: IPreferences;
   progress: Record<string, unknown>;

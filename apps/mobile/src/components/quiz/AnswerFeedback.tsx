@@ -11,7 +11,8 @@
 // a plain `borderColor` is now DepthView's `shadowColor` — an opaque tint drawn where the rim
 // peeks out from behind the inset face, so it reads as a colored ring around the whole card
 // rather than a thin 1-2px border line.
-import { Image, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Text } from '../AppText';
 import { CheckCircle2, SkipForward, Volume2, XCircle } from 'lucide-react-native';
 import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IQuestionContent } from '@my-backpack/shared';

@@ -30,7 +30,8 @@
 // browse/overview list, not a gate. Selecting a locked quiz still opens the ordinary Quiz Mode
 // Select flow; the roadmap's own item-start endpoint remains the actual gate server-side.
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { useRouter } from 'expo-router';
 import { ClipboardCheck, Gamepad2, History, Lock, X } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
@@ -38,6 +39,7 @@ import type { IQuizItemSummary, NodeItemWithProgress, RoadmapWithProgress } from
 import { QuizModeGrid } from '../quiz/QuizModeGrid';
 import { encodeAssignedPlayMode, encodePlayModeParam, type QuizPlayModeId, type QuizPlayModeSettings } from '../quiz/quizPlayModes';
 import { useTheme } from '../../theme/ThemeContext';
+import { fonts } from '../../theme/fonts';
 
 interface QuizPickerModalProps {
   roadmap: RoadmapWithProgress;
@@ -247,7 +249,7 @@ function createStyles(colors: ThemeColors) {
       gap: spacing.sm,
     },
     groupHeading: {
-      fontFamily: 'Fredoka_500Medium',
+      fontFamily: fonts.display.medium,
       fontSize: typography.small,
       color: colors.text.muted,
       textTransform: 'uppercase',
@@ -275,12 +277,12 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     rowTitle: {
-      fontFamily: 'Fredoka_500Medium',
+      fontFamily: fonts.display.medium,
       fontSize: typography.body,
       color: colors.text.primary,
     },
     rowSubtitle: {
-      fontFamily: 'Fredoka_400Regular',
+      fontFamily: fonts.display.regular,
       fontSize: typography.small,
       color: colors.text.muted,
     },

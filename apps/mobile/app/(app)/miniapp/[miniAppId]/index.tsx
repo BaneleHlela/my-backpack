@@ -2,7 +2,8 @@
 // Built as a single top-level FlatList (not stacked ScrollViews) so the
 // browse results' onEndReached pagination fires against a real scroll
 // container — see DictionaryBrowseList.tsx for why.
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../../../../src/components/AppText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Bookmark, Sparkles } from 'lucide-react-native';
@@ -124,7 +125,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     color: colors.text.secondary,
   },
   listContent: {
-    padding: spacing.lg,
+    padding: spacing.md,
   },
   row: {
     gap: spacing.xs,

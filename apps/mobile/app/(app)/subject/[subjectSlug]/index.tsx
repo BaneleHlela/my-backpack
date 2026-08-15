@@ -5,7 +5,8 @@
 // segment either) — both are resolved by matching subjectSlug against the already-loaded
 // enrolledSubjects list, exactly like web's SubjectHomePage/CoursePage do.
 import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../../../../src/components/AppText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Map } from 'lucide-react-native';
@@ -142,7 +143,7 @@ export default function SubjectHomeScreen() {
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
   content: {
-    padding: spacing.lg,
+    padding: spacing.md,
     gap: spacing.md,
   },
   heading: {

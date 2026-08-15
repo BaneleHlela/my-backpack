@@ -2,7 +2,8 @@
 // route (rather than inline state) — matches web's reasoning: linkable,
 // supports back navigation.
 import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../../../../../src/components/AppText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Volume2 } from 'lucide-react-native';
@@ -82,7 +83,7 @@ export default function TermDetailScreen() {
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
   content: {
-    padding: spacing.lg,
+    padding: spacing.md,
     gap: spacing.md,
   },
   loading: {

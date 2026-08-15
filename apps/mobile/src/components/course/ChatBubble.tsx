@@ -1,5 +1,6 @@
 // A single message bubble in the AI Helper chat — aligned left (assistant) or right (user).
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AiChatRole } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';

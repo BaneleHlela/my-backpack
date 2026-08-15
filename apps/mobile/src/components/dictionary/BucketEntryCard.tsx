@@ -1,5 +1,6 @@
 // Ports apps/web's BucketPage/components/BucketEntryCard.tsx.
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { formatDistanceToNow } from 'date-fns';
 import { Volume2, Trash2, Brain, Clock3 } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';

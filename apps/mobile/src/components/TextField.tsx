@@ -1,4 +1,5 @@
-import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
+import { Text } from './AppText';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { useTheme } from '../theme/ThemeContext';
 

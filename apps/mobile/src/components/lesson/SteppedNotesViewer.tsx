@@ -1,7 +1,8 @@
 // Renders a Lesson 'steps' resource — a read-only paginated card viewer (not a quiz).
 // Ports apps/web's SteppedNotesViewer.tsx onto plain useState + Prev/Next controls.
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import Markdown from 'react-native-markdown-display';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IResourceStep } from '@my-backpack/shared';

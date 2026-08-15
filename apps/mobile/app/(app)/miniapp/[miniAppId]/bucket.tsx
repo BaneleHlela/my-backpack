@@ -1,7 +1,8 @@
 // Ports apps/web's BucketPage/BucketPage.tsx — status filter tabs, sort,
 // list of bucketed terms with confidence/accuracy info and a remove action.
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../../../../src/components/AppText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { BookOpen } from 'lucide-react-native';
@@ -185,7 +186,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     flex: 1,
   },
   header: {
-    padding: spacing.lg,
+    padding: spacing.md,
     paddingBottom: spacing.sm,
   },
   menubar: {
@@ -278,7 +279,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     marginTop: spacing.sm,
   },
   listContent: {
-    padding: spacing.lg,
+    padding: spacing.md,
     paddingTop: 0,
   },
   separator: {

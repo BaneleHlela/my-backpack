@@ -12,12 +12,15 @@ import {
   resetPassword,
   deleteAccount,
   resendVerificationEmail,
+  createGuestAccount,
+  claimAccount,
   EmailNotVerifiedError,
 } from './auth.service';
 import { sendSuccess } from '../../utils/response';
 import { AppError, catchAsync } from '../../utils/AppError';
 import { signPartialToken } from '../../utils/jwt';
 import { IAccountDocument } from '../../models/core/account.model';
+import { AgeGroup } from '../../models/core/profile.model';
 
 const REFRESH_COOKIE = 'refreshToken';
 const MOBILE_CLIENT_HEADER = 'x-client-type';
@@ -75,6 +78,41 @@ export const login = catchAsync(async (req: Request, res: Response): Promise<voi
       return;
     }
     throw new AppError(err instanceof Error ? err.message : 'Login failed', 401);
+  }
+});
+
+export const guestSignup = catchAsync(async (req: Request, res: Response): Promise<void> => {
+  const { displayName, ageGroup } = req.body as { displayName?: string; ageGroup?: AgeGroup };
+
+  try {
+    const result = await createGuestAccount(displayName, ageGroup ?? 'adult');
+    setRefreshCookie(res, result.refreshToken);
+    sendSuccess(
+      res,
+      {
+        accessToken: result.accessToken,
+        profile: result.profile,
+        ...(isMobileClient(req) && { refreshToken: result.refreshToken }),
+      },
+      201
+    );
+  } catch (err) {
+    throw new AppError(err instanceof Error ? err.message : 'Failed to create guest account', 400);
+  }
+});
+
+export const claimAccountHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
+  const { email, password } = req.body as { email: string; password: string };
+  const accountId = req.account?._id.toString();
+
+  if (!accountId) throw new AppError('Unauthorized', 401);
+  if (!email || !password) throw new AppError('email and password are required', 400);
+
+  try {
+    const result = await claimAccount(accountId, email, password);
+    sendSuccess(res, result);
+  } catch (err) {
+    throw new AppError(err instanceof Error ? err.message : 'Failed to claim account', 400);
   }
 });
 

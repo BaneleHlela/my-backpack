@@ -16,7 +16,8 @@
 // this component, and is untouched by this rewrite.
 import { useState, type ReactNode } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { Star } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IQuizItemSummary, NodeItemWithProgress, RoadmapWithProgress } from '@my-backpack/shared';

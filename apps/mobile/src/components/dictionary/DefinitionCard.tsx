@@ -4,7 +4,8 @@
 // full width — the button no longer competes with the definition for horizontal space.
 // Pressing "Added" removes the term from the bucket (removeFromBucket is term-scoped
 // server-side, not per-definition — see apps/api's vocab.service.ts).
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { Check, Plus } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { spacing, typography } from '@my-backpack/shared';

@@ -28,15 +28,8 @@
 // docs/technical/mobile-architecture.md's "Live TTS (Prompt 3)" section.
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import {
-  Image,
-  ImageBackground,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Image, ImageBackground, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Text } from '../../AppText';
 import { Lightbulb, Volume2 } from 'lucide-react-native';
 import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
