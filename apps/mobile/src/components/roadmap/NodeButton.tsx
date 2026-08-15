@@ -74,8 +74,16 @@ export default function NodeButton({ itemType, progress, loading = false, onPres
   // DepthButton's shadow defaults to a fixed purple otherwise — every badge, lesson or quiz,
   // would get that same hardcoded rim regardless of its own face colour. Derive it from the same
   // family as `mainFill` instead (its `.dark` tone) so a red-faced lesson badge gets a red
-  // shadow and a purple-faced quiz badge gets a purple one.
-  const shadowFill = isLocked ? undefined : itemType === 'lesson' ? colors.error.dark : colors.primary.dark;
+  // shadow and a purple-faced quiz badge gets a purple one. Locked has no `.dark` tone to pull
+  // from (`surface.glassSoft` is a translucent white, not an accent colour) — leaving it
+  // `undefined` used to fall through to that same hardcoded purple, a jarring accent colour
+  // behind an otherwise dim, muted badge, so it gets its own neutral translucent-black rim
+  // instead, reading as a soft grey shadow in both themes.
+  const shadowFill = isLocked
+    ? 'rgba(0,0,0,0.25)'
+    : itemType === 'lesson'
+      ? colors.error.dark
+      : colors.primary.dark;
   const Icon = itemType === 'lesson' ? MonitorPlay : ClipboardCheck;
 
   return (
