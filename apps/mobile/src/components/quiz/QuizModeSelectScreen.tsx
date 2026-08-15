@@ -55,23 +55,23 @@ export function QuizModeSelectScreen({ target, backLabel }: QuizModeSelectScreen
 
   return (
     <ScreenBackground>
-      <View style={styles.topSection}>
-        <Menubar label={backLabel} onBackPress={() => router.back()} />
-        <Text style={styles.heading}>Quiz Modes</Text>
-        <Text style={styles.subheading}>Pick how you want to play.</Text>
-        <Pressable
-          onPress={() =>
-            router.push({ pathname: '/(app)/quiz-history', params: { contextId: target.miniAppId } })
-          }
-          style={styles.historyLink}
-          hitSlop={8}
-        >
-          <History size={14} color={colors.primary.DEFAULT} />
-          <Text style={styles.historyLinkText}>Quiz History</Text>
-        </Pressable>
-      </View>
+      <ScrollView contentContainerStyle={styles.gridScroll} stickyHeaderIndices={[0]}>
+        <View style={styles.topSection}>
+          <Menubar label={backLabel} onBackPress={() => router.back()} />
+          <Text style={styles.heading}>Quiz Modes</Text>
+          <Text style={styles.subheading}>Pick how you want to play.</Text>
+          <Pressable
+            onPress={() =>
+              router.push({ pathname: '/(app)/quiz-history', params: { contextId: target.miniAppId } })
+            }
+            style={styles.historyLink}
+            hitSlop={8}
+          >
+            <History size={14} color={colors.primary.DEFAULT} />
+            <Text style={styles.historyLinkText}>Quiz History</Text>
+          </Pressable>
+        </View>
 
-      <ScrollView contentContainerStyle={styles.gridScroll}>
         <QuizModeGrid settingsAdjustable onStart={startSession} />
       </ScrollView>
     </ScreenBackground>

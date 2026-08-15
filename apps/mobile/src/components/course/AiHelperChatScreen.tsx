@@ -81,18 +81,19 @@ export function AiHelperChatScreen({ courseId, courseName }: AiHelperChatScreenP
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <Menubar
-        label={courseName || 'AI Helper'}
-        onBackPress={() => router.back()}
-        style={styles.menubar}
-      />
-
       <ScrollView
         ref={scrollRef}
         style={styles.messageList}
         contentContainerStyle={styles.messageListContent}
         keyboardShouldPersistTaps="handled"
+        stickyHeaderIndices={[0]}
       >
+        <Menubar
+          label={courseName || 'AI Helper'}
+          onBackPress={() => router.back()}
+          style={styles.menubar}
+        />
+
         {historyStatus === 'loading' && messages.length === 0 ? (
           <ActivityIndicator color={colors.primary.DEFAULT} style={styles.loading} />
         ) : messages.length === 0 && !pendingText ? (

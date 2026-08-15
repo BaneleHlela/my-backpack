@@ -51,6 +51,7 @@ export default function DictionaryHomeScreen() {
       onEndReachedThreshold={0.5}
       onEndReached={loadMore}
       renderItem={({ item }) => <BrowseResultRow term={item} onPress={() => goToTerm(item._id)} />}
+      stickyHeaderIndices={[0]}
       ListHeaderComponent={
         <View style={styles.header}>
           <Menubar label="Home" onBackPress={() => router.replace('/(app)/home')} />

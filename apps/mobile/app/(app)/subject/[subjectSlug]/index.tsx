@@ -68,7 +68,7 @@ export default function SubjectHomeScreen() {
   }, [dispatch, fieldSlug, subjectSlug, subjectId]);
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={styles.content} stickyHeaderIndices={[0]}>
       <Menubar label={fieldName || 'Back'} onBackPress={() => router.back()} />
 
       <Text style={styles.heading}>{subjectName || subjectSlug}</Text>

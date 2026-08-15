@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ASSETS } from '@my-backpack/shared';
 import { useTheme } from '../theme/ThemeContext';
 import { spacing } from '@my-backpack/shared';
+import  BackgroundIcon  from '../../assets/pencil_and_rubber.svg';
 
 interface ScreenBackgroundProps extends ViewProps {
   // Wraps children in a KeyboardAvoidingView + ScrollView — for form
@@ -42,6 +43,12 @@ export function ScreenBackground({ scroll = false, style, children, ...rest }: S
           paddingHorizontal: spacing.xs,
          }, scroll ? undefined : style]}
       >
+        <View style={[styles.backgroundIcon]}>
+          <BackgroundIcon 
+            width='600px' 
+            height={'600px'}
+          />
+        </View>
         {scroll ? (
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
             <ScrollView contentContainerStyle={[styles.scrollContent, style]} keyboardShouldPersistTaps="handled">
@@ -62,6 +69,7 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+    position: 'relative',
   },
   flex: {
     flex: 1,
@@ -69,4 +77,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
+  backgroundIcon: {
+    position: 'absolute',
+    height: '50%',
+    width: '80%',
+    top: '15%',
+    right: 10,
+    opacity: .2
+  }
 });

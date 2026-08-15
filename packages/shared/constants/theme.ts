@@ -75,7 +75,7 @@ export const lightColors: IThemeColors = {
     glass: 'rgba(255,255,255,0.4)', // standard glass card fill
     glassSoft: 'rgba(255,255,255,0.3)', // secondary glass fill
     glassStrong: 'rgba(255,255,255,0.6)', // hover/pressed glass fill
-    border: 'rgba(255,255,255,0.5)', // glass card border
+    border: 'rgba(255,255,255,0.2)', // glass card border
   },
 } as const;
 

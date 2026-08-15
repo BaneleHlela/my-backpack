@@ -124,7 +124,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.listContent}>
+    <ScrollView contentContainerStyle={styles.listContent} stickyHeaderIndices={[0]}>
       <Menubar />
 
       {enrolledSubjects?.fields.map(({ subjects }) =>

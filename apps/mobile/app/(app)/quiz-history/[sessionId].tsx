@@ -69,11 +69,10 @@ export default function QuizHistoryReviewScreen() {
 
   return (
     <View style={styles.flex}>
-      <View style={styles.header}>
+      <ScrollView contentContainerStyle={styles.content} stickyHeaderIndices={[0]}>
         <Menubar label="Back to history" onBackPress={() => router.back()} />
-      </View>
 
-      {reviewStatus === 'loading' ? (
+        {reviewStatus === 'loading' ? (
         <ActivityIndicator color={colors.primary.light} style={styles.loading} />
       ) : null}
 
@@ -84,7 +83,7 @@ export default function QuizHistoryReviewScreen() {
       ) : null}
 
       {reviewStatus === 'succeeded' && review && session ? (
-        <ScrollView contentContainerStyle={styles.content}>
+        <>
           <GlassCard style={styles.summaryCard}>
             <Text style={styles.eyebrow}>{session.quizTitle}</Text>
             <Text style={styles.eyebrowMuted}>
@@ -159,8 +158,9 @@ export default function QuizHistoryReviewScreen() {
             disabled={!retakeable}
             style={styles.retakeButton}
           />
-        </ScrollView>
+        </>
       ) : null}
+      </ScrollView>
     </View>
   );
 }
@@ -168,7 +168,6 @@ export default function QuizHistoryReviewScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     flex: { flex: 1 },
-    header: { padding: spacing.md, paddingBottom: spacing.sm },
     loading: { paddingVertical: spacing.xl },
     margin: { marginHorizontal: spacing.lg },
     errorText: { fontSize: typography.small, color: colors.error.dark, textAlign: 'center' },

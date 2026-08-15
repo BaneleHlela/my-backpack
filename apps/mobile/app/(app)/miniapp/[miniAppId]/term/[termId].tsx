@@ -32,7 +32,7 @@ export default function TermDetailScreen() {
   }, [dispatch, termId]);
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={styles.content} stickyHeaderIndices={[0]}>
       <Menubar label="Back to search" onBackPress={() => router.back()} />
 
       {activeTermLoading ? <ActivityIndicator color={colors.primary.light} style={styles.loading} /> : null}

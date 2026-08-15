@@ -31,6 +31,7 @@ import type { RootState } from '../store/store';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts } from '../theme/fonts';
 import PeanutIcon from '../../assets/icons/peanut.svg';
+import XPIcon from '../../assets/icons/xp.svg';
 
 interface MenubarProps {
   label?: string;
@@ -69,7 +70,7 @@ export function Menubar({ label, onBackPress, style }: MenubarProps) {
           <Text style={styles.statText}>{PEANUTS_PLACEHOLDER}</Text>
         </View>
         <View style={styles.statChip}>
-          <Gem size={16} color={colors.primary.DEFAULT} />
+          <XPIcon />
           <Text style={styles.statText}>{XP_PLACEHOLDER}</Text>
         </View>
         {activeProfile ? (
@@ -96,6 +97,10 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: spacing.sm,
+      backgroundColor: colors.background,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.surface.border,
+      paddingBottom: spacing.sm,
     },
     backButton: {
       flexDirection: 'row',

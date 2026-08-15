@@ -101,11 +101,11 @@ export default function NodeButton({ itemType, progress, loading = false, onPres
           disabled={isLocked || loading}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" size="small" style={{marginBottom: 17}}/>
+            <ActivityIndicator color="#fff" size="small" style={{marginBottom: 16}}/>
           ) : isLocked ? (
-            <Lock size={28} color={colors.text.muted} style={{marginBottom: 17}}/>
+            <Lock size={28} color={colors.text.muted} style={{marginBottom: 16}}/>
           ) : (
-            <Icon size={36} color="#fff" strokeWidth={2}  style={{marginBottom: 17}}/>
+            <Icon size={36} color="#fff" strokeWidth={2}  style={{marginBottom: 16}}/>
           )}
         </DepthButton>
       </View>
@@ -151,7 +151,7 @@ function CurrentPulse({ color }: { color: string }) {
   return (
     <Animated.View
       pointerEvents="none"
-      style={[StyleSheet.absoluteFill, styles.pulse, { backgroundColor: color }, animatedStyle]}
+      style={[StyleSheet.absoluteFill, styles.pulse, { backgroundColor: color }, { marginBottom: 2 }, animatedStyle]}
     />
   );
 }

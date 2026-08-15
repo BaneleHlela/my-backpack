@@ -109,7 +109,7 @@ export default function CourseScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} stickyHeaderIndices={[0]}>
         <Menubar label={subjectName || 'Back'} onBackPress={() => router.back()} />
 
         <Text style={styles.heading}>{course.name}</Text>
