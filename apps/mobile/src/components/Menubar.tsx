@@ -5,24 +5,33 @@
 //
 // Peanuts and XP are shown as fixed placeholders (not wired to real data) — the reward system
 // exists in the data model but the service layer isn't built yet (see root CLAUDE.md's "XP and
-// peanuts reward system" note), so there is nothing real to display yet. The profile avatar is
-// NOT a placeholder — `state.auth.activeProfile` already holds the real signed-in profile, so
-// its initials are shown directly, the same way select-profile.tsx's ProfileTile does it.
+// peanuts reward system" note), so there is nothing real to display yet. The profile avatar IS
+// functional — tapping it opens `ProfileSwitcherModal`, this app's port of apps/web's
+// `ProfileSwitcher.tsx` (switch profile / add profile / sign out), and shows a real DiceBear
+// image (see `Avatar`/`lib/avatar.ts`) instead of a plain initials circle.
+//
+// `label`/`onBackPress` are optional so a screen with no natural "back" destination (e.g.
+// home.tsx, the subjects list) can render just the right-hand stat/avatar cluster — the empty
+// `<View/>` left in the back button's place still gets `justifyContent: 'space-between'` to push
+// that cluster to the right exactly as if a real back button were there.
 //
 // Figma's back-button label ("SUBJECT") is set via CSS caps in a decorative font (Chewy) this
 // app doesn't load — `textTransform: 'uppercase'` on the existing system-font style gets the
 // same visual effect without pulling in a new font asset, so callers can keep passing natural-
 // case labels (e.g. "Home", subjectName) unchanged.
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSelector } from 'react-redux';
 import { ChevronLeft, Gem, Nut } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
+import { Avatar } from './Avatar';
+import { ProfileSwitcherModal } from './ProfileSwitcherModal';
 import type { RootState } from '../store/store';
 import { useTheme } from '../theme/ThemeContext';
 
 interface MenubarProps {
-  label: string;
-  onBackPress: () => void;
+  label?: string;
+  onBackPress?: () => void;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -32,28 +41,24 @@ const XP_PLACEHOLDER = '0';
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-}
-
 export function Menubar({ label, onBackPress, style }: MenubarProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const activeProfile = useSelector((state: RootState) => state.auth.activeProfile);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
 
   return (
     <View style={[styles.container, style]}>
-      <Pressable onPress={onBackPress} style={styles.backButton} hitSlop={8}>
-        <ChevronLeft size={18} color={colors.text.secondary} />
-        <Text style={styles.backText} numberOfLines={1}>
-          {label}
-        </Text>
-      </Pressable>
+      {onBackPress ? (
+        <Pressable onPress={onBackPress} style={styles.backButton} hitSlop={8}>
+          <ChevronLeft size={18} color={colors.text.secondary} />
+          <Text style={styles.backText} numberOfLines={1}>
+            {label}
+          </Text>
+        </Pressable>
+      ) : (
+        <View />
+      )}
 
       <View style={styles.rightContent}>
         <View style={styles.statChip}>
@@ -64,10 +69,19 @@ export function Menubar({ label, onBackPress, style }: MenubarProps) {
           <Gem size={16} color={colors.primary.DEFAULT} />
           <Text style={styles.statText}>{XP_PLACEHOLDER}</Text>
         </View>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{activeProfile ? initials(activeProfile.displayName) : ''}</Text>
-        </View>
+        {activeProfile ? (
+          <Pressable onPress={() => setSwitcherOpen(true)} hitSlop={8}>
+            <Avatar
+              displayName={activeProfile.displayName}
+              ageGroup={activeProfile.ageGroup}
+              avatarUrl={activeProfile.avatarUrl}
+              size={28}
+            />
+          </Pressable>
+        ) : null}
       </View>
+
+      <ProfileSwitcherModal visible={switcherOpen} onClose={() => setSwitcherOpen(false)} />
     </View>
   );
 }
@@ -111,21 +125,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: typography.small,
       fontWeight: '700',
       color: colors.text.primary,
-    },
-    avatar: {
-      width: 28,
-      height: 28,
-      borderRadius: radii.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.primary.DEFAULT,
-      borderWidth: 1,
-      borderColor: colors.text.primary,
-    },
-    avatarText: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: '#fff',
     },
   });
 }

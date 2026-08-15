@@ -1170,6 +1170,8 @@ root CLAUDE.md's "XP and peanuts reward system" note). **The profile avatar is n
 placeholder** — it reads `state.auth.activeProfile.displayName` directly and renders initials,
 the same small helper `select-profile.tsx`'s `ProfileTile` already used, since that data already
 exists and showing a fake avatar there would be strictly worse than showing the real one.
+*(Superseded by "Functional Menubar profile switcher + DiceBear avatars" below — the avatar is
+now tappable and shows a real DiceBear image, not a plain initials circle.)*
 
 Dictionary home's "Take Quiz"/"My Bucket" buttons previously lived inside the same row as the old
 back button; they moved to their own row directly below `Menubar` — `Menubar`'s right side is
@@ -1183,6 +1185,68 @@ other colour in that file already goes through `useTheme()`, these two literals 
 In dark mode this rendered `colors.text.primary` (cream, `#fcfded` — a very slightly yellow-
 tinted white) against a hardcoded white card, which read as washed-out, barely-visible "white and
 yellow" text. Both now use `colors.background`, matching the rest of the app's solid-card
+convention.
+
+## Functional Menubar profile switcher + DiceBear avatars (August 2026)
+
+`Menubar`'s avatar was static (initials only, no `onPress`) until this pass. Tapping it now
+opens `src/components/ProfileSwitcherModal.tsx` (new) — this app's port of apps/web's
+`components/nav/ProfileSwitcher.tsx` dropdown: the current profile (shown, not tappable), any
+other profiles on the account to switch to, "Add Profile", and "Sign out".
+
+**Why a `Modal`, not a dropdown.** Web's `ProfileSwitcher` is an absolutely-positioned `<div>`
+anchored under the avatar button, closed by a `mousedown` listener outside its ref. RN has
+neither primitive. `ProfileSwitcherModal` instead renders a transparent, backdrop-dismissible
+`Modal` whose card is anchored top-right (`alignItems: 'flex-end'` on the overlay, no
+`justifyContent` override) — visually approximating "a dropdown hanging off the top-right
+avatar" without needing real anchoring.
+
+**DiceBear avatars, `png` not `svg`.** New `src/lib/avatar.ts`'s `dicebearAvatarUrl()` ports
+web's `avatarUrl()` helper exactly — same DiceBear 8.x API, same per-`ageGroup` style choice
+(`fun-emoji` for `child`, `adventurer` otherwise) — with one deliberate format change: `png`
+instead of `svg`. RN's `<Image>` can't render a remote SVG on its own; that needs
+`react-native-svg`'s `SvgUri` fetching and parsing the document at runtime. DiceBear's `png`
+endpoint is server-rendered, so it drops straight into a plain `<Image source={{ uri }}>` — the
+simpler option, and this app already depends on `react-native-svg` only for bundling local
+`.svg` files via `react-native-svg-transformer`, not for remote-SVG rendering. New
+`src/components/Avatar.tsx` layers that image over an initials circle (same initials helper
+used throughout); the initials sit underneath unconditionally, so they double as a fallback
+while the image loads or if the fetch fails (offline, DiceBear down) — RN's `<Image>` simply
+paints nothing in either case, unlike a plain web `<img>`, which shows a broken-image icon
+instead. `Avatar` takes an optional `avatarUrl` (a profile's own, if ever set) that wins over
+the DiceBear URL, mirroring web's `activeProfile.avatarUrl ?? avatarUrl(...)` fallback.
+
+**`PinEntryModal` extracted, not duplicated.** `app/select-profile.tsx` previously defined its
+4-digit PIN pad inline. `ProfileSwitcherModal` needs the exact same pad when switching to a
+PIN-protected profile, so it was pulled out to `src/components/PinEntryModal.tsx` (same props,
+same behavior) — mirrors web already having a separate `components/auth/PinModal.tsx`.
+`select-profile.tsx` now imports it instead of defining its own copy; nothing else about that
+screen changed.
+
+**One deliberate improvement over web.** Web's `ProfileSwitcher.handleSwitch` calls
+`selectProfile` then navigates straight to `/dashboard` — it never re-fetches the newly active
+profile, so web's own `TopNav` avatar/name can go stale until something else happens to refetch
+it. `ProfileSwitcherModal` instead reuses `select-profile.tsx`'s fuller flow: `selectProfile` →
+`fetchActiveProfile` → resume that profile's last route (via `getLastRoute`), or `/profile-setup`
+if it hasn't finished setup. This is the only way `Menubar`'s own avatar ends up showing the
+newly-active profile immediately after a switch, rather than the one that was active before it.
+
+**"Add Profile" mirrors web's dropdown exactly — including its current no-op.** Both platforms'
+"Add Profile" navigate to `/select-profile`. On both, `ProtectedRoute`'s `requireFullToken:false`
+guard on that route immediately redirects back home whenever an access token is already held —
+which it always is, at the point this button is reachable. Neither platform has a real "create a
+new profile" form yet (see root CLAUDE.md's "Profile management screens", unbuilt on both) — not
+fixed here, out of this pass's scope; flagged rather than silently left to look broken.
+
+**`Menubar`'s `label`/`onBackPress` are now optional.** A screen with no natural "back"
+destination — `home.tsx`, the enrolled-subjects list, the one screen from the original Menubar
+rollout that never got one — can now render `<Menubar />` with neither prop: an empty `<View/>`
+takes the back button's place, and `justifyContent: 'space-between'` on the container still
+pushes the Peanuts/XP/avatar cluster all the way right, exactly as if a real back button were
+there. Every existing call site is unaffected (both props are still always passed).
+
+Verified via `tsc --noEmit` and a clean `expo export --platform android` (3955 modules) — not
+yet confirmed on a real device/emulator, per this project's established "flag what's unverified"
 convention.
 
 ---

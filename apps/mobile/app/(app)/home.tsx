@@ -3,9 +3,11 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View
 import { useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AvailableSubject } from '@my-backpack/shared';
 import { GlassCard } from '../../src/components/GlassCard';
+import { Menubar } from '../../src/components/Menubar';
 import { PrimaryButton } from '../../src/components/PrimaryButton';
 import { LaunchScreenBody } from '../../src/components/LaunchScreen';
 import {
@@ -19,6 +21,7 @@ import { useTheme } from '../../src/theme/ThemeContext';
 function AddSubjectsModal({ onClose }: { onClose: () => void }) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
   const dispatch = useDispatch<AppDispatch>();
   const { availableSubjects, isLoadingAvailable } = useSelector((state: RootState) => state.content);
   const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set());
@@ -45,7 +48,7 @@ function AddSubjectsModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal transparent animationType="slide" onRequestClose={handleDone}>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalSheet}>
+        <View style={[styles.modalSheet, { marginBottom: insets.bottom }]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Choose a subject</Text>
             <Pressable onPress={handleDone}>
@@ -106,11 +109,14 @@ export default function HomeScreen() {
 
   if (!hasEnrollments) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyEmoji}>🎒</Text>
-        <Text style={styles.emptyHeading}>Your backpack is empty!</Text>
-        <Text style={styles.emptyBody}>Enroll in a subject to start learning.</Text>
-        <PrimaryButton title="Add subjects" onPress={() => setShowAddSubjects(true)} style={styles.emptyButton} />
+      <View style={styles.emptyScreen}>
+        <Menubar style={styles.menubarPadded} />
+        <View style={styles.center}>
+          <Text style={styles.emptyEmoji}>🎒</Text>
+          <Text style={styles.emptyHeading}>Your backpack is empty!</Text>
+          <Text style={styles.emptyBody}>Enroll in a subject to start learning.</Text>
+          <PrimaryButton title="Add subjects" onPress={() => setShowAddSubjects(true)} style={styles.emptyButton} />
+        </View>
         {showAddSubjects ? <AddSubjectsModal onClose={() => setShowAddSubjects(false)} /> : null}
       </View>
     );
@@ -118,6 +124,8 @@ export default function HomeScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.listContent}>
+      <Menubar />
+
       {enrolledSubjects?.fields.map(({ subjects }) =>
         subjects.map(({ subject }) => (
           <Pressable
@@ -148,6 +156,12 @@ export default function HomeScreen() {
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
+    emptyScreen: {
+      flex: 1,
+    },
+    menubarPadded: {
+      padding: spacing.lg,
+    },
     center: {
       flex: 1,
       alignItems: 'center',
@@ -202,7 +216,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       backgroundColor: 'rgba(0,0,0,0.4)',
     },
     modalSheet: {
-      backgroundColor: '#fff',
+      backgroundColor: colors.background,
       borderTopLeftRadius: radii.lg,
       borderTopRightRadius: radii.lg,
       padding: spacing.lg,

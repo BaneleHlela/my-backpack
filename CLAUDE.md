@@ -1671,7 +1671,10 @@ my-backpack/
       (`'0'`, not wired to real data — the reward system is schema-only, see "XP and peanuts
       reward system" above); the profile avatar is **not** a placeholder — it reads
       `state.auth.activeProfile.displayName` directly (same initials helper as
-      `select-profile.tsx`'s `ProfileTile`), since that data already exists. Dictionary home's
+      `select-profile.tsx`'s `ProfileTile`), since that data already exists — **superseded by
+      the "Functional Menubar profile switcher + DiceBear avatars" entry below**, which made
+      the avatar tappable and swapped the plain initials circle for a DiceBear image. Dictionary
+      home's
       "Take Quiz"/"My Bucket" buttons moved out of the old back-button row into their own row
       below `Menubar` (`Menubar`'s right side is reserved for the Peanuts/XP/avatar cluster, not
       arbitrary action buttons). Also fixed while in this area: `select-profile.tsx`'s PIN-entry
@@ -1881,6 +1884,40 @@ my-backpack/
       an ordinary tap. Verified via `tsc --noEmit` and a clean `expo export --platform android`
       (3951 modules) — not yet confirmed on a real device/emulator, per this project's established
       "flag what's unverified" convention.
+- [x] Functional Menubar profile switcher + DiceBear avatars (August 2026) — `Menubar`'s
+      account/avatar button (previously just static initials, no `onPress`) now opens
+      `src/components/ProfileSwitcherModal.tsx` (new), this app's port of apps/web's
+      `components/nav/ProfileSwitcher.tsx` dropdown: current profile (non-tappable), other
+      profiles to switch to (PIN-gated ones open a PIN pad first), "Add Profile", and "Sign
+      out" — rendered as a top-right-anchored `Modal` (backdrop-tap to dismiss) rather than an
+      absolutely-positioned dropdown, since RN has no hover/click-outside primitive to anchor
+      one under the avatar the way web's does. New `src/components/Avatar.tsx` renders a
+      DiceBear image (`src/lib/avatar.ts`'s `dicebearAvatarUrl()`, same per-`ageGroup` style
+      choice as web's `avatarUrl()` — `fun-emoji` for `child`, `adventurer` otherwise) layered
+      over an initials circle; unlike web's plain `<img>`, the initials underneath double as a
+      built-in fallback while the image loads or if it fails, since a DiceBear `svg` URI can't
+      feed a plain RN `<Image>` (no SVG-parsing without `react-native-svg`'s `SvgUri`) — this
+      pulls DiceBear's `png` endpoint instead, the one deliberate format difference from web.
+      `PinEntryModal` (new) was extracted out of `app/select-profile.tsx`'s previously-inline
+      pin pad so `ProfileSwitcherModal` could reuse it without duplicating it, mirroring web's
+      already-separate `components/auth/PinModal.tsx`; `select-profile.tsx` itself is otherwise
+      unchanged. One deliberate improvement over web: after switching profiles, web's
+      `ProfileSwitcher` navigates straight to `/dashboard` without ever re-fetching the new
+      profile, so its own avatar/name go stale until something else refetches it — this follows
+      `select-profile.tsx`'s fuller `selectProfile` → `fetchActiveProfile` → resume-last-route
+      (or `/profile-setup` if unfinished) flow instead, the only way `Menubar`'s own avatar ends
+      up showing the newly-active profile immediately. "Add Profile" mirrors web's dropdown
+      exactly, **including its current no-op**: both navigate to `/select-profile`, which
+      `ProtectedRoute`'s `requireFullToken:false` guard immediately bounces back home whenever
+      an access token is already held (no "create a new profile" form exists yet on either
+      platform — see "Profile management screens" below) — not fixed here, out of this pass's
+      scope. `Menubar`'s `label`/`onBackPress` props are now optional (an empty `<View/>` takes
+      the back button's place, so `justifyContent:'space-between'` still pushes the stat/avatar
+      cluster fully right) so a screen with no natural "back" destination can render just that
+      cluster — used to add `Menubar` to `home.tsx` (the enrolled-subjects list), the one
+      screen in the Menubar rollout above that never got one. Verified via `tsc --noEmit` and a
+      clean `expo export --platform android` (3955 modules) — not yet confirmed on a real
+      device/emulator.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens

@@ -18,7 +18,7 @@ export function LaunchScreenBody() {
 
   return (
     <View style={styles.center}>
-      <BackpackLogo size={112} />
+      <BackpackLogo size={72} />
       <ActivityIndicator size="large" color={colors.primary.DEFAULT} style={styles.spinner} />
     </View>
   );

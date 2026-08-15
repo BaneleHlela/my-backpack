@@ -18,6 +18,7 @@ export default function VerifyEmailPage() {
 
   const [resendLoading, setResendLoading] = useState(false);
   const [resendStatus, setResendStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  console.log(token);
 
   useEffect(() => {
     if (token) {
