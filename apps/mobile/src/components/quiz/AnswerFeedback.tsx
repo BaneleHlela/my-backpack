@@ -18,6 +18,7 @@ import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IQuestionContent } from '@my-backpack/shared';
 import { playAudioUrl } from '../../lib/audio';
 import { resolveAssetUrl } from '../../lib/assetUrl';
+import { fonts } from '../../theme/fonts';
 import { SpokenText } from './SpokenText';
 import { DepthView } from '../DepthView';
 import { DepthButton } from '../DepthButton';
@@ -193,8 +194,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       gap: 4,
     },
     headline: {
+      fontFamily: fonts.display.bold,
       fontSize: typography.heading,
-      fontWeight: '700',
       textAlign: 'center',
     },
     headlineChild: {

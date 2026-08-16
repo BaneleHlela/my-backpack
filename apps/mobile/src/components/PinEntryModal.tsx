@@ -7,6 +7,7 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from './AppText';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { useTheme } from '../theme/ThemeContext';
+import { fonts } from '../theme/fonts';
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
@@ -96,8 +97,8 @@ function createStyles(colors: ThemeColors) {
       gap: spacing.md,
     },
     modalTitle: {
+      fontFamily: fonts.display.bold,
       fontSize: typography.heading,
-      fontWeight: '700',
       color: colors.text.primary,
     },
     modalSubtitle: {

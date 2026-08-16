@@ -32,6 +32,7 @@ import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useSpeak } from '../../../lib/useSpeak';
 import { useTheme } from '../../../theme/ThemeContext';
+import { fonts } from '../../../theme/fonts';
 import type { QuestionPatternHandle, QuestionPatternReadyProps } from './questionPatternTypes';
 
 interface DndSinglePatternProps extends QuestionPatternReadyProps {
@@ -437,13 +438,13 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     borderWidth: 3,
   },
   promptText: {
+    fontFamily: fonts.display.bold,
     fontSize: typography.heading,
     color: lightColors.text.primary,
-    fontWeight: '700',
   },
   promptTextChild: {
+    fontFamily: fonts.display.bold,
     fontSize: typography.headingLg,
-    fontWeight: '700',
     textAlign: 'center',
     color: lightColors.text.primary,
   },

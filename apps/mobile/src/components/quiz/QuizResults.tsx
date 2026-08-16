@@ -10,6 +10,7 @@ import { radii, spacing, typography } from '@my-backpack/shared';
 import type { SessionResults } from '@my-backpack/shared';
 import type { AnsweredQuestionSummary } from '../../features/quiz/quizSlice';
 import { useTheme } from '../../theme/ThemeContext';
+import { fonts } from '../../theme/fonts';
 
 interface QuizResultsProps {
   results: SessionResults;
@@ -117,8 +118,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       marginBottom: spacing.sm,
     },
     scoreText: {
+      fontFamily: fonts.display.bold,
       fontSize: typography.headingLg,
-      fontWeight: '700',
       color: colors.text.primary,
     },
     subText: {

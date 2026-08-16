@@ -1,18 +1,26 @@
+// Redesigned August 2026 alongside the auth screens — see login.tsx's module comment for the
+// shared full-bleed rationale. New: a "+ Add profile" tile in the grid. Building a real
+// create-profile form is out of scope for this pass — the rest of the app already has an
+// accepted "Add Profile is a known no-op" convention (ProfileSwitcherModal's "Add Profile" ->
+// CLAUDE.md: "not fixed here, out of this pass's scope"), so this tile shows the same
+// ComingSoonOverlay CourseScreen/auth screens use rather than a broken navigation.
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '../src/components/AppText';
 import { useRouter } from 'expo-router';
+import { Plus } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { ProfileSummary } from '@my-backpack/shared';
-import { GlassCard } from '../src/components/GlassCard';
+import { AuthScreenBackground } from '../src/components/AuthScreenBackground';
+import { ComingSoonOverlay } from '../src/components/ComingSoonOverlay';
 import { PinEntryModal } from '../src/components/PinEntryModal';
-import { ScreenBackground } from '../src/components/ScreenBackground';
 import { ProtectedRoute } from '../src/components/ProtectedRoute';
 import { selectProfile, fetchActiveProfile, logoutAsync, clearError } from '../src/features/auth/authSlice';
 import { getLastRoute } from '../src/lib/secureStore';
 import type { AppDispatch, RootState } from '../src/store/store';
 import { useTheme } from '../src/theme/ThemeContext';
+import { fonts } from '../src/theme/fonts';
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
@@ -39,7 +47,7 @@ function ProfileTile({ profile, onPress }: { profile: ProfileSummary; onPress: (
   const ageGroupStyles = getAgeGroupStyles(colors);
   const ageStyle = ageGroupStyles[profile.ageGroup] ?? { bg: colors.surface.glass, text: colors.text.secondary };
   return (
-    <Pressable onPress={onPress} style={styles.tile}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}>
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>{initials(profile.displayName)}</Text>
         {profile.hasPin ? <View style={styles.pinBadge} /> : null}
@@ -54,11 +62,27 @@ function ProfileTile({ profile, onPress }: { profile: ProfileSummary; onPress: (
   );
 }
 
+function AddProfileTile({ onPress }: { onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.tile, styles.addTile, pressed && styles.tilePressed]}>
+      <View style={[styles.avatar, styles.addAvatar]}>
+        <Plus size={26} color={colors.text.muted} />
+      </View>
+      <Text style={[styles.tileName, { color: colors.text.muted }]} numberOfLines={1}>
+        Add profile
+      </Text>
+    </Pressable>
+  );
+}
+
 function SelectProfileScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const [pendingProfile, setPendingProfile] = useState<ProfileSummary | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [comingSoon, setComingSoon] = useState<string | null>(null);
 
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
@@ -102,26 +126,25 @@ function SelectProfileScreen() {
   };
 
   return (
-    <ScreenBackground style={styles.center}>
-      <GlassCard style={styles.card}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.heading}>Who's learning today?</Text>
-            <Text style={styles.subheading}>Select a profile to continue</Text>
-          </View>
-          <Pressable onPress={() => dispatch(logoutAsync())}>
-            <Text style={styles.signOut}>Sign out</Text>
-          </Pressable>
+    <AuthScreenBackground contentStyle={styles.centerContent}>
+      <View style={styles.headerRow}>
+        <View>
+          <Text style={styles.heading}>Who's learning today?</Text>
+          <Text style={styles.subheading}>Select a profile to continue</Text>
         </View>
+        <Pressable onPress={() => dispatch(logoutAsync())}>
+          <Text style={styles.signOut}>Sign out</Text>
+        </Pressable>
+      </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <View style={styles.grid}>
-          {profiles.map((profile) => (
-            <ProfileTile key={profile.id} profile={profile} onPress={() => handleProfilePress(profile)} />
-          ))}
-        </View>
-      </GlassCard>
+      <View style={styles.grid}>
+        {profiles.map((profile) => (
+          <ProfileTile key={profile.id} profile={profile} onPress={() => handleProfilePress(profile)} />
+        ))}
+        <AddProfileTile onPress={() => setComingSoon('Adding a new profile')} />
+      </View>
 
       {pendingProfile ? (
         <PinEntryModal
@@ -135,7 +158,9 @@ function SelectProfileScreen() {
           }}
         />
       ) : null}
-    </ScreenBackground>
+
+      {comingSoon && <ComingSoonOverlay label={comingSoon} onDismiss={() => setComingSoon(null)} />}
+    </AuthScreenBackground>
   );
 }
 
@@ -149,25 +174,20 @@ export default function SelectProfileRoute() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    center: {
-      flex: 1,
-      alignItems: 'center',
+    centerContent: {
+      flexGrow: 1,
       justifyContent: 'center',
-      padding: spacing.md,
+      padding: spacing.lg,
+      gap: spacing.lg,
     },
-    card: {
-      width: '100%',
-      maxWidth: 480,
-    },
-    header: {
+    headerRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'flex-start',
-      marginBottom: spacing.lg,
     },
     heading: {
-      fontSize: typography.heading,
-      fontWeight: '700',
+      fontFamily: fonts.display.bold,
+      fontSize: typography.headingLg,
       color: colors.text.primary,
     },
     subheading: {
@@ -189,17 +209,32 @@ function createStyles(colors: ThemeColors) {
       width: '30%',
       alignItems: 'center',
       gap: spacing.xs,
-      backgroundColor: colors.background,
-      borderRadius: radii.md,
+      backgroundColor: colors.surface.glass,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
+      borderRadius: radii.lg,
       paddingVertical: spacing.md,
     },
+    tilePressed: {
+      opacity: 0.85,
+    },
+    addTile: {
+      borderStyle: 'dashed',
+      backgroundColor: 'transparent',
+    },
     avatar: {
-      width: 56,
-      height: 56,
+      width: 60,
+      height: 60,
       borderRadius: radii.full,
       backgroundColor: colors.surface.glassStrong,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    addAvatar: {
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      borderStyle: 'dashed',
+      borderColor: colors.surface.border,
     },
     avatarText: {
       fontSize: typography.body,
@@ -216,8 +251,8 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.text.primary,
     },
     tileName: {
+      fontFamily: fonts.display.semibold,
       fontSize: typography.small,
-      fontWeight: '600',
       color: colors.text.primary,
       maxWidth: '100%',
     },
@@ -235,7 +270,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: typography.small,
       fontWeight: '600',
       color: colors.error.dark,
-      marginBottom: spacing.md,
       textAlign: 'center',
     },
   });

@@ -15,6 +15,7 @@ import { TextField } from './TextField';
 import { claimAccount, clearError } from '../features/auth/authSlice';
 import type { AppDispatch, RootState } from '../store/store';
 import { useTheme } from '../theme/ThemeContext';
+import { fonts } from '../theme/fonts';
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
@@ -144,8 +145,8 @@ function createStyles(colors: ThemeColors) {
       gap: spacing.sm,
     },
     title: {
+      fontFamily: fonts.display.bold,
       fontSize: typography.heading,
-      fontWeight: '700',
       color: colors.text.primary,
       textAlign: 'center',
     },

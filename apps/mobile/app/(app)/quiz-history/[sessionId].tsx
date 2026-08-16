@@ -13,6 +13,7 @@ import { GlassCard } from '../../../src/components/GlassCard';
 import { Menubar } from '../../../src/components/Menubar';
 import { PrimaryButton } from '../../../src/components/PrimaryButton';
 import { useTheme } from '../../../src/theme/ThemeContext';
+import { fonts } from '../../../src/theme/fonts';
 import { fetchSessionReview, resetReview } from '../../../src/features/quizHistory/quizHistorySlice';
 import { canRetake, navigateToRetake } from '../../../src/components/quiz/quizHistoryLinks';
 import type { AppDispatch, RootState } from '../../../src/store/store';
@@ -181,7 +182,7 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: 0.5,
     },
     eyebrowMuted: { fontSize: 11, color: colors.text.faint, marginTop: 2 },
-    scoreHeading: { fontSize: typography.headingLg, fontWeight: '700', color: colors.text.primary, marginTop: spacing.xs },
+    scoreHeading: { fontFamily: fonts.display.bold, fontSize: typography.headingLg, color: colors.text.primary, marginTop: spacing.xs },
     scoreSubtext: { fontSize: typography.small, color: colors.text.muted, marginTop: 2 },
     statsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md, alignSelf: 'stretch' },
     statBox: {

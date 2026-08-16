@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../../src/components/AppText';
 import { useRouter } from 'expo-router';
-import { ChevronRight } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AvailableSubject } from '@my-backpack/shared';
-import { GlassCard } from '../../src/components/GlassCard';
+import { GradientListCard } from '../../src/components/GradientListCard';
 import { Menubar } from '../../src/components/Menubar';
 import { PrimaryButton } from '../../src/components/PrimaryButton';
 import { LaunchScreenBody } from '../../src/components/LaunchScreen';
@@ -18,6 +17,7 @@ import {
 } from '../../src/features/content/contentSlice';
 import type { AppDispatch, RootState } from '../../src/store/store';
 import { useTheme } from '../../src/theme/ThemeContext';
+import { fonts } from '../../src/theme/fonts';
 
 function AddSubjectsModal({ onClose }: { onClose: () => void }) {
   const { colors } = useTheme();
@@ -128,21 +128,23 @@ export default function HomeScreen() {
       <Menubar />
 
       {enrolledSubjects?.fields.map(({ subjects }) =>
-        subjects.map(({ subject }) => (
-          <Pressable
+        subjects.map(({ enrollment, subject }, index) => (
+          <GradientListCard
             key={subject._id}
+            title={subject.name}
+            subtitle={subject.description}
+            progress={{
+              completed: enrollment.progressSummary.completedItems,
+              total: enrollment.progressSummary.totalItems,
+            }}
+            accentIndex={index}
             onPress={() =>
               router.push({
                 pathname: '/(app)/subject/[subjectSlug]',
                 params: { subjectSlug: subject.slug },
               })
             }
-          >
-            <GlassCard style={styles.subjectCard}>
-              <Text style={styles.subjectHeading}>{subject.name}</Text>
-              <ChevronRight size={18} color={colors.text.muted} />
-            </GlassCard>
-          </Pressable>
+          />
         ))
       )}
 
@@ -174,8 +176,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       marginBottom: spacing.md,
     },
     emptyHeading: {
+      fontFamily: fonts.display.bold,
       fontSize: typography.heading,
-      fontWeight: '700',
       color: colors.text.primary,
     },
     emptyBody: {
@@ -190,17 +192,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     listContent: {
       padding: spacing.md,
-      gap: spacing.lg,
-    },
-    subjectCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    subjectHeading: {
-      fontSize: typography.heading,
-      fontWeight: '700',
-      color: colors.text.primary,
+      gap: spacing.sm,
     },
     addMore: {
       alignItems: 'center',
@@ -230,8 +222,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       marginBottom: spacing.md,
     },
     modalTitle: {
+      fontFamily: fonts.display.bold,
       fontSize: typography.heading,
-      fontWeight: '700',
       color: colors.text.primary,
     },
     modalClose: {

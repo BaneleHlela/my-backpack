@@ -10,6 +10,7 @@ import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
 import { Menubar } from '../Menubar';
 import { useTheme } from '../../theme/ThemeContext';
+import { fonts } from '../../theme/fonts';
 
 interface CourseChatHubScreenProps {
   subjectSlug: string;
@@ -90,8 +91,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     screen: { flex: 1 },
     content: { padding: spacing.md, gap: spacing.md },
     heading: {
+      fontFamily: fonts.display.bold,
       fontSize: typography.headingLg,
-      fontWeight: '700',
       color: colors.text.primary,
     },
     subheading: {

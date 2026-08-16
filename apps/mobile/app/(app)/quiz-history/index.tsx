@@ -17,6 +17,7 @@ import type { QuizHistoryEntry } from '@my-backpack/shared';
 import { GlassCard } from '../../../src/components/GlassCard';
 import { Menubar } from '../../../src/components/Menubar';
 import { useTheme } from '../../../src/theme/ThemeContext';
+import { fonts } from '../../../src/theme/fonts';
 import {
   fetchQuizHistory,
   fetchHistoryFilterOptions,
@@ -246,7 +247,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     flex: { flex: 1 },
     header: { padding: spacing.md, paddingBottom: spacing.sm, gap: spacing.sm },
-    title: { fontSize: typography.headingLg, fontWeight: '700', color: colors.text.primary },
+    title: { fontFamily: fonts.display.bold, fontSize: typography.headingLg, color: colors.text.primary },
     tabs: {
       flexDirection: 'row',
       backgroundColor: colors.surface.glassSoft,

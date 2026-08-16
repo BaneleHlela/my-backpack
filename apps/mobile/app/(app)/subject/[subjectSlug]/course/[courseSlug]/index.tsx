@@ -7,7 +7,7 @@
 // A separate fetchCourseDetail call still runs to populate course.miniAppIds (the list endpoint
 // only returns plain id strings — see contentSlice.ts).
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../../../../../../src/components/AppText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -22,8 +22,12 @@ import ResourcesModal from '../../../../../../src/components/course/ResourcesMod
 import QuizPickerModal from '../../../../../../src/components/course/QuizPickerModal';
 import { encodeAssignedPlayMode } from '../../../../../../src/components/quiz/quizPlayModes';
 import { Menubar } from '../../../../../../src/components/Menubar';
+import { GradientProgressBar } from '../../../../../../src/components/GradientProgressBar';
+import { LaunchScreenBody } from '../../../../../../src/components/LaunchScreen';
+import { ComingSoonOverlay } from '../../../../../../src/components/ComingSoonOverlay';
 import type { AppDispatch, RootState } from '../../../../../../src/store/store';
 import { useTheme } from '../../../../../../src/theme/ThemeContext';
+import { fonts } from '../../../../../../src/theme/fonts';
 
 const MINI_APP_EMOJI: Record<string, string> = {
   dictionary: '📖',
@@ -112,20 +116,24 @@ export default function CourseScreen() {
       <ScrollView contentContainerStyle={styles.content} stickyHeaderIndices={[0]}>
         <Menubar label={subjectName || 'Back'} onBackPress={() => router.back()} />
 
-        <Text style={styles.heading}>{course.name}</Text>
-        {course.description ? <Text style={styles.description}>{course.description}</Text> : null}
-
-        {currentRoadmap && (
-          <View style={styles.progressSection}>
-            <Text style={styles.progressLabel}>
-              {currentRoadmap.completedItems} of {currentRoadmap.totalItems} items complete ·{' '}
-              <Text style={styles.progressPercent}>{pct}% done</Text>
+        <View style={styles.headerRow}>
+          <View style={styles.headerCol}>
+            <Text style={styles.heading} numberOfLines={1}>
+              {course.name}
             </Text>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${pct}%` }]} />
-            </View>
+            {course.description ? (
+              <Text style={styles.description} numberOfLines={2}>
+                {course.description}
+              </Text>
+            ) : null}
+            {currentRoadmap && (
+              <View style={styles.progressSection}>
+                <GradientProgressBar progress={pct} height={7} />
+                <Text style={styles.progressPercent}>{pct}%</Text>
+              </View>
+            )}
           </View>
-        )}
+        </View>
 
         {linkedMiniApps.length > 0 && (
           <View style={styles.linksRow}>
@@ -149,7 +157,9 @@ export default function CourseScreen() {
 
         <View style={styles.roadmapSection}>
           {isLoading && !currentRoadmap ? (
-            <ActivityIndicator color={colors.primary.DEFAULT} style={styles.loading} />
+            <View style={styles.roadmapLoading}>
+              <LaunchScreenBody />
+            </View>
           ) : error ? (
             <View style={styles.center}>
               <Text style={styles.errorText}>Could not load roadmap.</Text>
@@ -212,13 +222,7 @@ export default function CourseScreen() {
         />
       )}
 
-      {comingSoon && (
-        <Pressable style={styles.comingSoonOverlay} onPress={() => setComingSoon(null)}>
-          <View style={styles.comingSoonCard}>
-            <Text style={styles.comingSoonText}>{comingSoon} coming soon.</Text>
-          </View>
-        </Pressable>
-      )}
+      {comingSoon && <ComingSoonOverlay label={comingSoon} onDismiss={() => setComingSoon(null)} />}
     </View>
   );
 }
@@ -233,27 +237,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     paddingBottom: 160,
     gap: spacing.md,
   },
-  comingSoonOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  comingSoonCard: {
-    backgroundColor: colors.background,
-    borderRadius: radii.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-  },
-  comingSoonText: {
-    fontSize: typography.body,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
   center: {
     flex: 1,
     alignItems: 'center',
@@ -266,37 +249,34 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     fontWeight: '600',
     color: colors.primary.DEFAULT,
   },
+  // "min-w-[25%]"/"max 50%" from the design brief — the name+progress column shrinks with a
+  // long course name but never drops below a quarter of the header row's width.
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  headerCol: {
+    minWidth: '25%',
+    maxWidth: '50%',
+    gap: spacing.xs,
+  },
   heading: {
+    fontFamily: fonts.display.bold,
     fontSize: typography.headingLg,
-    fontWeight: '700',
     color: colors.text.primary,
   },
   description: {
     fontSize: typography.small,
     color: colors.text.secondary,
-    marginTop: -spacing.xs,
   },
   progressSection: {
-    gap: spacing.xs,
-  },
-  progressLabel: {
-    fontSize: typography.small,
-    color: colors.text.secondary,
+    gap: 2,
+    marginTop: spacing.xs,
   },
   progressPercent: {
-    fontWeight: '700',
+    fontSize: typography.small,
+    fontFamily: fonts.display.semibold,
     color: colors.text.primary,
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface.glassSoft,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: radii.full,
-    backgroundColor: colors.primary.DEFAULT,
   },
   linksRow: {
     flexDirection: 'row',
@@ -324,7 +304,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   roadmapSection: {
     marginTop: spacing.sm,
   },
-  loading: {
+  roadmapLoading: {
     paddingVertical: spacing.xl,
   },
   errorText: {

@@ -10,6 +10,7 @@ import { Text } from '../AppText';
 import { Sparkles } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { useTheme } from '../../theme/ThemeContext';
+import { fonts } from '../../theme/fonts';
 
 interface GuestProgressNudgeProps {
   visible: boolean;
@@ -62,8 +63,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       gap: spacing.sm,
     },
     title: {
+      fontFamily: fonts.display.bold,
       fontSize: typography.heading,
-      fontWeight: '700',
       color: colors.text.primary,
     },
     body: {

@@ -19,6 +19,7 @@ import {
 } from '../../../../src/features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../../../src/store/store';
 import { useTheme } from '../../../../src/theme/ThemeContext';
+import { fonts } from '../../../../src/theme/fonts';
 
 type StatusFilter = 'all' | 'learning' | 'mastered' | 'paused';
 type SortOption = 'recent' | 'alphabetical' | 'confidence' | 'accuracy' | 'lastPracticed' | 'dueForReview';
@@ -170,8 +171,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     marginBottom: spacing.sm,
   },
   title: {
+    fontFamily: fonts.display.bold,
     fontSize: typography.headingLg,
-    fontWeight: '700',
     color: colors.text.primary,
     marginBottom: spacing.md,
   },

@@ -15,6 +15,7 @@ import { playAudioUrl } from '../../../../../src/lib/audio';
 import { clearActiveTerm, fetchTermDetail } from '../../../../../src/features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../../../../src/store/store';
 import { useTheme } from '../../../../../src/theme/ThemeContext';
+import { fonts } from '../../../../../src/theme/fonts';
 
 export default function TermDetailScreen() {
   const { colors } = useTheme();
@@ -107,8 +108,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     gap: spacing.sm,
   },
   word: {
+    fontFamily: fonts.display.bold,
     fontSize: typography.headingLg,
-    fontWeight: '700',
     color: colors.glassText.primary,
   },
   phonetic: {

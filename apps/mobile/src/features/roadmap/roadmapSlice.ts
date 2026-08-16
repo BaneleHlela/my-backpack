@@ -24,6 +24,15 @@ interface RoadmapState {
   // apart from a fresh one on load, so it doesn't re-gate a revisit behind watching the video
   // again. Cleared alongside currentLesson, same lifecycle.
   currentLessonProgress: IItemProgressEntry | null;
+  // Per-course completed/total item counts, keyed by courseId (design pass, August 2026) — lets
+  // the Subject screen show a real progress bar on every course card at once, which
+  // `currentRoadmap` (a single slot) can't do. Populated as a side effect of
+  // fetchRoadmapByCourse.fulfilled below rather than a dedicated thunk/endpoint — that request
+  // already returns completedItems/totalItems, and subjects only have 1-3 courses today, so
+  // firing it once per card is cheap. Purely additive: currentRoadmap's own behavior is
+  // untouched, and CourseScreen (the only other caller of fetchRoadmapByCourse) doesn't read
+  // this map.
+  courseProgressById: Record<string, { completedItems: number; totalItems: number }>;
   isLoading: boolean;
   error: string | null;
 }
@@ -33,6 +42,7 @@ const initialState: RoadmapState = {
   currentNode: null,
   currentLesson: null,
   currentLessonProgress: null,
+  courseProgressById: {},
   isLoading: false,
   error: null,
 };
@@ -95,6 +105,10 @@ const roadmapSlice = createSlice({
       .addCase(fetchRoadmapByCourse.fulfilled, (state, action) => {
         state.isLoading = false;
         state.currentRoadmap = action.payload;
+        state.courseProgressById[action.meta.arg] = {
+          completedItems: action.payload.completedItems,
+          totalItems: action.payload.totalItems,
+        };
       })
       .addCase(fetchRoadmapByCourse.rejected, (state, action) => {
         state.isLoading = false;

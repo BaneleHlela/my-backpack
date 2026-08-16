@@ -2039,6 +2039,57 @@ my-backpack/
       established "flag what's unverified" convention. See
       [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Fonts"
       section for full detail.
+- [x] Visual redesign pass — colorful cards, animated FAB/launch screen, full-bleed auth
+      (August 2026) — a broad styling pass across the Course/Subject/Home flow and the
+      pre-app screens, referencing a set of external design mockups (not a Figma source this
+      time). New `expo-linear-gradient` dependency. New shared primitives:
+      `GradientProgressBar.tsx` (gradient-filled progress bar, replaces flat fills in
+      `CourseScreen`/`QuizProgress`), `GradientListCard.tsx` (colorful full-width card — diagonal
+      gradient cycled from `theme/accentPalette.ts`'s 6-tone palette, two translucent "blob"
+      circles for a procedural background-pattern look, title + optional bottom progress row),
+      `MiniAppGridCard.tsx` (2-column pastel grid tile), `ComingSoonOverlay.tsx` (extracted from
+      `CourseScreen`'s inline pattern, now reused by the auth screens' OAuth buttons and
+      select-profile's new tile), `AuthScreenBackground.tsx` (gradient wash +
+      `illustrations/FloatingBlobs.tsx`/`FloatingSparkles.tsx` — hand-built `react-native-svg` +
+      Reanimated decorative loops, not an external Lottie file; no such library is installed and
+      none was added). **Course screen** (`subject/[subjectSlug]/course/[courseSlug]/index.tsx`):
+      the 4 always-visible `CoursePathActions` FABs became one bottom-left toggle that expands a
+      vertical stack of the same 4 actions with a staggered scale/translateY/rotateX "flip out
+      from behind the toggle" animation (opens bottom-to-top, closes top-to-bottom); the header's
+      course name + progress bar now share one column (`minWidth: 25%`, `maxWidth: 50%`,
+      `numberOfLines={1}`), showing only the `%` — the "X of Y items complete" text moved to the
+      course card on the Subject screen instead; the roadmap-loading state now renders
+      `LaunchScreenBody` instead of a bare spinner. **Subject screen**
+      (`subject/[subjectSlug]/index.tsx`): Mini-Apps grid moved above Courses; each course is now
+      a `GradientListCard` with a real completed/total progress bar, sourced from a new additive
+      `courseProgressById` map on `roadmapSlice.ts` (populated as a side effect of the existing
+      `fetchRoadmapByCourse.fulfilled`, keyed by `action.meta.arg`) — fired once per listed
+      course; deliberately reuses the existing `GET /roadmap/course/:courseId` endpoint rather
+      than adding profile-scoped progress to the unauthenticated `GET /content/.../courses` route,
+      since subjects only have 1-3 courses today. **Home screen** (`home.tsx`): subject list is
+      now `GradientListCard` too, progress read directly from the already-fetched
+      `enrollment.progressSummary` (no new call). **Auth/profile screens** (`login.tsx`,
+      `signup.tsx`, `select-profile.tsx`, `profile-setup.tsx`): dropped the centered `GlassCard`
+      in favor of `AuthScreenBackground`'s full-bleed layout; `TextField.tsx` gained an opt-in
+      `showToggle` prop (Eye/EyeOff from `lucide-react-native`, off by default — no change for
+      existing callers) used by every password field; login/signup gained placeholder "Continue
+      with Google/Facebook" buttons that show `ComingSoonOverlay`; select-profile gained a
+      "+ Add profile" tile that does the same (a real create-profile flow is out of scope — this
+      matches the existing accepted "Add Profile is a no-op" convention documented under
+      `ProfileSwitcherModal` below). **Launch screen** (`LaunchScreen.tsx`): the bare logo +
+      `ActivityIndicator` became a continuously "breathing" logo (scale/rotate loop) with
+      orbiting `FloatingSparkles`, a one-shot fade+slide-in "My Backpack" wordmark, and a 3-dot
+      pulsing loader — both exports (`LaunchScreenBody`/`LaunchScreen`) kept their existing call
+      signatures, so no call sites changed. **Fredoka sweep**: every text style keyed to
+      `typography.heading`/`typography.headingLg` app-wide now has an explicit
+      `fontFamily: fonts.display.*` (was previously inconsistent — e.g. the auth headings had
+      none, silently falling back to the `AppText` body-font default); deliberately left alone:
+      emoji-sized glyphs, the PIN pad's digit keys, and a DnD word-build pattern's
+      fill-in-the-blank underscore glyph, none of which are semantically "headings." Restyling
+      every other page in the app (Bucket, Dictionary, Quiz History, etc.) beyond the ones above
+      was out of scope for this pass. Verified via `tsc --noEmit` (clean) and a clean
+      `expo export --platform android` (3988 modules) — not yet confirmed on a real
+      device/emulator, per this project's established "flag what's unverified" convention.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens

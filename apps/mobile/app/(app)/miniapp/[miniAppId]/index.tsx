@@ -17,6 +17,7 @@ import { setBrowseLetter, type DictionaryTermPreview } from '../../../../src/fea
 import { Menubar } from '../../../../src/components/Menubar';
 import type { AppDispatch, RootState } from '../../../../src/store/store';
 import { useTheme } from '../../../../src/theme/ThemeContext';
+import { fonts } from '../../../../src/theme/fonts';
 
 export default function DictionaryHomeScreen() {
   const { colors } = useTheme();
@@ -158,8 +159,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     color: colors.primary.DEFAULT,
   },
   title: {
+    fontFamily: fonts.display.bold,
     fontSize: typography.headingLg,
-    fontWeight: '700',
     color: colors.text.primary,
     marginBottom: spacing.md,
   },

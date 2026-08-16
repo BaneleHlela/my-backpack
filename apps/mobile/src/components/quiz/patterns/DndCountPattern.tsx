@@ -37,6 +37,7 @@ import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useSpeak } from '../../../lib/useSpeak';
 import { DndTile, DndTileHandle, Rect, clampTileSize, playAsset, pointInRect, shuffle } from './DndTile';
 import { useTheme } from '../../../theme/ThemeContext';
+import { fonts } from '../../../theme/fonts';
 import type { QuestionPatternHandle, QuestionPatternReadyProps } from './questionPatternTypes';
 
 interface DndCountPatternProps extends QuestionPatternReadyProps {
@@ -327,8 +328,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     color: colors.text.primary,
   },
   promptTextChild: {
+    fontFamily: fonts.display.bold,
     fontSize: typography.headingLg,
-    fontWeight: '700',
     textAlign: 'center',
   },
   promptButtons: {
