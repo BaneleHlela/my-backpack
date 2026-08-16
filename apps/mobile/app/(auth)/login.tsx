@@ -13,6 +13,8 @@ import { spacing, typography } from '@my-backpack/shared';
 import { AuthScreenBackground } from '../../src/components/AuthScreenBackground';
 import { BackpackLogo } from '../../src/components/BackpackLogo';
 import { ComingSoonOverlay } from '../../src/components/ComingSoonOverlay';
+import { FacebookIcon } from '../../src/components/icons/FacebookIcon';
+import { GoogleIcon } from '../../src/components/icons/GoogleIcon';
 import { PrimaryButton } from '../../src/components/PrimaryButton';
 import { TextField } from '../../src/components/TextField';
 import { login, continueAsGuest, fetchActiveProfile, clearError } from '../../src/features/auth/authSlice';
@@ -121,10 +123,12 @@ export default function LoginScreen() {
 
       <View style={styles.socialRow}>
         <Pressable style={styles.socialButton} onPress={() => setComingSoon('Google sign-in')}>
-          <Text style={styles.socialButtonText}>🔍 Google</Text>
+          <GoogleIcon size={18} />
+          <Text style={styles.socialButtonText}>Google</Text>
         </Pressable>
         <Pressable style={styles.socialButton} onPress={() => setComingSoon('Facebook sign-in')}>
-          <Text style={styles.socialButtonText}>📘 Facebook</Text>
+          <FacebookIcon size={18} />
+          <Text style={styles.socialButtonText}>Facebook</Text>
         </Pressable>
       </View>
 
@@ -199,7 +203,10 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     socialButton: {
       flex: 1,
+      flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
       paddingVertical: spacing.sm,
       borderRadius: 999,
       borderWidth: 1,
@@ -223,7 +230,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     link: {
       fontSize: typography.small,
       fontWeight: '600',
-      color: colors.primary.darker,
+      color: colors.text.secondary,
+      textDecorationLine: 'underline',
     },
     // Visually secondary to "Sign in" — this is the fast path, not the primary one, so it
     // reads as a plain text link rather than a second button competing for attention.

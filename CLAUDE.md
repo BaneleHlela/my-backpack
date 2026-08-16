@@ -277,10 +277,20 @@ A course within a Subject — the umbrella for a roadmap-based learning path (e.
 (unique per subjectId), description, iconUrl, roadmapId, miniAppIds[] (optional convenience
 links, e.g. Dictionary), curriculumTags[], team (reserved, no shape yet — see
 [docs/product/course-marketplace-vision.md](docs/product/course-marketplace-vision.md)),
-isActive.
+bookSource (optional — set by the book-to-course pipeline, see below), isActive.
 
 A Subject can have multiple Courses — replaces the old `Roadmap.findOne({ subjectId })`
 "one roadmap per subject" assumption; fetching a subject's courses is `Course.find({ subjectId })`.
+
+`bookSource` (added August 2026 — see
+[docs/content/book-to-course-design.md](docs/content/book-to-course-design.md)):
+`{ pdfPath: string; extractedText: string }`, set when the course was created (or later
+populated) via the book-to-course pipeline. `pdfPath` is a GCS path (not a full URL, the usual
+convention); `extractedText` is the raw, mechanically-extracted book text, used both to create
+chapters and to ground the AI Helper. Deliberately **not** exposed on `ICourseSummary` or any
+public/dashboard read serializer — it can be the length of a whole book. Dashboard course-write
+responses (create/update/book-chapters) instead carry a derived `hasBookSource: boolean`
+(`course.service.ts`'s `toDashboardCourseResponse`).
 
 ### Term
 Shared across all users. Fields: word, miniAppId, phonetic, origin, 
@@ -745,12 +755,25 @@ PATCH  /api/enrollment/subjects/:subjectId/accessed
 ### AI Chat (Course Chat's AI Helper)
 ```
 GET  /api/ai-chat/course/:courseId/history
-POST /api/ai-chat/course/:courseId/message   — { message }
+POST /api/ai-chat/course/:courseId/message              — { message }
+POST /api/ai-chat/course/:courseId/practice-questions    — {}; book-to-course pipeline Phase 4b
+                                                             (personal, on-demand "Quiz me on
+                                                             this chapter" — see below)
 ```
-Both require `requireProfile`; `POST` also runs `attachContentPrefs` (reads
-`ageGroup`/`simplifiedLanguage` for the system prompt). Rate-limited per-profile: 5s cooldown
-between messages, 50 messages/day. See the `AiChatMessage` entry above and
-[docs/product/course-chat-vision.md](docs/product/course-chat-vision.md).
+`GET`/`POST .../message` require `requireProfile`; `POST .../message` also runs
+`attachContentPrefs` (reads `ageGroup`/`simplifiedLanguage` for the system prompt).
+`POST .../practice-questions` requires `requireProfile` only. All three are rate-limited
+per-profile: 5s cooldown between messages, 50 messages/day (the practice-questions route counts
+as an ordinary turn for this limit, via the same `checkRateLimit`). See the `AiChatMessage`
+entry above and [docs/product/course-chat-vision.md](docs/product/course-chat-vision.md).
+
+`POST .../message` also grounds the AI Helper in the course's book when one is attached
+(`Course.bookSource.extractedText`, added as its own cacheable system-prompt block, model
+switching Haiku→Sonnet past the same token threshold `suggest-structure` uses below).
+`POST .../practice-questions` generates personal (not shared), on-demand practice questions
+from the learner's current chapter, returned inline — not wrapped in a QuizSession/AnswerRecord,
+not persisted as a chat message. See
+[docs/content/book-to-course-design.md](docs/content/book-to-course-design.md).
 
 ### Admin
 ```
@@ -767,6 +790,8 @@ GET  /api/dashboard/assets?type=&search=    — list/browse assets under questio
 POST   /api/dashboard/courses                              — { subjectId, name, slug, description?, curriculumTags? }; also creates the Course's (empty) Roadmap
 PATCH  /api/dashboard/courses/:courseId                     — name/description/iconUrl/miniAppIds/curriculumTags only
 DELETE /api/dashboard/courses/:courseId                     — soft delete (isActive: false); roadmap/nodes/lessons/quizzes/questions untouched
+POST   /api/dashboard/courses/:courseId/suggest-structure    — { pdfPath }; book-to-course pipeline Phase 2 — extracts the PDF's text (mechanical) then asks Claude to propose a chapter list mirroring the book's own structure (judgment); persists nothing, returns { chapters, extractedText }
+POST   /api/dashboard/courses/:courseId/book-chapters        — { pdfPath, extractedText, chapters }; book-to-course pipeline Phase 3 — the admin-approved (possibly edited) proposal; sets Course.bookSource and creates one node + draft 'Reading' lesson per chapter, no quizzes yet
 POST   /api/dashboard/courses/:courseId/nodes               — { title, slug, description?, curriculumTags? }
 PATCH  /api/dashboard/courses/:courseId/nodes/reorder        — { nodeIds: string[] } full ordered list; rewrites Roadmap.nodes[] + each RoadmapNode.position
 
@@ -775,6 +800,7 @@ DELETE /api/dashboard/nodes/:nodeId                          — soft delete; re
 POST   /api/dashboard/nodes/:nodeId/lessons                  — { title, resources: IResource[], requireVideoWatch? }
 POST   /api/dashboard/nodes/:nodeId/quizzes                  — { title, settings? }; always mode:'fixed', miniAppId: <course._id>
 PATCH  /api/dashboard/nodes/:nodeId/items/:itemId/grade-settings — { passingScore?, starThresholds? }; quiz items only, responds with the item's fully-resolved grade settings (see gradeSettings.ts)
+POST   /api/dashboard/nodes/:nodeId/book-questions            — { count? }; book-to-course pipeline Phase 4a (official/curated) — generates AI questions from this node's slice of the course's book text, saves them with nodeId set (a deliberate divergence from POST /questions below, which never sets nodeId), and attaches a new mode:'fixed' Quiz
 
 PATCH  /api/dashboard/lessons/:lessonId                       — title/resources/requireVideoWatch only
 DELETE /api/dashboard/lessons/:lessonId                       — soft delete; removes its entry from the parent node's items[], renumbers the rest
@@ -796,7 +822,10 @@ auth gate + shared asset library. Every Quiz/Question created here gets `miniApp
 **Course's `_id`** (no MiniApp document exists for roadmap content) — same convention the
 Course/Roadmap migration already established. Every delete across this module is a **soft
 delete** — real learner progress can already be attached by the time something gets edited. See
-[docs/content/content-studio-design.md](docs/content/content-studio-design.md).
+[docs/content/content-studio-design.md](docs/content/content-studio-design.md). The
+`suggest-structure`/`book-chapters`/`book-questions` routes are the book-to-course pipeline
+(August 2026) — see
+[docs/content/book-to-course-design.md](docs/content/book-to-course-design.md).
 
 ---
 
@@ -1297,10 +1326,68 @@ my-backpack/
       specifically, layered on top of the existing blanket `authLimiter`. Mobile-only for now —
       `apps/web` has no guest entry point yet. See
       [docs/technical/guest-mode.md](docs/technical/guest-mode.md).
+- [x] Book-to-course pipeline backend (August 2026) — a scoped version of the two deferred items
+      below: one specific book, uploaded manually in Studio, turned into a course's Topics plus
+      AI question generation and AI Helper grounding — not a general "any PDF becomes a course"
+      tool. New `Course.bookSource?: { pdfPath, extractedText }` (never exposed on
+      `ICourseSummary`/any public serializer — dashboard course-write responses instead carry a
+      derived `hasBookSource: boolean`, `course.service.ts`'s `toDashboardCourseResponse`). New
+      `apps/api/src/services/bookIngestion/` — `pdfExtraction.ts` (`extractPdfText`, mechanical,
+      `pdf-parse@1.1.1` pinned — `pdf-parse@2.x` ships a completely different class-based API
+      with no default export, so `^` latest would silently break this), `chapterStructure.ts`
+      (`suggestChapterStructure`, AI proposes a chapter list mirroring the book's own structure,
+      persists nothing), `chapterIngestion.ts` (`createChaptersFromBook`, the admin-approved
+      version — sets `bookSource`, creates one `RoadmapNode` + draft `'Reading'` `Lesson` per
+      chapter via the existing `createNode`/`createLesson`, no quizzes), `chapterQuestions.ts`
+      (`generateChapterQuestions`, the shared AI question generator — MCQ/true-false/text-input
+      mix; any calculation/numeric question must be MCQ with numeric options, never typed, since
+      quiz grading does exact string matching with no numeric tolerance), `chapterTextSlice.ts`
+      (`sliceChapterText`, a rough proportional slice of `extractedText` by node position — not
+      exact page numbers), `nodeBookQuestions.ts` (`createBookQuestionsForNode`, Phase 4a —
+      official/curated, saves shared `Question` docs with `nodeId` set explicitly, a deliberate
+      divergence from `studio/question.service.ts`'s `createQuestion`, which never sets `nodeId`
+      — and attaches a new `mode:'fixed'` Quiz), and `modelSelection.ts` (shared
+      Haiku→Sonnet-past-150k-tokens model choice, reused by both chapter-structure generation and
+      AI Helper book-grounding below, not redefined per call site). Three new dashboard routes
+      (`suggest-structure`, `book-chapters`, `book-questions` — see API Routes Reference) plus a
+      fourth on `/api/ai-chat` (`practice-questions`, Phase 4b — personal, on-demand, chat-
+      triggered: `aiChat.service.ts`'s `getPracticeQuestionsForProfile` resolves the learner's
+      current chapter from `ProfileRoadmapProgress.nodeProgress`'s `in_progress` entry — **not**
+      `currentNodeId`, which is dead: declared on the schema but never set or read anywhere in
+      `roadmap.service.ts` — falling back to the start of the book if the learner hasn't started
+      yet; saves questions with `isGeneric: false`, `profileId` set, never added to the shared
+      pool; reuses the existing AI Helper rate limit, no new limiter). `aiChatHelper.service.ts`
+      grounds the AI Helper's system prompt in the book text as its own `cache_control:
+      {type:'ephemeral'}` block, placed before the smaller per-turn persona/context block for
+      cache-hit ordering; `aiChat.service.ts`'s `sendChatMessage` threads `course.bookSource?.
+      extractedText` straight through. See
+      [docs/content/book-to-course-design.md](docs/content/book-to-course-design.md) for the
+      full design, including the two corrections above written out in detail.
+      **Addendum (August 2026): AI response robustness fix** — real testing against a genuine
+      graduate-level textbook (Sean Carroll's *Spacetime and Geometry*) surfaced a long-context
+      "lost in the middle" failure: `chapterStructure.ts`/`chapterQuestions.ts` both put the raw
+      book/chapter excerpt at the very end of the prompt, right before generation, and on a
+      large or content-dense excerpt (a textbook's own worked examples and end-of-chapter
+      problem sets are a real, observed trigger) the model drifted into continuing the
+      excerpt's own pattern — e.g. "answering" practice questions it had just read — instead of
+      following the JSON-array instruction given earlier in the prompt. Fixed two ways: both
+      prompts now repeat the strict output-format instruction (plus an explicit "don't answer
+      questions in the text above") immediately after the excerpt, recency-anchored so it's the
+      last thing the model reads before generating; and a new shared
+      `bookIngestion/aiJson.ts`'s `cleanAndParseJsonArray()` (used by both files in place of a
+      bare `JSON.parse`) falls back to slicing out the first `[` … last `]` substring and
+      parsing that, in case the model still prefaces the JSON with prose despite the
+      instruction.
+      **Second addendum (August 2026): JSON body-size limit** — the same real-book testing hit
+      `PayloadTooLargeError` on `POST /dashboard/courses/:courseId/book-chapters`, whose request
+      body round-trips the whole book's `extractedText` as plain JSON (Phase 3 re-submits what
+      Phase 2's `suggest-structure` returned) — Express's default `express.json()` body limit is
+      100kb, far too small for a book's worth of text. `app.ts`'s `express.json()` now sets
+      `{ limit: '25mb' }` globally (one blanket cap across all routes, same "single generous
+      limit" convention as the 250MB multer cap on asset uploads) rather than scoping a special
+      limit to just this route.
 - [ ] XP and peanuts reward system (deferred)
 - [ ] Test readiness scoring (deferred)
-- [ ] Book/PDF upload pipeline (deferred)
-- [ ] AI-powered content generation from books (deferred)
 
 ### Frontend Web (apps/web)
 - [x] React + Vite + TypeScript + Redux setup
@@ -1499,6 +1586,38 @@ my-backpack/
       component instead). Fredoka is applied the same zero-touch way, via a `@layer base` rule
       in `index.css` targeting every `h1`-`h6`; nothing web-specific needed touching beyond
       those three files. See `docs/design/brand-guide.md`'s Typography section.
+- [x] Book-to-course pipeline — Studio frontend + AI Helper suggested actions (August 2026) —
+      web half of the pipeline described under Backend above; see
+      [docs/content/book-to-course-design.md](docs/content/book-to-course-design.md). New
+      `features/studio/components/ImportBookModal.tsx`, opened from a new "Import from book"
+      button on `CourseDetailPage.tsx`'s Topics section (next to "Add Topic"; a "📖 Book
+      imported" badge shows once `hasBookSource` is true). Two-step wizard: upload a PDF
+      (reuses the existing `AssetPicker`, `type: 'documents'`) → `suggestBookStructure` thunk
+      calls `POST .../suggest-structure` and shows the proposed chapters as an editable,
+      reorderable list (title, page range) using the existing `@dnd-kit` `SortableList`, matching
+      the convention already used for node/quiz/lesson-resource ordering → `applyBookChapters`
+      thunk calls `POST .../book-chapters` with the (possibly edited) list, then refreshes the
+      course's node list. `NodeDetailPage.tsx` gained a "Generate practice questions" action
+      (shown only when the parent course has `hasBookSource`) calling the new
+      `generateNodeBookQuestions` thunk (`POST .../book-questions`), after which the node's new
+      quiz is visible and editable the normal way. `studioSlice.ts`'s `StudioCourseEntry` gained
+      a derived `hasBookSource: boolean` (never the raw `bookSource`, which the backend
+      deliberately never returns to any client) — populated from dashboard course-write
+      responses only, so it stays `false` until a write happens in this session even though the
+      course actually has a book (the aggregated public `/content/.../courses` list this entry
+      is otherwise built from doesn't carry it either, by the same "never expose extractedText"
+      rule). Course Chat's AI Helper (`CourseChatAiHelperPage.tsx`) gained a row of
+      suggested-action chips above the message input: "Quiz me on this chapter" calls the new
+      `POST /ai-chat/course/:courseId/practice-questions` directly (not sent as a chat message)
+      via a new `fetchPracticeQuestions` thunk on `aiChatSlice.ts`, rendering the returned
+      questions in a new `components/chat/PracticeQuestionsCard.tsx` — a small inline card
+      (prompt, tappable options or a typed-answer field depending on whether the question has
+      `content.options`, reveal correct/incorrect + explanation on selection, step through with
+      "Next question") — deliberately not wired into `QuizSession`/`AnswerRecord`, no progress
+      tracking. Three static conversational starters ("Explain this differently," "Give me an
+      example," "Can you summarize this?") populate/send a normal chat message through the
+      existing send flow, no new endpoint. `packages/shared/types/aiChat.ts` gained
+      `IPracticeQuestionsResponse` alongside `IAiChatSendMessageResponse`.
 - [ ] Profile management screens
 
 ### Frontend Mobile (apps/mobile)
@@ -2090,6 +2209,61 @@ my-backpack/
       was out of scope for this pass. Verified via `tsc --noEmit` (clean) and a clean
       `expo export --platform android` (3988 modules) — not yet confirmed on a real
       device/emulator, per this project's established "flag what's unverified" convention.
+- [x] Book-to-course pipeline — AI Helper suggested actions (August 2026) — mobile half of the
+      web entry above; see
+      [docs/content/book-to-course-design.md](docs/content/book-to-course-design.md). The
+      book-import wizard itself (`ImportBookModal.tsx`) is web-only, matching Content Studio's
+      existing web-only footprint — nothing to port here. `AiHelperChatScreen.tsx` gained the
+      same suggested-action chip row as web, ported 1:1: "Quiz me on this chapter"
+      (`fetchPracticeQuestions` thunk, new on `features/aiChat/aiChatSlice.ts`, calling
+      `POST /ai-chat/course/:courseId/practice-questions` directly) renders a new
+      `components/course/PracticeQuestionsCard.tsx` (`GlassCard`-based, following
+      `ChatBubble.tsx`'s `useTheme()`/`createStyles(colors)` convention — tappable
+      `content.options` or a `TextInput` for typed answers, reveal correct/incorrect +
+      explanation, step through with "Next question"), plus three static conversational
+      starters that populate/send a normal chat message through the existing send flow.
+      `aiChatSlice.ts` gained `practiceQuestionsByCourseId`/`practiceQuestionsStatus`/
+      `practiceQuestionsError` state and a `clearPracticeQuestions` action, mirrored from web's
+      slice. Verified via `tsc --noEmit` (clean) — not yet confirmed on a real device/emulator,
+      per this project's established "flag what's unverified" convention.
+- [x] PaddedView/PaddedButton + varying-color mini-app/quiz cards (August 2026) — new
+      `src/components/PaddedView.tsx`/`PaddedButton.tsx`, siblings to `DepthView.tsx`/
+      `DepthButton.tsx` (same prop shape — `color`, `borderRadius`, `width`/`height`/
+      `aspectRatio`, `children`, `style`, `contentStyle` — so the two families are
+      interchangeable at a call site) but trading DepthView's shadow-peek "3D plate" look for
+      the flat bordered-frame look prototyped in `apps/web/src/pages/Scribbler.tsx` (an outer
+      border+padding shell wrapping an inner filled face, radii kept concentric via
+      `innerRadius = borderRadius - padding`); also picked up a `borderStyle` prop
+      (`'solid' | 'dashed' | 'dotted'`, default `'solid'`) to reproduce Scribbler's
+      `border-dashed`. `padding`/`borderWidth` both default to `0` (off) — with neither set
+      it's a plain rounded color face; both are set explicitly per call site instead of relying
+      on one shared default, since the two usages below want opposite looks. On the Subject
+      screen (`SubjectHomeScreen`), `MiniAppGridCard.tsx` now renders on a `PaddedButton` at
+      `aspectRatio={3 / 4}` (portrait) with `padding={2}`, `borderWidth={2}`,
+      `borderStyle="dashed"` — Scribbler's picture-frame effect reproduced 1:1. Note: RN's
+      dashed+rounded-corner rendering is a known inconsistent case on Android — not yet
+      confirmed on a real Android device. `QuizPickerModal.tsx`'s "Course Quizzes" tab (the
+      Topic quizzes list) rows are `PaddedButton`s too, with `padding={0}`/`borderWidth={0}`
+      (no frame — a flat colored row). Both cycle their fill color from the same
+      `theme/accentPalette.ts` 6-tone palette (already the app's one shared accent-color source,
+      used by `GradientListCard`/`MiniAppGridCard` since the Visual redesign pass above) — the
+      quiz list uses a running counter *not* reset per topic group, so color cycles down the
+      whole flat list rather than repeating within a topic with several quizzes back to back —
+      channeling `ideal_design_example1.webp`'s first phone (a vertical list of flat,
+      varying-pastel subject cards). The Subject screen's Courses section
+      (`GradientListCard`) was deliberately left as-is — only Mini-Apps and the quiz modal were
+      asked for. **Card text correction**: both cards' text (`MiniAppGridCard`'s name,
+      `QuizPickerModal`'s row title/subtitle/lock icon) initially used `accent.dark` for
+      contrast against `accent.light`, matching the pattern `GradientListCard` established —
+      changed to always `colors.text.primary` instead (the theme's own primary text tone: near-
+      black in light mode, near-white/cream in dark mode), regardless of which accent tone a
+      given card landed on. Reason: `darkColors`' `success`/`warning`/`error` accents swap
+      `.light` for a deep 900-level fill in dark mode (not a pale pastel — see
+      `packages/shared/constants/theme.ts`'s `darkColors` comment), so `accent.dark` text could
+      land close in tone to its own `accent.light` background there; `colors.text.primary`
+      sidesteps that per-accent contrast question entirely. Verified via `tsc --noEmit` (clean)
+      — not yet confirmed on a real device/emulator, per this project's established "flag what's
+      unverified" convention.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens

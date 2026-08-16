@@ -625,6 +625,34 @@ Soft-deletes the Course only (`isActive: false`). The Roadmap/nodes/lessons/quiz
 
 ---
 
+### `POST /api/dashboard/courses/:courseId/suggest-structure`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+Book-to-course pipeline, Phase 2 — see [docs/content/book-to-course-design.md](../content/book-to-course-design.md).
+
+**Body:** `{ "pdfPath": "question-media/documents/..." }` — a GCS path already returned by `POST /api/dashboard/assets/upload` (`type: 'documents'`).
+
+Runs deterministic PDF text extraction (`pdf-parse`, no AI) then asks Claude to propose a chapter list mirroring the book's own structure (no invented chapters). Persists nothing.
+
+**Response:** `{ "chapters": [{ "title", "startPage"?, "endPage"?, "summary" }], "extractedText": "..." }`. The frontend holds `extractedText` in memory to submit back to `book-chapters` below rather than re-extracting.
+
+---
+
+### `POST /api/dashboard/courses/:courseId/book-chapters`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+Book-to-course pipeline, Phase 3. The admin-approved (possibly edited) version of `suggest-structure`'s proposal — titles/ranges may have changed, chapters may have been added, removed, or reordered.
+
+**Body:** `{ "pdfPath", "extractedText", "chapters": [{ "title", "startPage"?, "endPage"? }] }`
+
+Sets `Course.bookSource = { pdfPath, extractedText }`, then for each chapter in order: creates a `RoadmapNode` (same as `POST .../nodes` below) and a draft `'Reading'` `Lesson` with one `notes` resource ("Read pages X–Y: *Title*") — editable afterward through the normal lesson editor. Does **not** create quizzes — see `POST /api/dashboard/nodes/:nodeId/book-questions`.
+
+**Response:** the updated Course, in the same shape as every other dashboard course-write response (`hasBookSource: true`, raw `bookSource` never included — see `course.service.ts`'s `toDashboardCourseResponse`).
+
+---
+
 ### `POST /api/dashboard/courses/:courseId/nodes`
 
 **Auth:** requireProfile + requirePlatformAdmin
@@ -721,6 +749,20 @@ Creates a `Quiz` (`mode: 'fixed'`, `miniAppId: <course._id>`, `questionIds: []`,
 
 ---
 
+### `POST /api/dashboard/nodes/:nodeId/book-questions`
+
+**Auth:** requireProfile + requirePlatformAdmin
+
+Book-to-course pipeline, Phase 4a (official/curated) — see [docs/content/book-to-course-design.md](../content/book-to-course-design.md). The chat-triggered, personal counterpart is `POST /api/ai-chat/course/:courseId/practice-questions` below.
+
+**Body:** `{ "count"? }` — defaults to 8.
+
+Requires the node's course to have `bookSource` set (400 otherwise). Takes a rough proportional slice of `bookSource.extractedText` for this node (by position among the roadmap's nodes, not exact page numbers), generates AI questions from it, saves them as real `Question` documents (`source: 'ai'`, `isGeneric: true`, `profileId: null`, **`nodeId` set explicitly** — a deliberate divergence from `POST /api/dashboard/questions`, which never sets `nodeId`), and creates a new `mode: 'fixed'` Quiz with `questionIds` pre-populated in one write, appended to the node's `items[]` — same net effect as `POST .../quizzes` + `PATCH .../questions` but in one call.
+
+**Errors:** 404 if the node doesn't exist. 400 if the course has no book attached. 502 if the AI returned no valid questions.
+
+---
+
 ### `PATCH /api/dashboard/quizzes/:quizId`
 
 **Auth:** requireProfile + requirePlatformAdmin
@@ -797,6 +839,48 @@ Soft-deletes the question. If it's still referenced by an active `Quiz.questionI
 - `search` — optional, matches against `content.prompt`, falling back to `content.correctAnswer` for DnD types (which have no `prompt`)
 
 **Response:** Active questions for the course, newest first — backs the "add existing question to this quiz" picker in the quiz editor.
+
+---
+
+## AI Chat
+
+Course Chat's AI Helper — a 1:1, course-scoped chat between a profile and Claude Haiku. All routes require `requireProfile`.
+
+### `GET /api/ai-chat/course/:courseId/history`
+
+**Auth:** requireProfile
+
+**Response:** `{ "messages": IAiChatMessage[] }` — the full persisted history for this profile+course, chronological, capped at 200 (`CHAT_HISTORY_FETCH_LIMIT`).
+
+---
+
+### `POST /api/ai-chat/course/:courseId/message`
+
+**Auth:** requireProfile + attachContentPrefs
+
+**Body:** `{ "message": "..." }` (max 2000 chars)
+
+Rate-limited per-profile: 5s cooldown between messages, 50 messages/day, both derived from the `AiChatMessage` collection's own timestamps. When the course has a book attached (`Course.bookSource`), the AI Helper's system prompt is grounded in the book's full extracted text (see `POST .../practice-questions` below and [docs/content/book-to-course-design.md](../content/book-to-course-design.md)) — the model switches from Haiku to Sonnet for a long book, past the same token threshold `suggest-structure` uses.
+
+**Response:** `{ "userMessage", "assistantMessage" }` — both persisted only after the AI reply succeeds.
+
+**Errors:** 429 on cooldown/daily-limit. 503 if the AI Helper call itself fails.
+
+---
+
+### `POST /api/ai-chat/course/:courseId/practice-questions`
+
+**Auth:** requireProfile
+
+Book-to-course pipeline, Phase 4b (personal, on-demand) — the "Quiz me on this chapter" suggested action in the AI Helper chat. The official/curated counterpart is `POST /api/dashboard/nodes/:nodeId/book-questions` above. See [docs/content/book-to-course-design.md](../content/book-to-course-design.md).
+
+**Body:** none.
+
+Requires the course to have `bookSource` set (400 otherwise). Resolves the learner's current chapter from `ProfileRoadmapProgress.nodeProgress` (the entry with `status: 'in_progress'`, most-recently-attempted if several qualify — **not** `ProfileRoadmapProgress.currentNodeId`, which is dead: declared on the schema but never set or read anywhere), falling back to a slice from the start of the book if the learner hasn't started the roadmap yet. Generates 5 AI questions from that chapter's text and saves them as `Question` documents scoped to this profile (`isGeneric: false`, `profileId` set, `source: 'ai'`) — never added to the shared course-wide question pool. Rate-limited the same way as `POST .../message` above (an ordinary AI Helper turn for rate-limiting purposes), but does **not** persist an `AiChatMessage` — this is a lightweight widget, not a chat turn.
+
+**Response:** `{ "questions": IQuestion[] }`
+
+**Errors:** 400 if the course has no book attached. 429 on cooldown/daily-limit. 502 if the AI returned no valid questions.
 
 ---
 

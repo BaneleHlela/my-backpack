@@ -61,6 +61,12 @@ export interface StudioCourseEntry {
   fieldName: string;
   subjectSlug: string;
   subjectName: string;
+  // Derived — never the raw Course.bookSource (which can carry a whole book's extracted text).
+  // Only set on the dashboard course-write responses (create/update/book-chapters); the
+  // aggregated /content/.../courses list this entry is otherwise built from doesn't carry it,
+  // so it stays false until a write response says otherwise. See course.service.ts's
+  // toDashboardCourseResponse.
+  hasBookSource: boolean;
 }
 
 interface StudioCourseRaw {
@@ -74,6 +80,10 @@ interface StudioCourseRaw {
   miniAppIds: (string | { _id: string })[];
   curriculumTags: ICurriculumTag[];
   isActive: boolean;
+  // Only present on dashboard course-write responses (create/update/book-chapters) — see
+  // course.service.ts's toDashboardCourseResponse. Absent on the aggregated public
+  // /content/.../courses list fetchAllCourses builds from.
+  hasBookSource?: boolean;
 }
 
 function normalizeMiniAppIds(ids: (string | { _id: string })[]): string[] {
@@ -83,7 +93,7 @@ function normalizeMiniAppIds(ids: (string | { _id: string })[]): string[] {
 function toStudioCourseEntry(
   raw: StudioCourseRaw,
   ctx: { fieldSlug: string; fieldName: string; subjectSlug: string; subjectName: string },
-  fallback?: Partial<Pick<StudioCourseEntry, 'roadmapTitle' | 'nodeCount'>>
+  fallback?: Partial<Pick<StudioCourseEntry, 'roadmapTitle' | 'nodeCount' | 'hasBookSource'>>
 ): StudioCourseEntry {
   return {
     _id: raw._id,
@@ -98,6 +108,7 @@ function toStudioCourseEntry(
     roadmapId: raw.roadmapId,
     roadmapTitle: fallback?.roadmapTitle ?? `${raw.name} Roadmap`,
     nodeCount: fallback?.nodeCount ?? 0,
+    hasBookSource: raw.hasBookSource ?? fallback?.hasBookSource ?? false,
     ...ctx,
   };
 }
@@ -618,6 +629,72 @@ export const deleteQuestion = createAsyncThunk(
   }
 );
 
+// ── Thunks: book-to-course pipeline ──────────────────────
+// See docs/content/book-to-course-design.md. Three steps map to three thunks: suggest (2),
+// apply (3), and per-node question generation (4a). None of these persist a local "wizard"
+// slot in Redux state — ImportBookModal.tsx holds the proposed chapters + extractedText in
+// component state between suggest and apply, matching how every other Studio modal (e.g.
+// AddNodeModal) is a thin form dispatching thunks and reading isMutating/error, not a
+// dedicated state shape of its own.
+
+export interface ProposedBookChapter {
+  title: string;
+  startPage?: number;
+  endPage?: number;
+  summary: string;
+}
+
+export const suggestBookStructure = createAsyncThunk(
+  'studio/suggestBookStructure',
+  async ({ courseId, pdfPath }: { courseId: string; pdfPath: string }, { rejectWithValue }) => {
+    try {
+      const res = await api.post(`/dashboard/courses/${courseId}/suggest-structure`, { pdfPath });
+      return res.data.data as { chapters: ProposedBookChapter[]; extractedText: string };
+    } catch (err: unknown) {
+      return rejectWithValue(extractErrorMessage(err, 'Failed to analyze the book'));
+    }
+  }
+);
+
+export interface ApplyBookChaptersArgs {
+  courseId: string;
+  pdfPath: string;
+  extractedText: string;
+  chapters: { title: string; startPage?: number; endPage?: number }[];
+}
+
+export const applyBookChapters = createAsyncThunk(
+  'studio/applyBookChapters',
+  async ({ courseId, pdfPath, extractedText, chapters }: ApplyBookChaptersArgs, { rejectWithValue }) => {
+    try {
+      const res = await api.post(`/dashboard/courses/${courseId}/book-chapters`, {
+        pdfPath,
+        extractedText,
+        chapters,
+      });
+      return res.data.data as StudioCourseRaw;
+    } catch (err: unknown) {
+      return rejectWithValue(extractErrorMessage(err, 'Failed to create chapters from the book'));
+    }
+  }
+);
+
+// Response is the raw, unresolved RoadmapNode (items[] entries aren't populated with
+// lesson/quiz docs the way NodeDetail's items are) — the caller re-dispatches fetchNodeDetail
+// afterward to pick up the new quiz item, same pattern AddNodeModal already uses after
+// createNode + fetchCourseNodes. Nothing here is merged into currentNode.
+export const generateNodeBookQuestions = createAsyncThunk(
+  'studio/generateNodeBookQuestions',
+  async ({ nodeId, count }: { nodeId: string; count?: number }, { rejectWithValue }) => {
+    try {
+      await api.post(`/dashboard/nodes/${nodeId}/book-questions`, count ? { count } : {});
+      return nodeId;
+    } catch (err: unknown) {
+      return rejectWithValue(extractErrorMessage(err, 'Failed to generate practice questions'));
+    }
+  }
+);
+
 // ── Slice ────────────────────────────────────────────────
 
 const studioSlice = createSlice({
@@ -692,6 +769,7 @@ const studioSlice = createSlice({
         const entry = toStudioCourseEntry(raw, ctx, {
           roadmapTitle: ctx.roadmapTitle,
           nodeCount: ctx.nodeCount,
+          hasBookSource: ctx.hasBookSource,
         });
         if (idx >= 0) state.allCourses[idx] = entry;
         if (state.currentCourse?._id === raw._id) state.currentCourse = entry;
@@ -819,6 +897,59 @@ const studioSlice = createSlice({
         state.questionSearchResults = state.questionSearchResults.filter(
           (q) => q._id !== action.payload
         );
+      })
+      // suggestBookStructure — no state slot; ImportBookModal reads the resolved thunk
+      // payload directly via unwrap().
+      .addCase(suggestBookStructure.pending, (state) => {
+        state.isMutating = true;
+        state.error = null;
+      })
+      .addCase(suggestBookStructure.fulfilled, (state) => {
+        state.isMutating = false;
+      })
+      .addCase(suggestBookStructure.rejected, (state, action) => {
+        state.isMutating = false;
+        state.error = action.payload as string;
+      })
+      // applyBookChapters — same allCourses/currentCourse merge pattern as updateCourse
+      .addCase(applyBookChapters.pending, (state) => {
+        state.isMutating = true;
+        state.error = null;
+      })
+      .addCase(applyBookChapters.fulfilled, (state, action) => {
+        state.isMutating = false;
+        const raw = action.payload;
+        const idx = state.allCourses.findIndex((c) => c._id === raw._id);
+        const ctx =
+          idx >= 0
+            ? state.allCourses[idx]
+            : state.currentCourse && state.currentCourse._id === raw._id
+              ? state.currentCourse
+              : undefined;
+        if (!ctx) return;
+        const entry = toStudioCourseEntry(raw, ctx, {
+          roadmapTitle: ctx.roadmapTitle,
+          nodeCount: ctx.nodeCount,
+        });
+        if (idx >= 0) state.allCourses[idx] = entry;
+        if (state.currentCourse?._id === raw._id) state.currentCourse = entry;
+      })
+      .addCase(applyBookChapters.rejected, (state, action) => {
+        state.isMutating = false;
+        state.error = action.payload as string;
+      })
+      // generateNodeBookQuestions — no state to merge (raw unresolved node); caller
+      // re-dispatches fetchNodeDetail on success.
+      .addCase(generateNodeBookQuestions.pending, (state) => {
+        state.isMutating = true;
+        state.error = null;
+      })
+      .addCase(generateNodeBookQuestions.fulfilled, (state) => {
+        state.isMutating = false;
+      })
+      .addCase(generateNodeBookQuestions.rejected, (state, action) => {
+        state.isMutating = false;
+        state.error = action.payload as string;
       });
   },
 });

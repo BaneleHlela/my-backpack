@@ -8,14 +8,25 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollVie
 import { Text } from '../AppText';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { Send } from 'lucide-react-native';
+import { Send, Sparkles } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup } from '@my-backpack/shared';
-import { fetchChatHistory, sendChatMessage } from '../../features/aiChat/aiChatSlice';
+import {
+  fetchChatHistory,
+  sendChatMessage,
+  fetchPracticeQuestions,
+  clearPracticeQuestions,
+} from '../../features/aiChat/aiChatSlice';
 import type { AppDispatch, RootState } from '../../store/store';
 import { useTheme } from '../../theme/ThemeContext';
 import { Menubar } from '../Menubar';
 import { ChatBubble } from './ChatBubble';
+import { PracticeQuestionsCard } from './PracticeQuestionsCard';
+
+// Static conversational starters — populate/send a normal chat message through the existing
+// send flow, no dedicated endpoint. "Quiz me on this chapter" is handled separately below
+// since it calls a different endpoint and renders an inline widget instead of a chat turn.
+const CONVERSATION_STARTERS = ['Explain this differently', 'Give me an example', 'Can you summarize this?'];
 
 interface AiHelperChatScreenProps {
   courseId: string;
@@ -34,6 +45,15 @@ export function AiHelperChatScreen({ courseId, courseName }: AiHelperChatScreenP
   const historyStatus = useSelector((state: RootState) => state.aiChat.historyStatus);
   const sendStatus = useSelector((state: RootState) => state.aiChat.sendStatus);
   const error = useSelector((state: RootState) => state.aiChat.error);
+  const practiceQuestions = useSelector(
+    (state: RootState) => state.aiChat.practiceQuestionsByCourseId[courseId]
+  );
+  const practiceQuestionsStatus = useSelector(
+    (state: RootState) => state.aiChat.practiceQuestionsStatus
+  );
+  const practiceQuestionsError = useSelector(
+    (state: RootState) => state.aiChat.practiceQuestionsError
+  );
   const activeProfile = useSelector((state: RootState) => state.auth.activeProfile);
   const ageGroup: AgeGroup = activeProfile?.ageGroup ?? 'adult';
   const isChild = ageGroup === 'child';
@@ -42,6 +62,7 @@ export function AiHelperChatScreen({ courseId, courseName }: AiHelperChatScreenP
 
   const [inputText, setInputText] = useState('');
   const [pendingText, setPendingText] = useState<string | null>(null);
+  const isGeneratingPractice = practiceQuestionsStatus === 'loading';
 
   useEffect(() => {
     dispatch(fetchChatHistory(courseId));
@@ -75,6 +96,23 @@ export function AiHelperChatScreen({ courseId, courseName }: AiHelperChatScreenP
     sendText(pendingText);
   };
 
+  // Book-to-course pipeline, Phase 7 — suggested-action chips. "Quiz me" calls the
+  // practice-questions endpoint directly (not sent as a chat message); the starters below just
+  // populate/send a normal chat message through the existing send flow.
+  const handleQuizMe = () => {
+    if (isGeneratingPractice) return;
+    dispatch(fetchPracticeQuestions(courseId));
+  };
+
+  const handleDismissPractice = () => {
+    dispatch(clearPracticeQuestions(courseId));
+  };
+
+  const handleStarter = (text: string) => {
+    if (isSending) return;
+    sendText(text);
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.screen}
@@ -106,6 +144,19 @@ export function AiHelperChatScreen({ courseId, courseName }: AiHelperChatScreenP
           <ChatBubble key={m._id} role={m.role} content={m.content} isChild={isChild} />
         ))}
 
+        {isGeneratingPractice && (
+          <View style={styles.typingRow}>
+            <ActivityIndicator size="small" color={colors.text.muted} />
+            <Text style={styles.typingText}>Putting together a few practice questions…</Text>
+          </View>
+        )}
+        {practiceQuestionsError && !isGeneratingPractice && (
+          <Text style={styles.retryText}>{practiceQuestionsError}</Text>
+        )}
+        {practiceQuestions && practiceQuestions.length > 0 && (
+          <PracticeQuestionsCard questions={practiceQuestions} onDismiss={handleDismissPractice} />
+        )}
+
         {pendingText && (
           <>
             <ChatBubble role="user" content={pendingText} isChild={isChild} pending={isSending} />
@@ -123,6 +174,31 @@ export function AiHelperChatScreen({ courseId, courseName }: AiHelperChatScreenP
           </>
         )}
       </ScrollView>
+
+      <View style={styles.suggestionsRow}>
+        <Pressable
+          onPress={handleQuizMe}
+          disabled={isGeneratingPractice}
+          style={[styles.suggestionChip, styles.suggestionChipPrimary]}
+        >
+          {isGeneratingPractice ? (
+            <ActivityIndicator size="small" color={colors.primary.dark} />
+          ) : (
+            <Sparkles size={14} color={colors.primary.dark} />
+          )}
+          <Text style={styles.suggestionChipPrimaryText}>Quiz me on this chapter</Text>
+        </Pressable>
+        {CONVERSATION_STARTERS.map((starter) => (
+          <Pressable
+            key={starter}
+            onPress={() => handleStarter(starter)}
+            disabled={isSending}
+            style={styles.suggestionChip}
+          >
+            <Text style={styles.suggestionChipText}>{starter}</Text>
+          </Pressable>
+        ))}
+      </View>
 
       <View style={styles.inputRow}>
         <TextInput
@@ -191,6 +267,37 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors'], isChild: bo
       fontSize: typography.small,
       fontWeight: '600',
       color: colors.error.dark,
+    },
+    suggestionsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.xs,
+    },
+    suggestionChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs / 2,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderRadius: radii.full,
+      backgroundColor: colors.surface.glass,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
+    },
+    suggestionChipPrimary: {
+      backgroundColor: colors.primary.light,
+      borderColor: colors.primary.DEFAULT,
+    },
+    suggestionChipText: {
+      fontSize: typography.small,
+      color: colors.glassText.secondary,
+    },
+    suggestionChipPrimaryText: {
+      fontSize: typography.small,
+      fontWeight: '700',
+      color: colors.primary.dark,
     },
     inputRow: {
       flexDirection: 'row',

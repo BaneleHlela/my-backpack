@@ -3,7 +3,12 @@
 // course.routes.ts — see course.routes.ts.)
 import { Router, IRouter } from 'express';
 import { requireProfile, requirePlatformAdmin } from '../auth/auth.middleware';
-import { updateNodeHandler, deleteNodeHandler, updateNodeItemGradeSettingsHandler } from './node.controller';
+import {
+  updateNodeHandler,
+  deleteNodeHandler,
+  updateNodeItemGradeSettingsHandler,
+  createNodeBookQuestionsHandler,
+} from './node.controller';
 import { createLessonHandler } from './lesson.controller';
 import { createQuizHandler } from './quiz.controller';
 
@@ -25,5 +30,8 @@ router.post('/:nodeId/quizzes', createQuizHandler);
 
 // PATCH /api/dashboard/nodes/:nodeId/items/:itemId/grade-settings — quiz items only
 router.patch('/:nodeId/items/:itemId/grade-settings', updateNodeItemGradeSettingsHandler);
+
+// POST /api/dashboard/nodes/:nodeId/book-questions — book-to-course pipeline, Phase 4a
+router.post('/:nodeId/book-questions', createNodeBookQuestionsHandler);
 
 export default router;

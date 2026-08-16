@@ -117,23 +117,21 @@ export default function CourseScreen() {
         <Menubar label={subjectName || 'Back'} onBackPress={() => router.back()} />
 
         <View style={styles.headerRow}>
-          <View style={styles.headerCol}>
             <Text style={styles.heading} numberOfLines={1}>
               {course.name}
             </Text>
-            {course.description ? (
-              <Text style={styles.description} numberOfLines={2}>
-                {course.description}
-              </Text>
-            ) : null}
             {currentRoadmap && (
               <View style={styles.progressSection}>
-                <GradientProgressBar progress={pct} height={7} />
                 <Text style={styles.progressPercent}>{pct}%</Text>
+                <GradientProgressBar progress={pct} height={7} />
               </View>
             )}
-          </View>
         </View>
+        {course.description ? (
+          <Text style={styles.description} numberOfLines={2}>
+            {course.description}
+          </Text>
+        ) : null}
 
         {linkedMiniApps.length > 0 && (
           <View style={styles.linksRow}>
@@ -254,6 +252,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    justifyContent: 'space-between'
   },
   headerCol: {
     minWidth: '25%',
@@ -261,9 +260,11 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     gap: spacing.xs,
   },
   heading: {
+    maxWidth: '75%',
     fontFamily: fonts.display.bold,
-    fontSize: typography.headingLg,
+    fontSize: typography.headingLg - 2,
     color: colors.text.primary,
+    textTransform: 'capitalize',
   },
   description: {
     fontSize: typography.small,
@@ -274,9 +275,11 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     marginTop: spacing.xs,
   },
   progressPercent: {
+    minWidth: '25%',
     fontSize: typography.small,
     fontFamily: fonts.display.semibold,
     color: colors.text.primary,
+    textAlign: 'right',
   },
   linksRow: {
     flexDirection: 'row',

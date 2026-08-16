@@ -5,7 +5,7 @@
 import { Router, IRouter } from 'express';
 import { requireProfile } from '../auth/auth.middleware';
 import { attachContentPrefs } from '../../middleware/ageGroup.middleware';
-import { getChatHistoryHandler, sendChatMessageHandler } from './aiChat.controller';
+import { getChatHistoryHandler, sendChatMessageHandler, getPracticeQuestionsHandler } from './aiChat.controller';
 
 const router: IRouter = Router();
 
@@ -14,5 +14,8 @@ router.get('/course/:courseId/history', requireProfile, getChatHistoryHandler);
 
 // POST /api/ai-chat/course/:courseId/message  { message }
 router.post('/course/:courseId/message', requireProfile, attachContentPrefs, sendChatMessageHandler);
+
+// POST /api/ai-chat/course/:courseId/practice-questions — book-to-course pipeline, Phase 4b
+router.post('/course/:courseId/practice-questions', requireProfile, getPracticeQuestionsHandler);
 
 export default router;

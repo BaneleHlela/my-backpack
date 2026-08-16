@@ -10,3 +10,7 @@ export const CHAT_HISTORY_FETCH_LIMIT = 200; // defensive cap on a full history 
 
 export const COOLDOWN_MS = 5_000;
 export const DAILY_MESSAGE_LIMIT = 50;
+
+// Book-to-course pipeline, Phase 4b — how many questions "Quiz me on this chapter" generates
+// per tap. See docs/content/book-to-course-design.md.
+export const PRACTICE_QUESTIONS_PER_TURN = 5;

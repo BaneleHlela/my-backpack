@@ -4,7 +4,13 @@
 // each other's history in memory.
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import type { AxiosError } from 'axios';
-import type { ApiResponse, IAiChatMessage, IAiChatSendMessageResponse } from '@my-backpack/shared';
+import type {
+  ApiResponse,
+  IAiChatMessage,
+  IAiChatSendMessageResponse,
+  IPracticeQuestionsResponse,
+  IQuestion,
+} from '@my-backpack/shared';
 import api from '../../lib/api';
 
 function extractErrorMessage(error: unknown, fallback: string): string {
@@ -14,12 +20,19 @@ function extractErrorMessage(error: unknown, fallback: string): string {
 
 type HistoryStatus = 'idle' | 'loading' | 'loaded' | 'error';
 type SendStatus = 'idle' | 'sending' | 'error';
+// Book-to-course pipeline, Phase 4b/7 — "Quiz me on this chapter" suggested action.
+type PracticeQuestionsStatus = 'idle' | 'loading' | 'error';
 
 interface AiChatState {
   messagesByCourseId: Record<string, IAiChatMessage[]>;
   historyStatus: HistoryStatus;
   sendStatus: SendStatus;
   error: string | null;
+  // Not persisted as chat messages — a lightweight in-chat practice widget, keyed by courseId
+  // so switching courses doesn't leave a stale widget visible.
+  practiceQuestionsByCourseId: Record<string, IQuestion[]>;
+  practiceQuestionsStatus: PracticeQuestionsStatus;
+  practiceQuestionsError: string | null;
 }
 
 const initialState: AiChatState = {
@@ -27,6 +40,9 @@ const initialState: AiChatState = {
   historyStatus: 'idle',
   sendStatus: 'idle',
   error: null,
+  practiceQuestionsByCourseId: {},
+  practiceQuestionsStatus: 'idle',
+  practiceQuestionsError: null,
 };
 
 export const fetchChatHistory = createAsyncThunk(
@@ -58,6 +74,22 @@ export const sendChatMessage = createAsyncThunk(
   }
 );
 
+// Book-to-course pipeline, Phase 4b — "Quiz me on this chapter" chip. Called directly (not
+// sent as a chat message) — see the API's aiChat.service.ts's getPracticeQuestionsForProfile.
+export const fetchPracticeQuestions = createAsyncThunk(
+  'aiChat/fetchPracticeQuestions',
+  async (courseId: string, { rejectWithValue }) => {
+    try {
+      const res = await api.post<ApiResponse<IPracticeQuestionsResponse>>(
+        `/ai-chat/course/${courseId}/practice-questions`
+      );
+      return { courseId, questions: res.data.data.questions };
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error, 'Failed to generate practice questions'));
+    }
+  }
+);
+
 const aiChatSlice = createSlice({
   name: 'aiChat',
   initialState,
@@ -65,6 +97,11 @@ const aiChatSlice = createSlice({
     resetAiChatError(state) {
       state.error = null;
       state.sendStatus = 'idle';
+    },
+    clearPracticeQuestions(state, action: { payload: string }) {
+      delete state.practiceQuestionsByCourseId[action.payload];
+      state.practiceQuestionsStatus = 'idle';
+      state.practiceQuestionsError = null;
     },
   },
   extraReducers: (builder) => {
@@ -97,9 +134,21 @@ const aiChatSlice = createSlice({
       .addCase(sendChatMessage.rejected, (state, action) => {
         state.sendStatus = 'error';
         state.error = action.payload as string;
+      })
+      .addCase(fetchPracticeQuestions.pending, (state) => {
+        state.practiceQuestionsStatus = 'loading';
+        state.practiceQuestionsError = null;
+      })
+      .addCase(fetchPracticeQuestions.fulfilled, (state, action) => {
+        state.practiceQuestionsStatus = 'idle';
+        state.practiceQuestionsByCourseId[action.payload.courseId] = action.payload.questions;
+      })
+      .addCase(fetchPracticeQuestions.rejected, (state, action) => {
+        state.practiceQuestionsStatus = 'error';
+        state.practiceQuestionsError = action.payload as string;
       });
   },
 });
 
-export const { resetAiChatError } = aiChatSlice.actions;
+export const { resetAiChatError, clearPracticeQuestions } = aiChatSlice.actions;
 export default aiChatSlice.reducer;

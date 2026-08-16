@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   mainButtonOuter: {
     width: MAIN_BUTTON_SIZE,
     height: MAIN_BUTTON_SIZE,
-    borderRadius: radii.full,
+    borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     top: 2,
     right: 2,
     bottom: 2,
-    borderRadius: radii.full,
+    borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
