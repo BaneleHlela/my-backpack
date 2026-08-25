@@ -9,6 +9,7 @@ import { BotMessageSquare, ChevronRight, Users } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
 import { Menubar } from '../Menubar';
+import { useSafeGoBack } from '../../lib/navigation';
 import { useTheme } from '../../theme/ThemeContext';
 import { fonts } from '../../theme/fonts';
 
@@ -28,11 +29,12 @@ export function CourseChatHubScreen({
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
+  const goBack = useSafeGoBack();
 
   return (
     <View style={styles.screen}>
       <View style={styles.content}>
-        <Menubar label={courseName || 'Course'} onBackPress={() => router.back()} />
+        <Menubar label={courseName || 'Course'} onBackPress={goBack} />
 
         <Text style={styles.heading}>Course Chat</Text>
         <Text style={styles.subheading}>Get help with {courseName || 'this course'}.</Text>

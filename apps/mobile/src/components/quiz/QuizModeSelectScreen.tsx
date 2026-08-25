@@ -28,6 +28,7 @@ import { History } from 'lucide-react-native';
 import { spacing, typography } from '@my-backpack/shared';
 import { ScreenBackground } from '../ScreenBackground';
 import { Menubar } from '../Menubar';
+import { useSafeGoBack } from '../../lib/navigation';
 import { useTheme } from '../../theme/ThemeContext';
 import { fonts } from '../../theme/fonts';
 import { QuizModeGrid } from './QuizModeGrid';
@@ -44,6 +45,7 @@ export function QuizModeSelectScreen({ target, backLabel }: QuizModeSelectScreen
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
+  const goBack = useSafeGoBack();
 
   const startSession = (modeId: QuizPlayModeId, settings: QuizPlayModeSettings) => {
     const play = encodePlayModeParam(modeId, settings);
@@ -57,7 +59,7 @@ export function QuizModeSelectScreen({ target, backLabel }: QuizModeSelectScreen
     <ScreenBackground>
       <ScrollView contentContainerStyle={styles.gridScroll} stickyHeaderIndices={[0]}>
         <View style={styles.topSection}>
-          <Menubar label={backLabel} onBackPress={() => router.back()} />
+          <Menubar label={backLabel} onBackPress={goBack} />
           <Text style={styles.heading}>Quiz Modes</Text>
           <Text style={styles.subheading}>Pick how you want to play.</Text>
           <Pressable

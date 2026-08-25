@@ -292,6 +292,7 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
               answeredQuestions={quiz.feedbackMode === 'end' ? quiz.answeredQuestions : undefined}
               onQuizAgain={handleQuizAgain}
               onReturnToDictionary={() => navigate(`/subject/${subjectSlug}`)}
+              onReview={quiz.sessionId ? () => navigate(`/quiz-history/${quiz.sessionId}`) : undefined}
             />
           </motion.div>
         )}

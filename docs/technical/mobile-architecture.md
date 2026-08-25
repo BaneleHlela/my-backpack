@@ -216,10 +216,24 @@ single `colors` variable.
 
 Mobile has a real theme system as of Phase A (August 2026) — `ThemeProvider` (React Context)
 holds the active theme name (`'light' | 'dark'`) and resolves it to `lightColors` or
-`darkColors`; `useTheme()` returns `{ theme, colors }`. **Dark is the default and only active
-theme today** — there's no persistence and no user-facing toggle yet (no Settings screen exists
-to host one); the active theme is a hardcoded constant inside `ThemeContext.tsx`.
-`ThemeProvider` wraps the app in the root `_layout.tsx`, inside the Redux `<Provider>`.
+`darkColors`; `useTheme()` returns `{ theme, colors, isReady, setTheme, toggleTheme }`. Dark is
+still the default. `ThemeProvider` wraps the app in the root `_layout.tsx`, inside the Redux
+`<Provider>`.
+
+**User-facing toggle (Phase B, August 2026)** — a "Dark mode"/"Light mode" row with a `Switch`
+sits directly above Sign out in `ProfileSwitcherModal.tsx` (opened from `Menubar`'s avatar),
+calling `toggleTheme()` directly. The choice persists to `expo-secure-store` as a **device-level**
+preference (`getThemePreference`/`saveThemePreference` in `src/lib/secureStore.ts`, same file/
+convention as `lastRoute`/`guestNudgeShown`) — deliberately **not** synced through the existing
+`Profile.preferences.theme` field, since that would mean `ThemeContext` reading Redux's
+`activeProfile`, which isn't populated until deep into `authSlice.ts`'s `bootstrapAuth` (itself a
+carefully-sequenced flow — see its own comments); `Profile.preferences.theme` remains unwired.
+`ThemeProvider` reads the saved preference back on mount (async — `SecureStore` has no sync API)
+and exposes `isReady: boolean`, `false` until that read resolves; `app/_layout.tsx`'s
+`AuthBootstrap` folds `!themeReady` into its existing `isCheckingAuth || !fontsReady` splash gate
+so the app never paints its first real frame in the default theme before flipping to a saved
+light preference — only `<LaunchScreen/>` (which itself reads `useTheme()` and would show a very
+brief flip-if-any) can render during that window.
 
 Every component that reads `colors` calls `const { colors } = useTheme()` instead of a static
 import — `colors` is no longer exported from `packages/shared` (only `lightColors`/`darkColors`
@@ -264,9 +278,11 @@ part of this build.
 ### Dark mode
 
 Built as of Phase A (August 2026) — see "Light/dark theme system" above. `darkColors` exists in
-`theme.ts` and is the active default; `IPreferences.theme` still has no persistence/toggle
-wiring to it, and web hasn't adopted a theme system at all (still hardcoded Tailwind classes
-per `docs/design/brand-guide.md`'s light-only design).
+`theme.ts` and is the active default; a real user-facing toggle shipped in Phase B (August 2026,
+`ProfileSwitcherModal`'s row above Sign out), persisted device-locally via `expo-secure-store`
+— `Profile.preferences.theme` still has no persistence/toggle wiring to it (a deliberate choice,
+not a gap — see "Light/dark theme system" above), and web hasn't adopted a theme system at all
+(still hardcoded Tailwind classes per `docs/design/brand-guide.md`'s light-only design).
 
 ---
 
@@ -699,6 +715,24 @@ effect yet — no live TTS/number-speech exists on mobile until Prompt 3 — a
 running "N placed" text label substitutes as the visual equivalent for now.
 Correctness for both is resolved server-side on submit, same as every other
 non-`autoSubmit` pattern in this app.
+
+### `retryUntilCorrect` wrong-attempt point deduction (August 2026)
+
+A rejected drop under `helpers.retryUntilCorrect` was already never submitted to the server
+(see above) — it just bounced the item back with no scoring consequence at all. Both
+`DndSinglePattern.tsx` and `DndBuildPattern.tsx` now track a `wrongAttemptsRef` counter, reset
+per question, incremented once per rejected drop (`dnd_build` counts every blank's rejections
+into the same running total, not one counter per blank), and sent as `rawResponse`'s
+`wrongAttempts` field alongside the eventual correct submission. `evaluateDnDAnswer()` in
+`apps/api/src/services/quizSession.service.ts` deducts 1 point per wrong attempt from
+`question.maxPoints`, floored at 0 (`Math.max(0, maxPoints - wrongAttempts)`) —
+`isCorrect` is unaffected (the learner did place it correctly, eventually), only
+`pointsAwarded`, which also feeds the confidence-score boost
+(`+0.15 * learningVelocity * (pointsAwarded/maxPoints)`), so heavily-retried questions grow
+mastery more slowly. `dnd_count` has no `retryUntilCorrect` support (see above), so it never
+sends this field and is unaffected. Ported identically on web
+(`apps/web/src/components/quiz/patterns/DndSinglePattern.tsx`), since the deduction itself is
+computed once, server-side.
 
 ### Phase 0 — dnd_single on-device verification
 

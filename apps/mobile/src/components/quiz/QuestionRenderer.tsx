@@ -30,6 +30,7 @@ const MCQ_TYPES = new Set<IQuestion['type']>([
   'mcq_incorrect_usage',
   'mcq_fill_blank',
   'mcq_audio',
+  'mcq_general',
 ]);
 
 const TRUE_FALSE_TYPES = new Set<IQuestion['type']>([

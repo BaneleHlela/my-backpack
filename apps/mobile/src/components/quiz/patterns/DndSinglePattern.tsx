@@ -171,6 +171,9 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   );
   const [genKey, setGenKey] = useState(0);
   const submittedRef = useRef(false);
+  // Counts rejected (retryUntilCorrect) drops for the current question — sent with the final
+  // correct submission so the server can deduct a point per wrong attempt.
+  const wrongAttemptsRef = useRef(0);
   const tileRefs = useRef<Map<string, DraggableTileHandle>>(new Map());
   const dropZoneRef = useRef<View>(null);
   const dropZoneRectRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -186,6 +189,7 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
     setOrderedDraggables(helpers.shuffleDraggables ? shuffle(content.draggables ?? []) : (content.draggables ?? []));
     setGenKey((k) => k + 1);
     submittedRef.current = false;
+    wrongAttemptsRef.current = 0;
     tileRefs.current.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
@@ -203,7 +207,12 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   const submit = (finalPlacedId: string) => {
     if (!dropZone || disabled || submittedRef.current) return;
     submittedRef.current = true;
-    onAnswer(JSON.stringify({ placements: [{ draggableId: finalPlacedId, dropZoneId: dropZone.id }] }));
+    onAnswer(
+      JSON.stringify({
+        placements: [{ draggableId: finalPlacedId, dropZoneId: dropZone.id }],
+        wrongAttempts: wrongAttemptsRef.current,
+      })
+    );
   };
 
   // autoSubmit questions (all 6 vowels dnd_single variants) have no manual submit moment — the
@@ -270,7 +279,9 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
 
     const isCorrectDrop = dropZone.requiredDraggableIds.includes(item.id);
     if (helpers.retryUntilCorrect && !isCorrectDrop) {
-      // Rejected — never reaches onAnswer, item bounces back to the pool.
+      // Rejected — never reaches onAnswer, item bounces back to the pool. Counted toward the
+      // point deduction applied once the question is finally submitted.
+      wrongAttemptsRef.current += 1;
       tileRefs.current.get(item.id)?.snapBack();
       playAsset(content.tryAgainFeedback?.audioUrl);
       setWrongAttempt(true);

@@ -1,7 +1,7 @@
 // Final results screen shown after a session completes. When feedbackMode was 'end',
 // answeredQuestions carries a per-question breakdown that was withheld during the quiz.
 import { motion } from 'framer-motion';
-import { Trophy, RotateCcw, BookOpen, CheckCircle2, XCircle, SkipForward } from 'lucide-react';
+import { Trophy, RotateCcw, BookOpen, CheckCircle2, XCircle, SkipForward, ListChecks } from 'lucide-react';
 import type { SessionResults } from '@my-backpack/shared';
 import type { AnsweredQuestionSummary } from '../../features/quiz/quizSlice';
 
@@ -11,6 +11,10 @@ interface QuizResultsProps {
   onQuizAgain: () => void;
   onReturnToDictionary: () => void;
   returnLabel?: string;
+  // Navigates to the full question-by-question review of this session (Quiz History's review
+  // screen, reused directly by sessionId rather than duplicating that UI here) — omitted when
+  // no sessionId is available yet.
+  onReview?: () => void;
 }
 
 export default function QuizResults({
@@ -19,6 +23,7 @@ export default function QuizResults({
   onQuizAgain,
   onReturnToDictionary,
   returnLabel = 'Return to dictionary',
+  onReview,
 }: QuizResultsProps) {
   const seconds = Math.round(results.timeTakenMs / 1000);
   const timeLabel = seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
@@ -86,7 +91,18 @@ export default function QuizResults({
         </div>
       )}
 
-      <div className="flex gap-3 mt-6">
+      {onReview && (
+        <button
+          type="button"
+          onClick={onReview}
+          className="w-full flex items-center justify-center gap-2 py-3 mt-6 rounded-2xl bg-white/50 border border-white/50 text-sm font-medium text-gray-700 hover:bg-white/70 transition-colors"
+        >
+          <ListChecks className="w-4 h-4" />
+          Review questions & answers
+        </button>
+      )}
+
+      <div className={`flex gap-3 ${onReview ? 'mt-3' : 'mt-6'}`}>
         <button
           type="button"
           onClick={onReturnToDictionary}

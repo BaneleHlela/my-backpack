@@ -97,13 +97,20 @@ interface QuizVariant {
   passingScore: number;
 }
 
+// passingScore was 1.0 (100%) on every variant until August 2026, back when a
+// retryUntilCorrect wrong drop had zero scoring consequence — any number of retries still
+// earned full marks once the learner landed the correct item. Now that each wrong attempt
+// deducts 1 point from the question's maxPoints (see evaluateDnDAnswer in
+// quizSession.service.ts), a strict 100% would fail the quiz on the very first mis-drop
+// anywhere in the 10-question run — dropped to 0.7 (the same threshold the plain assessment
+// quizzes elsewhere in this seed data already use) so a few retries are still forgiven.
 const QUIZ_VARIANTS: QuizVariant[] = [
-  { seedKeyPrefix: 'vowels-learn-drag-audio', quizTitle: 'Learn to Drag', draggableCount: 1, audioOn: true, passingScore: 1.0 },
-  { seedKeyPrefix: 'vowels-learn-drag-solo', quizTitle: 'Learn to Drag — Solo', draggableCount: 1, audioOn: false, passingScore: 1.0 },
-  { seedKeyPrefix: 'vowels-pick-sound-audio', quizTitle: 'Pick the Sound', draggableCount: 2, audioOn: true, passingScore: 1.0 },
-  { seedKeyPrefix: 'vowels-pick-sound-solo', quizTitle: 'Pick the Sound — Solo', draggableCount: 2, audioOn: false, passingScore: 1.0 },
-  { seedKeyPrefix: 'vowels-all-audio', quizTitle: 'All the Vowels', draggableCount: 5, audioOn: true, passingScore: 1.0 },
-  { seedKeyPrefix: 'vowels-challenge', quizTitle: 'Vowels Challenge', draggableCount: 5, audioOn: false, passingScore: 1.0 },
+  { seedKeyPrefix: 'vowels-learn-drag-audio', quizTitle: 'Learn to Drag', draggableCount: 1, audioOn: true, passingScore: 0.7 },
+  { seedKeyPrefix: 'vowels-learn-drag-solo', quizTitle: 'Learn to Drag — Solo', draggableCount: 1, audioOn: false, passingScore: 0.7 },
+  { seedKeyPrefix: 'vowels-pick-sound-audio', quizTitle: 'Pick the Sound', draggableCount: 2, audioOn: true, passingScore: 0.7 },
+  { seedKeyPrefix: 'vowels-pick-sound-solo', quizTitle: 'Pick the Sound — Solo', draggableCount: 2, audioOn: false, passingScore: 0.7 },
+  { seedKeyPrefix: 'vowels-all-audio', quizTitle: 'All the Vowels', draggableCount: 5, audioOn: true, passingScore: 0.7 },
+  { seedKeyPrefix: 'vowels-challenge', quizTitle: 'Vowels Challenge', draggableCount: 5, audioOn: false, passingScore: 0.7 },
 ];
 
 // Picks `count` vowel-data indices (target first) for a dnd_single question, rotating the

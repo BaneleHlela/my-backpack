@@ -60,7 +60,9 @@ export interface IQuestionHelpers {
   hintsAllowed: number;          // 0 = none
   hintDelaySeconds: number;      // 0 = never auto-offer
   retryUntilCorrect: boolean;    // DnD: wrong drops are rejected client-side and must be retried —
-                                 // never submitted to the server; no skip is offered while true
+                                 // never submitted to the server; no skip is offered while true.
+                                 // Each rejected attempt costs 1 point (deducted from maxPoints,
+                                 // floored at 0) once the question is finally answered correctly.
   shuffleDraggables: boolean;    // DnD: randomize the draggable pool's display order once per
                                  // question load, instead of the authored content.draggables order
 }

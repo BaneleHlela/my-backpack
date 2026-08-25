@@ -15,8 +15,10 @@ function RouteTracker() {
   const pathname = usePathname();
   const activeProfile = useSelector((state: RootState) => state.auth.activeProfile);
 
+  
   useEffect(() => {
     if (activeProfile) {
+      
       void saveLastRoute(activeProfile._id, pathname);
     }
   }, [pathname, activeProfile]);

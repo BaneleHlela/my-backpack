@@ -15,6 +15,7 @@ import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IMiniApp } from '@my-backpack/shared';
 import { fetchCourseDetail, fetchCoursesBySubject } from '../../../../../../src/features/content/contentSlice';
 import { fetchRoadmapByCourse } from '../../../../../../src/features/roadmap/roadmapSlice';
+import { useSafeGoBack } from '../../../../../../src/lib/navigation';
 import RoadmapPath from '../../../../../../src/components/roadmap/RoadmapPath';
 import CoursePathActions from '../../../../../../src/components/roadmap/CoursePathActions';
 import LessonModal from '../../../../../../src/components/course/LessonModal';
@@ -43,6 +44,7 @@ export default function CourseScreen() {
   const styles = createStyles(colors);
   const { subjectSlug, courseSlug } = useLocalSearchParams<{ subjectSlug: string; courseSlug: string }>();
   const router = useRouter();
+  const goBack = useSafeGoBack();
   const dispatch = useDispatch<AppDispatch>();
 
   const { enrolledSubjects, coursesByKey, courseDetailByKey } = useSelector(
@@ -104,7 +106,7 @@ export default function CourseScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.errorText}>Course not found.</Text>
-        <Pressable onPress={() => router.back()}>
+        <Pressable onPress={goBack}>
           <Text style={styles.backLink}>Go back</Text>
         </Pressable>
       </View>
@@ -114,7 +116,7 @@ export default function CourseScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} stickyHeaderIndices={[0]}>
-        <Menubar label={subjectName || 'Back'} onBackPress={() => router.back()} />
+        <Menubar label={subjectName || 'Back'} onBackPress={goBack} />
 
         <View style={styles.headerRow}>
             <Text style={styles.heading} numberOfLines={1}>

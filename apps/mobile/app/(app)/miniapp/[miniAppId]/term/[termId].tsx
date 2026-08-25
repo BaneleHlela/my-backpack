@@ -4,7 +4,7 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../../../../../src/components/AppText';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Volume2 } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
@@ -12,6 +12,7 @@ import { GlassCard } from '../../../../../src/components/GlassCard';
 import { DefinitionCard } from '../../../../../src/components/dictionary/DefinitionCard';
 import { Menubar } from '../../../../../src/components/Menubar';
 import { playAudioUrl } from '../../../../../src/lib/audio';
+import { useSafeGoBack } from '../../../../../src/lib/navigation';
 import { clearActiveTerm, fetchTermDetail } from '../../../../../src/features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../../../../src/store/store';
 import { useTheme } from '../../../../../src/theme/ThemeContext';
@@ -20,7 +21,7 @@ import { fonts } from '../../../../../src/theme/fonts';
 export default function TermDetailScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-  const router = useRouter();
+  const goBack = useSafeGoBack();
   const dispatch = useDispatch<AppDispatch>();
   const { miniAppId, termId } = useLocalSearchParams<{ miniAppId: string; termId: string }>();
   const { activeTerm, activeTermLoading, activeTermError } = useSelector((state: RootState) => state.vocab);
@@ -34,7 +35,7 @@ export default function TermDetailScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content} stickyHeaderIndices={[0]}>
-      <Menubar label="Back to search" onBackPress={() => router.back()} />
+      <Menubar label="Back to search" onBackPress={goBack} />
 
       {activeTermLoading ? <ActivityIndicator color={colors.primary.light} style={styles.loading} /> : null}
 

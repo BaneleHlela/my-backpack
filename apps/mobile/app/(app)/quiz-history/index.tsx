@@ -26,6 +26,7 @@ import {
   type HistoryStatusFilter,
 } from '../../../src/features/quizHistory/quizHistorySlice';
 import { canRetake, navigateToRetake } from '../../../src/components/quiz/quizHistoryLinks';
+import { useSafeGoBack } from '../../../src/lib/navigation';
 import type { AppDispatch, RootState } from '../../../src/store/store';
 
 const STATUS_TABS: { value: HistoryStatusFilter; label: string }[] = [
@@ -44,6 +45,7 @@ export default function QuizHistoryScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
+  const goBack = useSafeGoBack();
   const dispatch = useDispatch<AppDispatch>();
   const { contextId: initialContextId, nodeId: initialNodeId } = useLocalSearchParams<{
     contextId?: string;
@@ -98,7 +100,7 @@ export default function QuizHistoryScreen() {
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Menubar label="Back" onBackPress={() => router.back()} />
+            <Menubar label="Back" onBackPress={goBack} />
             <Text style={styles.title}>Quiz History</Text>
 
             <View style={styles.tabs}>

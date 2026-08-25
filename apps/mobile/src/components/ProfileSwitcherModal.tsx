@@ -24,12 +24,19 @@
 // renders when the active profile is a guest (Account.isGuest, threaded down through
 // activeProfile.isGuest). Opens ClaimAccountModal, which adds email/password credentials to
 // the same account already in use — no logout, no new profile, no re-login.
+//
+// Dark mode/Light mode row (August 2026) sits directly above Sign out — the app's first
+// user-facing theme toggle (see src/theme/ThemeContext.tsx; previously dark was a hardcoded
+// constant with no toggle anywhere). Reads/writes ThemeContext's `theme`/`toggleTheme`
+// directly; the choice is a device-level SecureStore preference, not synced through
+// `Profile.preferences.theme` — see secureStore.ts's getThemePreference/saveThemePreference
+// for why.
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Switch, View } from 'react-native';
 import { Text } from './AppText';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { Lock, LogOut, Save, UserPlus } from 'lucide-react-native';
+import { Lock, LogOut, Moon, Save, Sun, UserPlus } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { ProfileSummary } from '@my-backpack/shared';
 import { Avatar } from './Avatar';
@@ -48,7 +55,7 @@ interface ProfileSwitcherModalProps {
 }
 
 export function ProfileSwitcherModal({ visible, onClose }: ProfileSwitcherModalProps) {
-  const { colors } = useTheme();
+  const { colors, theme, toggleTheme } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
@@ -180,6 +187,24 @@ export function ProfileSwitcherModal({ visible, onClose }: ProfileSwitcherModalP
               </View>
               <Text style={styles.rowText}>Add Profile</Text>
             </Pressable>
+
+            <View style={styles.divider} />
+            <View style={styles.row}>
+              <View style={styles.iconSlot}>
+                {theme === 'dark' ? (
+                  <Moon size={18} color={colors.text.secondary} />
+                ) : (
+                  <Sun size={18} color={colors.text.secondary} />
+                )}
+              </View>
+              <Text style={styles.rowText}>{theme === 'dark' ? 'Dark mode' : 'Light mode'}</Text>
+              <Switch
+                value={theme === 'dark'}
+                onValueChange={toggleTheme}
+                trackColor={{ false: colors.surface.glassSoft, true: colors.primary.DEFAULT }}
+                thumbColor="#fff"
+              />
+            </View>
 
             <View style={styles.divider} />
             <Pressable onPress={handleSignOut} style={styles.row}>

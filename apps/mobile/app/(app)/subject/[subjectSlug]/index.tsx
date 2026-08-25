@@ -20,6 +20,7 @@ import { MiniAppGridCard } from '../../../../src/components/MiniAppGridCard';
 import { Menubar } from '../../../../src/components/Menubar';
 import { fetchCoursesBySubject, fetchSubjectMiniApps } from '../../../../src/features/content/contentSlice';
 import { fetchRoadmapByCourse } from '../../../../src/features/roadmap/roadmapSlice';
+import { useSafeGoBack } from '../../../../src/lib/navigation';
 import type { AppDispatch, RootState } from '../../../../src/store/store';
 import { useTheme } from '../../../../src/theme/ThemeContext';
 import { fonts } from '../../../../src/theme/fonts';
@@ -36,6 +37,7 @@ export default function SubjectHomeScreen() {
   const styles = createStyles(colors);
   const { subjectSlug } = useLocalSearchParams<{ subjectSlug: string }>();
   const router = useRouter();
+  const goBack = useSafeGoBack();
   const dispatch = useDispatch<AppDispatch>();
   const { enrolledSubjects, coursesByKey, miniAppsBySubject, isLoadingCourses } = useSelector(
     (state: RootState) => state.content
@@ -88,7 +90,7 @@ export default function SubjectHomeScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content} stickyHeaderIndices={[0]}>
-      <Menubar label={fieldName || 'Back'} onBackPress={() => router.back()} />
+      <Menubar label={fieldName || 'Back'} onBackPress={goBack} />
 
       <Text style={styles.heading}>{subjectName || subjectSlug}</Text>
 

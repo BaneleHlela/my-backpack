@@ -18,7 +18,9 @@
 //     the learner can fix one letter without restarting the whole word.
 // helpers.retryUntilCorrect, where a future question does set it, still applies per-blank the
 // same way it does for dnd_single: a wrong tile is rejected at drop time (bounces back +
-// tryAgainFeedback) rather than ever landing.
+// tryAgainFeedback) rather than ever landing. Each rejection is counted locally
+// (wrongAttemptsRef) and sent with the eventual submission — evaluateDnDAnswer() server-side
+// deducts one point per wrong attempt from maxPoints (floored at 0).
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { Image, ImageBackground, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
@@ -65,6 +67,9 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
   );
   const [genKey, setGenKey] = useState(0);
   const submittedRef = useRef(false);
+  // Counts rejected (retryUntilCorrect) drops for the current question — sent with the final
+  // submission so the server can deduct a point per wrong attempt.
+  const wrongAttemptsRef = useRef(0);
   const tileRefs = useRef<Map<string, DndTileHandle>>(new Map());
   const zoneRefs = useRef<Map<string, View>>(new Map());
   const zoneRectsRef = useRef<Map<string, Rect>>(new Map());
@@ -79,6 +84,7 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
     setOrderedDraggables(helpers.shuffleDraggables ? shuffle(content.draggables ?? []) : (content.draggables ?? []));
     setGenKey((k) => k + 1);
     submittedRef.current = false;
+    wrongAttemptsRef.current = 0;
     tileRefs.current.clear();
     zoneRectsRef.current.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,7 +110,7 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
     if (disabled || submittedRef.current || !allFilled) return;
     submittedRef.current = true;
     const placementsArr = dropZones.map((z) => ({ draggableId: placements[z.id]!, dropZoneId: z.id }));
-    onAnswer(JSON.stringify({ placements: placementsArr }));
+    onAnswer(JSON.stringify({ placements: placementsArr, wrongAttempts: wrongAttemptsRef.current }));
   };
 
   useEffect(() => {
@@ -146,6 +152,8 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
 
     const isCorrectDrop = targetZone.requiredDraggableIds.includes(item.id);
     if (helpers.retryUntilCorrect && !isCorrectDrop) {
+      // Counted toward the point deduction applied once the question is finally submitted.
+      wrongAttemptsRef.current += 1;
       tileRefs.current.get(item.id)?.snapBack();
       playAsset(content.tryAgainFeedback?.audioUrl);
       setWrongZoneId(targetZone.id);

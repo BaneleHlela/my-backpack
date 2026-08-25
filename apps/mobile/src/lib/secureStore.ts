@@ -10,6 +10,7 @@ import { Platform } from 'react-native';
 const REFRESH_TOKEN_KEY = 'refreshToken';
 const LAST_ROUTE_KEY_PREFIX = 'lastRoute_';
 const GUEST_NUDGE_KEY_PREFIX = 'guestNudgeShown_';
+const THEME_PREFERENCE_KEY = 'themePreference';
 
 export async function saveRefreshToken(token: string): Promise<void> {
   if (Platform.OS === 'web') return;
@@ -35,6 +36,7 @@ export async function deleteRefreshToken(): Promise<void> {
 export async function saveLastRoute(profileId: string, route: string): Promise<void> {
   if (Platform.OS === 'web') return;
   await SecureStore.setItemAsync(`${LAST_ROUTE_KEY_PREFIX}${profileId}`, route);
+  console.log('Saved route:', route);
 }
 
 export async function getLastRoute(profileId: string): Promise<string | null> {
@@ -55,4 +57,22 @@ export async function hasShownGuestNudge(profileId: string): Promise<boolean> {
 export async function markGuestNudgeShown(profileId: string): Promise<void> {
   if (Platform.OS === 'web') return;
   await SecureStore.setItemAsync(`${GUEST_NUDGE_KEY_PREFIX}${profileId}`, '1');
+}
+
+// Device-level light/dark toggle (ThemeContext.tsx / ProfileSwitcherModal's toggle row) — a
+// deliberate device-scoped preference, not per-profile. `Profile.preferences.theme` exists on
+// the backend but stays unwired (see CLAUDE.md/mobile-architecture.md) — syncing theme through
+// it would mean ThemeContext reading Redux's activeProfile, which isn't populated until deep
+// into authSlice.ts's bootstrapAuth (itself a carefully-sequenced, previously-buggy flow — see
+// its own comments). A plain SecureStore read resolves before any of that and needs no
+// coordination with auth state at all.
+export async function getThemePreference(): Promise<'light' | 'dark' | null> {
+  if (Platform.OS === 'web') return null;
+  const value = await SecureStore.getItemAsync(THEME_PREFERENCE_KEY);
+  return value === 'light' || value === 'dark' ? value : null;
+}
+
+export async function saveThemePreference(theme: 'light' | 'dark'): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await SecureStore.setItemAsync(THEME_PREFERENCE_KEY, theme);
 }

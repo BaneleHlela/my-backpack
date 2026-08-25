@@ -330,6 +330,8 @@ mcq_correct_usage:   5   — select sentence using word correctly
 mcq_incorrect_usage: 7   — select sentence using word incorrectly
 mcq_fill_blank:      4   — sentence with blank, select correct word
 mcq_audio:           4   — audio prompt, select correct answer
+mcq_general:         5   — plain MCQ not tied to a vocab term/definition (e.g. a hand-authored
+                            book-chapter topic quiz — see docs/technical/question-types.md)
 fill_blank_typed:    6   — sentence with blank, type exact word
 true_false_term_def: 2   — is this definition correct for this term?
 true_false_def_term: 2   — is this term correct for this definition?
@@ -392,7 +394,13 @@ yet; the second param exists for future use).
 `retryUntilCorrect` — DnD only: a wrong drop is rejected client-side (checked against
 `content.dropZones[].requiredDraggableIds`) and never submitted to the server; the learner
 must get the current question right before advancing, and the host quiz page hides its Skip
-button. All 6 vowels dnd_single quiz variants (isiZulu + English) set this to `true`.
+button. All 6 vowels dnd_single quiz variants (isiZulu + English) set this to `true`. Each
+rejected drop is still counted (client-side `wrongAttemptsRef`, reset per question) and sent
+as `rawResponse`'s `wrongAttempts` field alongside the eventual correct submission —
+`evaluateDnDAnswer()` deducts 1 point per wrong attempt from that question's `maxPoints`,
+floored at 0 (added August 2026; see the wrong-attempt point deduction note under DnD answer
+capture below). This also lowered the vowels quizzes' `passingScore` from `1.0` to `0.7` —
+at 100%, a single mis-drop anywhere in a run would otherwise have permanently failed the quiz.
 `shuffleDraggables` — DnD only: randomizes `content.draggables`' pool display order once per
 question load (`DndSinglePattern` shuffles client-side via `useState` initializer, reshuffled
 in the same effect that resets other per-question state — not re-shuffled on every re-render).
@@ -403,8 +411,12 @@ never silently drops other helper overrides a seed script may have set, e.g.
 `retryUntilCorrect`).
 
 **DnD answer capture:**
-`rawResponse = JSON.stringify({ placements: [{ draggableId, dropZoneId }] })`
-Evaluated by `evaluateDnDAnswer()` in quizSession.service.ts.
+`rawResponse = JSON.stringify({ placements: [{ draggableId, dropZoneId }], wrongAttempts? })`
+Evaluated by `evaluateDnDAnswer()` in quizSession.service.ts. `wrongAttempts` (optional,
+defaults to 0) is only populated on `retryUntilCorrect` questions — see above; it's the count
+of drops locally rejected before the final correct one, and costs 1 point each off
+`maxPoints`, floored at 0. `isCorrect` itself is unaffected — only `pointsAwarded` (which also
+feeds the confidence-score boost, so a heavily-retried question grows mastery more slowly).
 
 **Illustration fields:**
 `IQuestionContent.dragAreaImageUrl` — background image for the entire DnD widget
@@ -1386,6 +1398,30 @@ my-backpack/
       `{ limit: '25mb' }` globally (one blanket cap across all routes, same "single generous
       limit" convention as the 250MB multer cap on asset uploads) rather than scoping a special
       limit to just this route.
+- [x] `retryUntilCorrect` wrong-attempt point deduction (August 2026) — a rejected DnD drop
+      under `helpers.retryUntilCorrect` was previously scoring-free (never submitted, no
+      consequence, unlimited free retries). `evaluateDnDAnswer()` (`quizSession.service.ts`)
+      now reads an optional `wrongAttempts` field off the DnD `rawResponse` JSON
+      (`{ placements, wrongAttempts? }`, defaults to 0) and deducts 1 point per wrong attempt
+      from `question.maxPoints`, floored at 0 — `isCorrect` is unchanged (the learner did place
+      it correctly, eventually), only `pointsAwarded`. The count itself is tracked entirely
+      client-side: `DndSinglePattern.tsx` (web + mobile) and `DndBuildPattern.tsx` (mobile)
+      each hold a `wrongAttemptsRef`, reset per question, incremented once per drop the
+      existing `retryUntilCorrect` client-side rejection bounces back, and sent alongside the
+      eventual correct submission — no new endpoint, no new `AnswerRecord` field. Questions
+      that don't use `retryUntilCorrect` never increment the counter, so they're unaffected.
+      Because `pointsAwarded` also feeds the confidence-score boost
+      (`+0.15 * learningVelocity * (pointsAwarded/maxPoints)`), a heavily-retried question now
+      grows mastery more slowly too. **Follow-up correction, same pass**: this made the 12
+      seeded vowels quiz variants (isiZulu + English, `passingScore: 1.0`, the primary content
+      that sets `retryUntilCorrect: true`) fail on the very first mis-drop anywhere in a
+      10-question run, since `scoreRatio` (`totalPointsAwarded/totalPointsAvailable`) could no
+      longer reach 100% — defeating the point of "unskippable but retriable." Their seed data
+      (`seed/questions/{isizulu,english}/vowels.questions.ts`) dropped `passingScore` from
+      `1.0` to `0.7` (matching the threshold other assessment-tier quizzes in this seed data
+      already use) — re-run `pnpm --filter api seed` to apply it to existing `RoadmapNode`
+      documents (each vowels node's `items[]` is fully overwritten on every seed run, per the
+      established convention — no migration needed, no learner-progress data touched).
 - [ ] XP and peanuts reward system (deferred)
 - [ ] Test readiness scoring (deferred)
 
@@ -2264,6 +2300,24 @@ my-backpack/
       sidesteps that per-accent contrast question entirely. Verified via `tsc --noEmit` (clean)
       — not yet confirmed on a real device/emulator, per this project's established "flag what's
       unverified" convention.
+- [x] Light/dark theme system, Phase B — user-facing toggle (August 2026) — the gap Phase A
+      explicitly left open: a "Dark mode"/"Light mode" row with a `Switch` now sits directly
+      above Sign out in `ProfileSwitcherModal.tsx`, wired straight to `ThemeContext`'s
+      `theme`/`toggleTheme` (both new — `ThemeContext.tsx` also gained `setTheme` and an
+      `isReady` flag). The choice persists as a **device-level** `expo-secure-store` value
+      (`getThemePreference`/`saveThemePreference`, new in `secureStore.ts`, same file/convention
+      as `lastRoute`/`guestNudgeShown`) — deliberately **not** synced through the existing
+      `Profile.preferences.theme` field (still unwired, unchanged from Phase A), since that
+      would mean `ThemeContext` reading Redux's `activeProfile`, which isn't populated until
+      deep into `authSlice.ts`'s `bootstrapAuth`. `ThemeProvider` reads the saved preference back
+      on mount (async, `SecureStore` has no sync API) and exposes `isReady`; `app/_layout.tsx`'s
+      `AuthBootstrap` folds `!themeReady` into its existing `isCheckingAuth || !fontsReady`
+      splash gate so the app's first real screen never paints in the default theme before
+      flipping to a saved light preference. Verified via `tsc --noEmit` (clean) — not yet
+      confirmed on a real device/emulator, per this project's established "flag what's
+      unverified" convention. See
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Light/
+      dark theme system" section for full detail.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens

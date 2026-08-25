@@ -16,6 +16,7 @@ import { useTheme } from '../../../src/theme/ThemeContext';
 import { fonts } from '../../../src/theme/fonts';
 import { fetchSessionReview, resetReview } from '../../../src/features/quizHistory/quizHistorySlice';
 import { canRetake, navigateToRetake } from '../../../src/components/quiz/quizHistoryLinks';
+import { useSafeGoBack } from '../../../src/lib/navigation';
 import type { AppDispatch, RootState } from '../../../src/store/store';
 
 // Mirrors quizSession.service.ts's DND_TYPES — DnD rawResponse is a JSON placements blob, not
@@ -47,6 +48,7 @@ export default function QuizHistoryReviewScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
+  const goBack = useSafeGoBack();
   const dispatch = useDispatch<AppDispatch>();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const { review, reviewStatus, reviewError } = useSelector((state: RootState) => state.quizHistory);
@@ -71,7 +73,7 @@ export default function QuizHistoryReviewScreen() {
   return (
     <View style={styles.flex}>
       <ScrollView contentContainerStyle={styles.content} stickyHeaderIndices={[0]}>
-        <Menubar label="Back to history" onBackPress={() => router.back()} />
+        <Menubar label="Back to history" onBackPress={goBack} />
 
         {reviewStatus === 'loading' ? (
         <ActivityIndicator color={colors.primary.light} style={styles.loading} />

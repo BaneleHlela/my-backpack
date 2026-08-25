@@ -39,6 +39,7 @@ export function LaunchScreenBody() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
 
+
   return (
     <View style={styles.center}>
       <View style={styles.logoArea}>

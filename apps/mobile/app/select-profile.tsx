@@ -132,9 +132,6 @@ function SelectProfileScreen() {
           <Text style={styles.heading}>Who's learning today?</Text>
           <Text style={styles.subheading}>Select a profile to continue</Text>
         </View>
-        <Pressable onPress={() => dispatch(logoutAsync())}>
-          <Text style={styles.signOut}>Sign out</Text>
-        </Pressable>
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -145,6 +142,10 @@ function SelectProfileScreen() {
         ))}
         <AddProfileTile onPress={() => setComingSoon('Adding a new profile')} />
       </View>
+
+      <Pressable onPress={() => dispatch(logoutAsync())}>
+        <Text style={styles.signOut}>Sign out</Text>
+      </Pressable>
 
       {pendingProfile ? (
         <PinEntryModal

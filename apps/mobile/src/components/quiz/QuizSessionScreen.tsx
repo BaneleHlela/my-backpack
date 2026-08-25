@@ -60,6 +60,7 @@ import { resolveHelpers, radii, spacing, typography } from '@my-backpack/shared'
 import type { AgeGroup, ApiResponse, ItemCompletionResult } from '@my-backpack/shared';
 import api from '../../lib/api';
 import { subjectSlugToLangCode } from '../../lib/lang';
+import { useSafeGoBack } from '../../lib/navigation';
 import { hasShownGuestNudge, markGuestNudgeShown } from '../../lib/secureStore';
 import { useTheme } from '../../theme/ThemeContext';
 import { ClaimAccountModal } from '../ClaimAccountModal';
@@ -133,6 +134,7 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const router = useRouter();
+  const goBack = useSafeGoBack();
   const dispatch = useDispatch<AppDispatch>();
   const quiz = useSelector((state: RootState) => state.quiz);
   const activeProfile = useSelector((state: RootState) => state.auth.activeProfile);
@@ -536,7 +538,7 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
         params: { subjectSlug: session.subjectSlug, courseSlug: session.courseSlug },
       });
     } else {
-      router.back();
+      goBack();
     }
   };
 
@@ -603,7 +605,7 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
         <Text style={styles.headerTitle} numberOfLines={1}>
           {title}
         </Text>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
+        <Pressable onPress={goBack} hitSlop={8}>
           <X size={22} color={colors.text.secondary} />
         </Pressable>
       </View>
@@ -706,6 +708,15 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
               onReturn={goToReturn}
               returnLabel={session.source === 'roadmapItem' ? 'Back to roadmap' : title ? `Back to ${title}` : 'Back'}
               banner={resultsBanner}
+              onReview={
+                quiz.sessionId
+                  ? () =>
+                      router.push({
+                        pathname: '/(app)/quiz-history/[sessionId]',
+                        params: { sessionId: quiz.sessionId! },
+                      })
+                  : undefined
+              }
             />
             {session.source === 'roadmapItem' && itemCompletion?.nodeCompleted ? (
               <View style={styles.nodeCompleteBanner}>

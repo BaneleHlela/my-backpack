@@ -82,20 +82,63 @@ function resetState(state: AuthState) {
 
 // Replaces web's cookie-based checkAuth — native has no persistent cookie
 // jar, so the refresh token is read back out of SecureStore explicitly.
-export const bootstrapAuth = createAsyncThunk('auth/bootstrapAuth', async () => {
+export const bootstrapAuth = createAsyncThunk('auth/bootstrapAuth', async (_, { dispatch }) => {
   const refreshToken = await getRefreshToken();
   if (!refreshToken) {
     return { authenticated: false as const };
   }
 
+  let accessToken: string;
   try {
     const { data } = await api.post<ApiResponse<{ accessToken: string }>>('/auth/refresh', { refreshToken });
-    return { authenticated: true as const, accessToken: data.data.accessToken, refreshToken };
+    accessToken = data.data.accessToken;
   } catch {
     await deleteRefreshToken();
     return { authenticated: false as const };
   }
+
+  // Commit the access token to the store *before* dispatching anything else — api.ts's
+  // request interceptor reads Authorization from store.getState().auth.accessToken
+  // synchronously, not from this thunk's local `accessToken` variable, so fetchActiveProfile
+  // below would otherwise go out unauthenticated (401), which the response interceptor's own
+  // failed refresh-retry (refreshToken isn't in the store yet either, for the same reason)
+  // would then resolve by dispatching logout() — wiping activeProfile right as
+  // bootstrapAuth.fulfilled was about to restore the tokens. This was a real bug, not
+  // hypothetical: fixed here.
+  dispatch(setAccessToken(accessToken));
+
+  // Both awaited (not fire-and-forget) so isCheckingAuth doesn't flip false — unblocking
+  // ProtectedRoute — until activeProfile/profiles are actually populated. Previously
+  // fetchActiveProfile was dispatched fire-and-forget from _layout.tsx's AuthBootstrap right
+  // after bootstrapAuth resolved, leaving a render frame where isCheckingAuth was already
+  // false but isLoadingProfile hadn't flipped true yet and activeProfile was still null —
+  // anything gating on activeProfile in that frame (e.g. index.tsx's last-route resume) read
+  // a false "no profile" signal and acted on it immediately. fetchProfiles (the full
+  // account-wide list "other profiles to switch to" needs — see ProfileSwitcherModal) was
+  // previously never fetched at all on a bootstrap resume, only ever populated by the login
+  // screen's response, which a resumed session skips entirely. A failure in either is
+  // non-fatal: the access token is still valid, ProtectedRoute/ResumeRedirect and
+  // ProfileSwitcherModal just fall back to their existing "no profile yet"/"no other
+  // profiles" handling.
+  await Promise.all([dispatch(fetchActiveProfile()), dispatch(fetchProfiles())]);
+
+  return { authenticated: true as const, accessToken, refreshToken };
 });
+
+// GET /profiles — the account's full profile list (ProfileSummary[]), same shape login's
+// response already carries. Only ever previously populated by login.fulfilled, which a
+// bootstrap-resumed session (no login screen involved) never runs — see bootstrapAuth above.
+export const fetchProfiles = createAsyncThunk(
+  'auth/fetchProfiles',
+  async (_, { rejectWithValue }) => {
+    try {
+      const { data } = await api.get<ApiResponse<ProfileSummary[]>>('/profiles');
+      return data.data;
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error, 'Failed to load profiles'));
+    }
+  }
+);
 
 export const fetchActiveProfile = createAsyncThunk(
   'auth/fetchActiveProfile',
@@ -279,6 +322,10 @@ const authSlice = createSlice({
       })
       .addCase(fetchActiveProfile.rejected, (state) => {
         state.isLoadingProfile = false;
+      })
+      // fetchProfiles
+      .addCase(fetchProfiles.fulfilled, (state, action) => {
+        state.profiles = action.payload;
       })
       // completeProfileSetup
       .addCase(completeProfileSetup.pending, (state) => {

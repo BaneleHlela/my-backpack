@@ -6,7 +6,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Text } from '../AppText';
-import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Send, Sparkles } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
@@ -17,6 +16,7 @@ import {
   fetchPracticeQuestions,
   clearPracticeQuestions,
 } from '../../features/aiChat/aiChatSlice';
+import { useSafeGoBack } from '../../lib/navigation';
 import type { AppDispatch, RootState } from '../../store/store';
 import { useTheme } from '../../theme/ThemeContext';
 import { Menubar } from '../Menubar';
@@ -35,7 +35,7 @@ interface AiHelperChatScreenProps {
 
 export function AiHelperChatScreen({ courseId, courseName }: AiHelperChatScreenProps) {
   const { colors } = useTheme();
-  const router = useRouter();
+  const goBack = useSafeGoBack();
   const dispatch = useDispatch<AppDispatch>();
   const scrollRef = useRef<ScrollView>(null);
 
@@ -128,7 +128,7 @@ export function AiHelperChatScreen({ courseId, courseName }: AiHelperChatScreenP
       >
         <Menubar
           label={courseName || 'AI Helper'}
-          onBackPress={() => router.back()}
+          onBackPress={goBack}
           style={styles.menubar}
         />
 

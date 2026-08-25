@@ -425,7 +425,12 @@ Creates a new QuizSession. Selects questions according to priority: review-due t
 }
 ```
 
-For DnD questions, `rawResponse` must be: `JSON.stringify({ placements: [{ draggableId: "...", dropZoneId: "..." }] })`
+For DnD questions, `rawResponse` must be: `JSON.stringify({ placements: [{ draggableId: "...", dropZoneId: "..." }], wrongAttempts: 0 })`
+
+`wrongAttempts` is optional (defaults to 0) and only meaningful on `helpers.retryUntilCorrect`
+questions — the client counts each locally-rejected wrong drop (never submitted on its own) and
+sends the running total with the final correct submission; the server deducts 1 point per wrong
+attempt from `maxPoints`, floored at 0.
 
 **Response:** Whether the answer was correct, points awarded, the correct answer, and the updated confidence score.
 

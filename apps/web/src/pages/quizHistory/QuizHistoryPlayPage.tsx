@@ -236,6 +236,7 @@ export default function QuizHistoryPlayPage() {
               onQuizAgain={handleQuizAgain}
               onReturnToDictionary={() => navigate('/quiz-history')}
               returnLabel="Back to history"
+              onReview={quiz.sessionId ? () => navigate(`/quiz-history/${quiz.sessionId}`) : undefined}
             />
           </motion.div>
         )}

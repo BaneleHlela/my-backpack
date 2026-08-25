@@ -273,7 +273,7 @@ at 0 lives) and still gets a correct, real results breakdown.
 |---|---|---|
 | `profileId` | ObjectId | The learner |
 | `questionId` | ObjectId | The question answered |
-| `termId` | ObjectId | The term being tested |
+| `termId` | ObjectId (optional) | The term being tested — mirrors `Question.termId`; absent for questions with no vocab term backing them (e.g. `mcq_general`), which skip the adaptive-learning/`LearningRecord` update step entirely |
 | `miniAppId` | ObjectId | Which mini-app |
 | `sessionId` | ObjectId | The QuizSession this answer belongs to |
 | `responseType` | String | How the answer was submitted |
@@ -542,7 +542,7 @@ These models are specific to the vocabulary mini-app and live in `models/apps/la
 | `definitionId` | ObjectId | Optional — the specific definition being tested |
 | `miniAppId` | ObjectId | Which mini-app this question belongs to |
 | `nodeId` | ObjectId | Optional — links to a RoadmapNode for roadmap-specific questions |
-| `type` | String | One of 21 question type identifiers |
+| `type` | String | One of 22 question type identifiers (includes `mcq_general` — a plain, non-vocabulary MCQ type for content not anchored to a term/definition, e.g. a hand-authored book-chapter topic quiz; see [question-types.md](question-types.md)) |
 | `content` | Mixed | Unified content field — all question data lives here |
 | `maxPoints` | Number | Maximum points available |
 | `pointsCanBePartial` | Boolean | Whether partial credit is possible |
