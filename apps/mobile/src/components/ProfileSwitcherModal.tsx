@@ -1,8 +1,9 @@
 // The dropdown menu opened by tapping Menubar's avatar — ports apps/web's
 // components/nav/ProfileSwitcher.tsx dropdown content (current profile, other profiles to
-// switch to, Add Profile, Sign out) as a centered Modal instead of an absolutely-positioned
-// dropdown, since RN has no hover/click-outside primitive to anchor one under the avatar —
-// tapping the backdrop closes it, the same dismiss gesture web's click-outside-listener gives.
+// switch to, Add Profile, Sign out) as an anchored Modal. Menubar measures the account/avatar
+// pressable and passes its window position so the menu's top/right edges line up with that
+// control instead of floating at a fixed inset from the top of the screen. Tapping the backdrop
+// still closes it, the same dismiss gesture web's click-outside-listener gives.
 //
 // One deliberate improvement over web: after switching profiles, web's ProfileSwitcher
 // navigates straight to '/dashboard' without ever re-fetching the new profile, so its own
@@ -49,12 +50,18 @@ import { useTheme } from '../theme/ThemeContext';
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
+export interface ProfileSwitcherAnchor {
+  top: number;
+  right: number;
+}
+
 interface ProfileSwitcherModalProps {
   visible: boolean;
   onClose: () => void;
+  anchor?: ProfileSwitcherAnchor | null;
 }
 
-export function ProfileSwitcherModal({ visible, onClose }: ProfileSwitcherModalProps) {
+export function ProfileSwitcherModal({ visible, onClose, anchor }: ProfileSwitcherModalProps) {
   const { colors, theme, toggleTheme } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
@@ -128,7 +135,16 @@ export function ProfileSwitcherModal({ visible, onClose }: ProfileSwitcherModalP
     <>
       <Modal transparent animationType="fade" visible={visible && !pendingProfile} onRequestClose={onClose}>
         <Pressable style={styles.overlay} onPress={onClose}>
-          <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
+          <Pressable
+            style={[
+              styles.card,
+              {
+                top: anchor?.top ?? spacing.md,
+                right: anchor?.right ?? spacing.md,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.currentRow}>
               <Avatar
                 displayName={activeProfile.displayName}
@@ -240,10 +256,9 @@ function createStyles(colors: ThemeColors) {
     overlay: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.5)',
-      alignItems: 'flex-end',
-      padding: spacing.md,
     },
     card: {
+      position: 'absolute',
       width: 240,
       backgroundColor: colors.background,
       borderRadius: radii.lg,
