@@ -84,7 +84,12 @@ export const McqPattern = forwardRef(function McqPattern(
         </Pressable>
       ) : (
         <View style={styles.promptRow}>
-          <SpokenText text={content.prompt ?? ''} lang={lang} containerStyle={styles.spokenPrompt} />
+          <SpokenText
+            text={content.prompt ?? ''}
+            lang={lang}
+            textStyle={styles.promptText}
+            containerStyle={styles.spokenPrompt}
+          />
           {content.promptAudioUrl ? (
             <Pressable
               onPress={() => playAudioUrl(resolveAssetUrl(content.promptAudioUrl)!)}
@@ -97,13 +102,21 @@ export const McqPattern = forwardRef(function McqPattern(
         </View>
       )}
 
-      <View style={styles.options}>
+      <View style={styles.options} accessibilityRole="radiogroup">
+        <Text style={styles.instruction}>Choose one answer</Text>
         {options.map((option, i) => (
           <Pressable
             key={`${i}-${option}`}
             disabled={disabled}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: selected === i, disabled: Boolean(disabled) }}
+            accessibilityLabel={option}
             onPress={() => setSelected(i)}
-            style={[styles.option, selected === i && styles.optionSelected]}
+            style={({ pressed }) => [
+              styles.option,
+              selected === i && styles.optionSelected,
+              pressed && styles.optionPressed,
+            ]}
           >
             <View style={[styles.optionBadge, selected === i && styles.optionBadgeSelected]}>
               <Text style={[styles.optionBadgeText, selected === i && styles.optionBadgeTextSelected]}>
@@ -121,9 +134,11 @@ export const McqPattern = forwardRef(function McqPattern(
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
     wrapper: {
-      gap: spacing.md,
+      gap: spacing.lg,
       padding: spacing.md,
     },
+    promptText: { fontSize: typography.bodyChild, lineHeight: 28, fontWeight: '600' },
+    instruction: { fontSize: typography.small, color: colors.text.secondary, marginBottom: spacing.xs },
     promptRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -133,14 +148,16 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       flex: 1,
     },
     audioButton: {
-      width: 28,
-      height: 28,
+      width: 44,
+      height: 44,
       borderRadius: radii.sm,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surface.glassSoft,
+      borderWidth: 1,
+      borderColor: colors.text.faint,
     },
     playAudioButton: {
+      minHeight: 48,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
@@ -148,7 +165,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       paddingHorizontal: spacing.sm,
       paddingVertical: spacing.sm,
       borderRadius: radii.md,
-      backgroundColor: colors.primary.DEFAULT,
+      backgroundColor: colors.primary.dark,
     },
     playAudioButtonText: {
       fontSize: typography.small,
@@ -159,27 +176,31 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       gap: spacing.sm,
     },
     option: {
+      minHeight: 64,
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
       borderRadius: radii.md,
-      borderWidth: 1,
-      borderColor: colors.surface.border,
-      backgroundColor: colors.surface.glassSoft,
+      borderWidth: 2,
+      borderColor: colors.text.faint,
+      backgroundColor: colors.background,
     },
+    optionPressed: { borderColor: colors.primary.light },
     optionSelected: {
-      backgroundColor: colors.primary.DEFAULT,
-      borderColor: colors.primary.DEFAULT,
+      backgroundColor: colors.primary.dark,
+      borderColor: colors.primary.dark,
     },
     optionBadge: {
-      width: 24,
-      height: 24,
+      minWidth: 32,
+      minHeight: 32,
       borderRadius: radii.full,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'rgba(255,255,255,0.6)',
+      padding: spacing.xs,
+      borderWidth: 1,
+      borderColor: colors.text.faint,
     },
     optionBadgeSelected: {
       backgroundColor: 'rgba(255,255,255,0.25)',
@@ -195,6 +216,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     optionText: {
       flex: 1,
       fontSize: typography.body,
+      lineHeight: 24,
       color: colors.text.primary,
     },
     optionTextSelected: {

@@ -9,10 +9,9 @@
 //   - `submit()` (exposed via ref) is what the global Submit button calls to actually trigger
 //     the pattern's existing internal submit logic (still owns its own onAnswer(rawResponse)
 //     call and shape).
-// Patterns whose questions can never be manually submitted (autoSubmit dnd_single/dnd_build,
-// which call onAnswer themselves the instant their one landing moment happens) simply never
-// report ready:true — the global Submit button stays disabled for the whole question, which is
-// the "always visible but disabled when not used" behavior QuizSessionScreen wants.
+// Auto-submit DnD patterns still call onAnswer on their landing/fill event. Once filled they
+// also report readiness, so the footer can retry that answer if the request fails. The screen
+// and thunk guard against duplicate requests while an answer is being submitted.
 export interface QuestionPatternHandle {
   submit: () => void;
 }

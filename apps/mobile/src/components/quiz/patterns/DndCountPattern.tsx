@@ -51,7 +51,7 @@ interface DndCountPatternProps extends QuestionPatternReadyProps {
 
 interface DraggableInstance extends IDraggable {
   typeId: string; // the original content.draggables[] entry's id — grading needs this, not
-                   // the per-tile instance id below
+  // the per-tile instance id below
 }
 
 function buildInstances(draggables: IDraggable[], shuffleOrder: boolean): DraggableInstance[] {
@@ -108,6 +108,10 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
   }, [content]);
 
   useEffect(() => {
+    if (!disabled) submittedRef.current = false;
+  }, [disabled]);
+
+  useEffect(() => {
     if (helpers.hintDelaySeconds === 0 || hintButtonReady) return;
     const timer = setTimeout(() => setHintButtonReady(true), helpers.hintDelaySeconds * 1000);
     return () => clearTimeout(timer);
@@ -131,7 +135,7 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
   useImperativeHandle(ref, () => ({ submit }));
 
   useEffect(() => {
-    onReadyChange?.(placedInstanceIds.size > 0 && !disabled);
+    onReadyChange?.(Boolean(dropZone) && placedInstanceIds.size > 0 && !disabled);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placedInstanceIds, disabled]);
 
@@ -248,7 +252,10 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
             draggable
             isChild={isChild}
             onTap={playItemAudio}
-            onDragStart={playItemAudio}
+            onDragStart={(item) => {
+              measureZone();
+              playItemAudio(item);
+            }}
             onDropAttempt={handleDropAttempt}
           />
         ))}
@@ -256,10 +263,15 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
 
       <View
         ref={zoneRef}
+        collapsable={false}
         onLayout={measureZone}
         style={[styles.dropZone, isChild && styles.dropZoneChild]}
       >
-        <ImageBackground source={{ uri: dropZoneBackground }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        <ImageBackground
+          source={{ uri: dropZoneBackground }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
         {zoneInstances.length > 0 ? (
           <View style={styles.zoneItems}>
             {zoneInstances.map((item) => (
@@ -286,7 +298,11 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
   if (!dragAreaBackground) return body;
 
   return (
-    <ImageBackground source={{ uri: dragAreaBackground }} style={styles.dragAreaBackground} resizeMode="cover">
+    <ImageBackground
+      source={{ uri: dragAreaBackground }}
+      style={styles.dragAreaBackground}
+      resizeMode="cover"
+    >
       {body}
     </ImageBackground>
   );
@@ -294,95 +310,97 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
-  dragAreaBackground: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  promptRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  promptAvatar: {
-    width: 32,
-    height: 32,
-  },
-  promptBubble: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: radii.lg,
-    borderWidth: 2,
-    borderColor: colors.primary.light,
-    padding: spacing.sm,
-  },
-  promptBubbleChild: {
-    padding: spacing.md,
-    borderWidth: 3,
-  },
-  promptText: {
-    fontSize: typography.body,
-    color: colors.text.primary,
-  },
-  promptTextChild: {
-    fontFamily: fonts.display.bold,
-    fontSize: typography.headingLg,
-    textAlign: 'center',
-  },
-  promptButtons: {
-    gap: spacing.xs,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.warning.light,
-  },
-  iconButtonDisabled: {
-    opacity: 0.4,
-  },
-  poolRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  dropZone: {
-    flex: 1,
-    minHeight: 140,
-    borderRadius: radii.lg,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: colors.surface.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    padding: spacing.sm,
-  },
-  dropZoneChild: {
-    borderWidth: 3,
-    borderColor: colors.primary.light,
-  },
-  dropZoneLabel: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-  },
-  zoneItems: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  countLabel: {
-    alignSelf: 'center',
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.text.secondary,
-  },
+    dragAreaBackground: {
+      flexGrow: 1,
+    },
+    container: {
+      flexGrow: 1,
+      gap: spacing.md,
+      padding: spacing.md,
+    },
+    promptRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+    },
+    promptAvatar: {
+      width: 32,
+      height: 32,
+    },
+    promptBubble: {
+      flex: 1,
+      backgroundColor: '#fff',
+      borderRadius: radii.lg,
+      borderWidth: 2,
+      borderColor: colors.primary.light,
+      padding: spacing.sm,
+    },
+    promptBubbleChild: {
+      padding: spacing.md,
+      borderWidth: 3,
+    },
+    promptText: {
+      fontSize: typography.body,
+      color: colors.glassText.primary,
+      lineHeight: 26,
+    },
+    promptTextChild: {
+      fontFamily: fonts.display.bold,
+      fontSize: typography.headingLg,
+      lineHeight: 36,
+      textAlign: 'center',
+    },
+    promptButtons: {
+      gap: spacing.xs,
+    },
+    iconButton: {
+      width: 44,
+      height: 44,
+      borderRadius: radii.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.warning.light,
+    },
+    iconButtonDisabled: {
+      opacity: 0.4,
+    },
+    poolRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    dropZone: {
+      flexGrow: 1,
+      minHeight: 140,
+      borderRadius: radii.lg,
+      borderWidth: 2,
+      borderStyle: 'dashed',
+      borderColor: colors.surface.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+      padding: spacing.sm,
+    },
+    dropZoneChild: {
+      borderWidth: 3,
+      borderColor: colors.primary.light,
+    },
+    dropZoneLabel: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+    },
+    zoneItems: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: spacing.xs,
+    },
+    countLabel: {
+      alignSelf: 'center',
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.text.secondary,
+    },
   });
 }

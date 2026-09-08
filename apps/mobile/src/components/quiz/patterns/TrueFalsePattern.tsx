@@ -32,6 +32,9 @@ export const TrueFalsePattern = forwardRef(function TrueFalsePattern(
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const [selected, setSelected] = useState<'True' | 'False' | null>(null);
+  const audioPromptUrl = content.prompt?.startsWith('audio:')
+    ? resolveAssetUrl(content.prompt.slice('audio:'.length))
+    : undefined;
 
   const submit = () => {
     if (!selected || disabled) return;
@@ -54,10 +57,22 @@ export const TrueFalsePattern = forwardRef(function TrueFalsePattern(
   return (
     <View style={styles.wrapper}>
       <View style={styles.promptRow}>
-        {content.prompt?.startsWith('audio:') ? (
-          <Text style={styles.prompt}>{content.prompt}</Text>
+        {audioPromptUrl ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Play question audio"
+            onPress={() => playAudioUrl(audioPromptUrl)}
+            style={styles.audioButton}
+          >
+            <Volume2 size={20} color={colors.text.primary} />
+          </Pressable>
         ) : (
-          <SpokenText text={content.prompt ?? ''} lang={lang} containerStyle={styles.spokenPrompt} />
+          <SpokenText
+            text={content.prompt ?? ''}
+            lang={lang}
+            textStyle={styles.prompt}
+            containerStyle={styles.spokenPrompt}
+          />
         )}
         {content.promptAudioUrl ? (
           <Pressable
@@ -65,28 +80,33 @@ export const TrueFalsePattern = forwardRef(function TrueFalsePattern(
             hitSlop={8}
             style={styles.audioButton}
           >
-            <Volume2 size={16} color={colors.glassText.secondary} />
+            <Volume2 size={18} color={colors.text.secondary} />
           </Pressable>
         ) : null}
       </View>
 
-      <View style={styles.optionsRow}>
+      <Text style={styles.instruction}>Is this statement true or false?</Text>
+      <View style={styles.optionsRow} accessibilityRole="radiogroup">
         <Pressable
           disabled={disabled}
+          accessibilityRole="radio"
+          accessibilityState={{ checked: selected === 'True', disabled: Boolean(disabled) }}
           onPress={() => setSelected('True')}
-          style={[styles.optionButton, selected === 'True' && styles.optionTrueSelected]}
+          style={[styles.optionButton, selected === 'True' && styles.optionSelected]}
         >
-          <Check size={20} color={selected === 'True' ? '#fff' : colors.glassText.primary} />
+          <Check size={20} color={selected === 'True' ? '#fff' : colors.text.primary} />
           <Text style={[styles.optionButtonText, selected === 'True' && styles.optionButtonTextSelected]}>
             True
           </Text>
         </Pressable>
         <Pressable
           disabled={disabled}
+          accessibilityRole="radio"
+          accessibilityState={{ checked: selected === 'False', disabled: Boolean(disabled) }}
           onPress={() => setSelected('False')}
-          style={[styles.optionButton, selected === 'False' && styles.optionFalseSelected]}
+          style={[styles.optionButton, selected === 'False' && styles.optionSelected]}
         >
-          <X size={20} color={selected === 'False' ? '#fff' : colors.glassText.primary} />
+          <X size={20} color={selected === 'False' ? '#fff' : colors.text.primary} />
           <Text style={[styles.optionButtonText, selected === 'False' && styles.optionButtonTextSelected]}>
             False
           </Text>
@@ -111,23 +131,28 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       flex: 1,
       fontSize: typography.bodyChild,
       color: colors.text.primary,
+      lineHeight: 28,
+      fontWeight: '600',
     },
     spokenPrompt: {
       flex: 1,
     },
     audioButton: {
-      width: 28,
-      height: 28,
+      width: 44,
+      height: 44,
       borderRadius: radii.sm,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surface.glassSoft,
+      borderWidth: 1,
+      borderColor: colors.text.faint,
     },
+    instruction: { fontSize: typography.small, color: colors.text.secondary, marginTop: spacing.sm },
     optionsRow: {
       flexDirection: 'row',
       gap: spacing.sm,
     },
     optionButton: {
+      minHeight: 64,
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
@@ -135,22 +160,19 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       gap: spacing.xs,
       paddingVertical: spacing.md,
       borderRadius: radii.md,
-      borderWidth: 1,
-      borderColor: colors.surface.border,
-      backgroundColor: colors.surface.glassSoft,
+      borderWidth: 2,
+      borderColor: colors.text.faint,
+      backgroundColor: colors.background,
     },
-    optionTrueSelected: {
-      backgroundColor: colors.success.DEFAULT,
-      borderColor: colors.success.DEFAULT,
-    },
-    optionFalseSelected: {
-      backgroundColor: colors.error.DEFAULT,
-      borderColor: colors.error.DEFAULT,
+    optionSelected: {
+      backgroundColor: colors.primary.dark,
+      borderColor: colors.primary.dark,
     },
     optionButtonText: {
       fontSize: typography.body,
       fontWeight: '700',
-      color: colors.glassText.primary,
+      color: colors.text.primary,
+      flexShrink: 1,
     },
     optionButtonTextSelected: {
       color: '#fff',

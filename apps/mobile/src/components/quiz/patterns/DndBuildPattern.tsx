@@ -81,7 +81,9 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
     setHintsRemaining(helpers.hintsAllowed);
     setHintActive(false);
     setHintButtonReady(helpers.hintDelaySeconds === 0);
-    setOrderedDraggables(helpers.shuffleDraggables ? shuffle(content.draggables ?? []) : (content.draggables ?? []));
+    setOrderedDraggables(
+      helpers.shuffleDraggables ? shuffle(content.draggables ?? []) : (content.draggables ?? [])
+    );
     setGenKey((k) => k + 1);
     submittedRef.current = false;
     wrongAttemptsRef.current = 0;
@@ -89,6 +91,10 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
     zoneRectsRef.current.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
+
+  useEffect(() => {
+    if (!disabled) submittedRef.current = false;
+  }, [disabled]);
 
   useEffect(() => {
     if (helpers.hintDelaySeconds === 0 || hintButtonReady) return;
@@ -118,17 +124,15 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allFilled]);
 
-  // autoSubmit questions submit themselves the instant every blank fills — the global Submit
-  // button stays disabled for those the whole time, matching "always visible but disabled when
-  // not used".
+  // Auto-submit once when filled, but allow a manual retry if that request fails.
   useImperativeHandle(ref, () => ({
     submit: () => {
-      if (!helpers.autoSubmit) submit();
+      submit();
     },
   }));
 
   useEffect(() => {
-    onReadyChange?.(!helpers.autoSubmit && allFilled && !disabled);
+    onReadyChange?.(allFilled && !disabled);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allFilled, helpers.autoSubmit, disabled]);
 
@@ -144,7 +148,9 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
       return;
     }
 
-    const targetZone = dropZones.find((z) => pointInRect(absoluteX, absoluteY, zoneRectsRef.current.get(z.id)));
+    const targetZone = dropZones.find((z) =>
+      pointInRect(absoluteX, absoluteY, zoneRectsRef.current.get(z.id))
+    );
     if (!targetZone) {
       tileRefs.current.get(item.id)?.snapBack();
       return;
@@ -194,7 +200,10 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
 
   const dragAreaBackground = resolveAssetUrl(content.dragAreaImageUrl);
   const wrongAvatarUrl = content.avatar
-    ? ASSETS.AVATARS.image(content.avatar.avatarId, content.tryAgainFeedback?.avatarEmotion ?? content.avatar.emotion)
+    ? ASSETS.AVATARS.image(
+        content.avatar.avatarId,
+        content.tryAgainFeedback?.avatarEmotion ?? content.avatar.emotion
+      )
     : undefined;
   const promptAvatarUrl = content.avatar
     ? ASSETS.AVATARS.image(content.avatar.avatarId, content.avatar.emotion)
@@ -243,6 +252,7 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
                 if (v) zoneRefs.current.set(zone.id, v);
                 else zoneRefs.current.delete(zone.id);
               }}
+              collapsable={false}
               onLayout={() => measureZone(zone.id)}
               style={[
                 styles.blank,
@@ -285,7 +295,10 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
             draggable
             isChild={isChild}
             onTap={playItemAudio}
-            onDragStart={playItemAudio}
+            onDragStart={(item) => {
+              dropZones.forEach((zone) => measureZone(zone.id));
+              playItemAudio(item);
+            }}
             onDropAttempt={handleDropAttempt}
           />
         ))}
@@ -300,7 +313,11 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
   if (!dragAreaBackground) return body;
 
   return (
-    <ImageBackground source={{ uri: dragAreaBackground }} style={styles.dragAreaBackground} resizeMode="cover">
+    <ImageBackground
+      source={{ uri: dragAreaBackground }}
+      style={styles.dragAreaBackground}
+      resizeMode="cover"
+    >
       {body}
     </ImageBackground>
   );
@@ -308,98 +325,100 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
-  dragAreaBackground: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  promptRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  promptAvatar: {
-    width: 32,
-    height: 32,
-  },
-  promptBubble: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: radii.lg,
-    borderWidth: 2,
-    borderColor: colors.primary.light,
-    padding: spacing.sm,
-  },
-  promptBubbleChild: {
-    padding: spacing.md,
-    borderWidth: 3,
-  },
-  promptText: {
-    fontSize: typography.body,
-    color: colors.text.primary,
-  },
-  promptTextChild: {
-    fontFamily: fonts.display.bold,
-    fontSize: typography.headingLg,
-    textAlign: 'center',
-  },
-  promptButtons: {
-    gap: spacing.xs,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.warning.light,
-  },
-  iconButtonDisabled: {
-    opacity: 0.4,
-  },
-  blanksRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  blank: {
-    width: 64,
-    height: 64,
-    borderRadius: radii.md,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: colors.surface.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  blankChild: {
-    borderRadius: radii.lg,
-    borderWidth: 3,
-    borderColor: colors.primary.light,
-  },
-  blankWrong: {
-    borderColor: colors.error.DEFAULT,
-    borderStyle: 'solid',
-  },
-  blankLabel: {
-    fontSize: typography.headingLg,
-    fontWeight: '700',
-    color: colors.text.faint,
-  },
-  poolRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  wrongAvatar: {
-    width: 72,
-    height: 72,
-    alignSelf: 'center',
-  },
+    dragAreaBackground: {
+      flexGrow: 1,
+    },
+    container: {
+      flexGrow: 1,
+      gap: spacing.md,
+      padding: spacing.md,
+    },
+    promptRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+    },
+    promptAvatar: {
+      width: 32,
+      height: 32,
+    },
+    promptBubble: {
+      flex: 1,
+      backgroundColor: '#fff',
+      borderRadius: radii.lg,
+      borderWidth: 2,
+      borderColor: colors.primary.light,
+      padding: spacing.sm,
+    },
+    promptBubbleChild: {
+      padding: spacing.md,
+      borderWidth: 3,
+    },
+    promptText: {
+      fontSize: typography.body,
+      color: colors.glassText.primary,
+      lineHeight: 26,
+    },
+    promptTextChild: {
+      fontFamily: fonts.display.bold,
+      fontSize: typography.headingLg,
+      lineHeight: 36,
+      textAlign: 'center',
+    },
+    promptButtons: {
+      gap: spacing.xs,
+    },
+    iconButton: {
+      width: 44,
+      height: 44,
+      borderRadius: radii.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.warning.light,
+    },
+    iconButtonDisabled: {
+      opacity: 0.4,
+    },
+    blanksRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    blank: {
+      width: 64,
+      height: 64,
+      borderRadius: radii.md,
+      borderWidth: 2,
+      borderStyle: 'dashed',
+      borderColor: colors.surface.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    blankChild: {
+      borderRadius: radii.lg,
+      borderWidth: 3,
+      borderColor: colors.primary.light,
+    },
+    blankWrong: {
+      borderColor: colors.error.DEFAULT,
+      borderStyle: 'solid',
+    },
+    blankLabel: {
+      fontSize: typography.headingLg,
+      fontWeight: '700',
+      color: colors.text.faint,
+    },
+    poolRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    wrongAvatar: {
+      width: 72,
+      height: 72,
+      alignSelf: 'center',
+    },
   });
 }

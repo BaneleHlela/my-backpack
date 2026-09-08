@@ -27,22 +27,10 @@
 // client-side streak count across that boundary. See the "Mastery" comments on the mode-rule
 // effect and the dedicated continuation effect below.
 //
-// Full-height/full-width question restyle (see docs/technical/mobile-architecture.md): the
-// screen is now five stacked rows instead of a menubar + boxed "question card":
-//   1. Header — course/mini-app name + exit icon (replaces the shared Menubar for this screen).
-//   2. Mode/stat bar (DepthView) — mode name (Classic/Hearts/...) + a right-aligned stat. For
-//      modes with no natural stat (Classic/Perfect) or no play mode at all (an ordinary roadmap
-//      Topic quiz), the stat falls back to "Question N of M" — QuizProgress itself no longer
-//      renders that text.
-//   3. QuizProgress — bar only, no label.
-//   4. The active question, centered in whatever height remains (patterns that are naturally
-//      compact center vertically; DnD patterns' own `flex: 1` container still fills the space,
-//      same as before).
-//   5. A permanent bottom bar — Submit (80% of the bar's width) + Skip (fixed, DepthButton),
-//      both always rendered, disabled rather than hidden when not usable right now. Submit no
-//      longer lives inside each pattern — QuestionRenderer forwards a ref
-//      (QuestionPatternHandle, see questionPatternTypes.ts) this screen calls directly, and
-//      each pattern reports its own submittable-ness via onReadyChange.
+// Layout: fixed header, compact mode/progress rows, a bounded scrolling question, and a
+// fixed flat-action footer. The flex/minHeight chain gives the question exactly the remaining
+// screen height; its content can grow without moving the controls off screen. Question keys
+// reset the scroll position, local answer, drag state, and hints between questions.
 //
 // Guest mode (August 2026, see docs/technical/guest-mode.md): a one-time GuestProgressNudge
 // fires the first time a guest profile completes a session here — the "genuine achievement
@@ -50,7 +38,16 @@
 // interruption. Orthogonal to everything else in this file (Quiz Modes, roadmap completion) —
 // it only reads quiz.status/quiz.results, never gates or delays them.
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { Text } from '../AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -64,8 +61,6 @@ import { useSafeGoBack } from '../../lib/navigation';
 import { hasShownGuestNudge, markGuestNudgeShown } from '../../lib/secureStore';
 import { useTheme } from '../../theme/ThemeContext';
 import { ClaimAccountModal } from '../ClaimAccountModal';
-import { DepthView } from '../DepthView';
-import { DepthButton } from '../DepthButton';
 import { GuestProgressNudge } from './GuestProgressNudge';
 import {
   startQuizItemSession,
@@ -77,6 +72,8 @@ import {
   resetQuiz,
 } from '../../features/quiz/quizSlice';
 import { QuestionRenderer } from './QuestionRenderer';
+import { QuestionScrollArea } from './QuestionScrollArea';
+import { QuizActionButton } from './QuizActionButton';
 import { QuizProgress } from './QuizProgress';
 import { AnswerFeedback } from './AnswerFeedback';
 import { QuizResults } from './QuizResults';
@@ -91,9 +88,6 @@ import type { QuestionPatternHandle } from './patterns/questionPatternTypes';
 import type { AppDispatch, RootState } from '../../store/store';
 
 const AUTO_ADVANCE_DELAY_MS = 1800;
-const SUBMIT_WIDTH_RATIO = 0.8;
-const SKIP_BUTTON_SIZE = 56;
-const BOTTOM_BUTTON_HEIGHT = 56;
 
 export type QuizSessionSource =
   | { source: 'roadmapItem'; nodeId: string; itemId: string; subjectSlug: string; courseSlug: string }
@@ -132,7 +126,6 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   // root-level fullScreenModal route, so it insets itself directly instead of inheriting padding
   // from that shared wrapper.
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
   const router = useRouter();
   const goBack = useSafeGoBack();
   const dispatch = useDispatch<AppDispatch>();
@@ -160,7 +153,6 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   // answer — see questionPatternTypes.ts and QuestionRenderer's pass-through.
   const patternRef = useRef<QuestionPatternHandle>(null);
   const [patternReady, setPatternReady] = useState(false);
-  const [bottomBarWidth, setBottomBarWidth] = useState(windowWidth - spacing.md * 2);
 
   // Guest mode: a one-time, dismissible nudge after a guest's first completed session — see
   // GuestProgressNudge's module comment and docs/technical/guest-mode.md. Gated on a
@@ -178,7 +170,9 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
   const [timeLeftMs, setTimeLeftMs] = useState<number | null>(
-    playMode?.id === 'time_run' ? (playMode.settings.duration ?? playModeDef?.defaultSettings.duration ?? 60) * 1000 : null
+    playMode?.id === 'time_run'
+      ? (playMode.settings.duration ?? playModeDef?.defaultSettings.duration ?? 60) * 1000
+      : null
   );
   const [endedEarlyReason, setEndedEarlyReason] = useState<EndedEarlyReason>(null);
   const masteryTarget = playMode?.settings.streakTarget ?? playModeDef?.defaultSettings.streakTarget ?? 5;
@@ -212,7 +206,9 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
     if (session.source !== 'miniApp') return;
     let cancelled = false;
     api
-      .get<ApiResponse<{ hasContent: boolean }>>('/quiz/has-content', { params: { miniAppId: session.miniAppId } })
+      .get<ApiResponse<{ hasContent: boolean }>>('/quiz/has-content', {
+        params: { miniAppId: session.miniAppId },
+      })
       .then((res) => {
         if (!cancelled) setHasContent(res.data.data.hasContent);
       })
@@ -259,7 +255,7 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
     questionStartedAt.current = Date.now();
     // A fresh question always starts unsubmittable until its pattern reports otherwise.
     setPatternReady(false);
-  }, [quiz.currentQuestion?._id]);
+  }, [quiz.sessionId, quiz.currentQuestion?._id]);
 
   useEffect(() => {
     if (quiz.status === 'completed' && !quiz.results && quiz.sessionId) {
@@ -476,7 +472,8 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   }, [quiz.status, quiz.results]);
 
   const handleAnswer = (rawResponse: string, selectedOptionIndex?: number) => {
-    if (!quiz.sessionId || !quiz.currentQuestion) return;
+    if (!quiz.sessionId || !quiz.currentQuestion || quiz.status !== 'active' || !rawResponse.trim()) return;
+    Keyboard.dismiss();
     dispatch(
       submitAnswer({
         sessionId: quiz.sessionId,
@@ -489,7 +486,8 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   };
 
   const handleSkip = () => {
-    if (!quiz.sessionId || !quiz.currentQuestion) return;
+    if (!quiz.sessionId || !quiz.currentQuestion || !canSkip) return;
+    Keyboard.dismiss();
     dispatch(
       submitAnswer({
         sessionId: quiz.sessionId,
@@ -526,7 +524,9 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
     setStreak(0);
     setBestStreak(0);
     setTimeLeftMs(
-      playMode?.id === 'time_run' ? (playMode.settings.duration ?? playModeDef?.defaultSettings.duration ?? 60) * 1000 : null
+      playMode?.id === 'time_run'
+        ? (playMode.settings.duration ?? playModeDef?.defaultSettings.duration ?? 60) * 1000
+        : null
     );
     startQuiz();
   };
@@ -546,7 +546,9 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
     ? resolveHelpers(quiz.currentQuestion.content.defaultHelpers, undefined)
     : null;
   const title =
-    session.source === 'miniApp' ? (session.title ?? 'Quiz') : (topicTitle ?? humanizeSlug(session.courseSlug));
+    session.source === 'miniApp'
+      ? (session.title ?? 'Quiz')
+      : (topicTitle ?? humanizeSlug(session.courseSlug));
   // Dictionary has exactly one mini-app, seeded under English — no isiZulu dictionary exists
   // yet, so that path is hardcoded rather than plumbing subjectSlug through the mini-app quiz
   // route. Revisit if a non-English dictionary is ever seeded.
@@ -570,7 +572,10 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
     modeStat = { text: `${mistakes}/${limit} mistakes` };
   } else if (playMode?.id === 'time_run' && timeLeftMs !== null) {
     const totalSeconds = Math.ceil(timeLeftMs / 1000);
-    modeStat = { Icon: Timer, text: `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}` };
+    modeStat = {
+      Icon: Timer,
+      text: `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`,
+    };
   } else {
     const current = Math.min(quiz.progress.answered + 1, quiz.progress.total || 1);
     modeStat = { text: `Question ${current} of ${quiz.progress.total}` };
@@ -600,12 +605,21 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   const canSkip = quiz.status === 'active' && !currentHelpers?.retryUntilCorrect;
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+    >
       <View style={styles.header}>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {title}
         </Text>
-        <Pressable onPress={goBack} hitSlop={8}>
+        <Pressable
+          onPress={goBack}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Exit quiz"
+          style={styles.closeButton}
+        >
           <X size={22} color={colors.text.secondary} />
         </Pressable>
       </View>
@@ -650,7 +664,7 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
 
         {isQuestionActive && quiz.currentQuestion && currentHelpers && (
           <View style={styles.activeWrapper}>
-            <DepthView color={colors.surface.glassStrong} borderRadius={radii.md} contentStyle={styles.modeBarContent}>
+            <View style={styles.modeBarContent}>
               <View style={styles.modeBarSide}>
                 {ModeIcon && <ModeIcon size={16} color={colors.primary.dark} />}
                 <Text style={styles.modeBarLabel}>{modeLabel}</Text>
@@ -659,21 +673,23 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
                 {modeStat.Icon && <modeStat.Icon size={16} color={colors.primary.dark} />}
                 <Text style={styles.modeBarStat}>{modeStat.text}</Text>
               </View>
-            </DepthView>
+            </View>
 
             <QuizProgress answered={quiz.progress.answered} total={quiz.progress.total} />
 
             <View style={styles.questionArea}>
-              <QuestionRenderer
-                ref={patternRef}
-                question={quiz.currentQuestion}
-                helpers={currentHelpers}
-                ageGroup={ageGroup}
-                lang={lang}
-                disabled={quiz.status !== 'active'}
-                onAnswer={handleAnswer}
-                onReadyChange={setPatternReady}
-              />
+              <QuestionScrollArea key={`${quiz.sessionId}:${quiz.currentQuestion._id}`}>
+                <QuestionRenderer
+                  ref={patternRef}
+                  question={quiz.currentQuestion}
+                  helpers={currentHelpers}
+                  ageGroup={ageGroup}
+                  lang={lang}
+                  disabled={quiz.status !== 'active'}
+                  onAnswer={handleAnswer}
+                  onReadyChange={setPatternReady}
+                />
+              </QuestionScrollArea>
             </View>
 
             {quiz.status === 'awaiting_advance' && quiz.feedbackMode === 'immediate' && quiz.lastAnswer && (
@@ -692,12 +708,13 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
           </View>
         )}
 
-        {hasContent === true && (quiz.status === 'completing' || (quiz.status === 'completed' && isMasteryContinuing)) && (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.primary.DEFAULT} />
-            {isMasteryContinuing && <Text style={styles.emptyBody}>Reshuffling questions…</Text>}
-          </View>
-        )}
+        {hasContent === true &&
+          (quiz.status === 'completing' || (quiz.status === 'completed' && isMasteryContinuing)) && (
+            <View style={styles.center}>
+              <ActivityIndicator color={colors.primary.DEFAULT} />
+              {isMasteryContinuing && <Text style={styles.emptyBody}>Reshuffling questions…</Text>}
+            </View>
+          )}
 
         {hasContent === true && quiz.status === 'completed' && quiz.results && !isMasteryContinuing && (
           <ScrollView contentContainerStyle={styles.resultsWrapper}>
@@ -706,7 +723,9 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
               answeredQuestions={quiz.feedbackMode === 'end' ? quiz.answeredQuestions : undefined}
               onQuizAgain={handleQuizAgain}
               onReturn={goToReturn}
-              returnLabel={session.source === 'roadmapItem' ? 'Back to roadmap' : title ? `Back to ${title}` : 'Back'}
+              returnLabel={
+                session.source === 'roadmapItem' ? 'Back to roadmap' : title ? `Back to ${title}` : 'Back'
+              }
               banner={resultsBanner}
               onReview={
                 quiz.sessionId
@@ -721,7 +740,8 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
             {session.source === 'roadmapItem' && itemCompletion?.nodeCompleted ? (
               <View style={styles.nodeCompleteBanner}>
                 <Text style={styles.nodeCompleteText}>
-                  Node complete! +{itemCompletion.rewards?.xp ?? 0} XP, +{itemCompletion.rewards?.peanuts ?? 0} peanuts
+                  Node complete! +{itemCompletion.rewards?.xp ?? 0} XP, +
+                  {itemCompletion.rewards?.peanuts ?? 0} peanuts
                 </Text>
               </View>
             ) : null}
@@ -736,34 +756,30 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
 
       {isQuestionActive && (
         <View style={styles.bottomBarOuter}>
-        <View style={styles.bottomBar} onLayout={(e) => setBottomBarWidth(e.nativeEvent.layout.width)}>
-          <DepthButton
-            width={bottomBarWidth * SUBMIT_WIDTH_RATIO}
-            height={BOTTOM_BUTTON_HEIGHT}
-            borderRadius={radii.md}
-            color={colors.primary.DEFAULT}
-            disabled={!canSubmit}
-            onPress={() => patternRef.current?.submit()}
-            style={!canSubmit && styles.bottomButtonDisabled}
-          >
-            {quiz.status === 'submitting' ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.submitButtonText}>Submit</Text>
-            )}
-          </DepthButton>
-
-          <DepthButton
-            width={SKIP_BUTTON_SIZE}
-            height={BOTTOM_BUTTON_HEIGHT}
-            color={colors.surface.glassStrong}
-            disabled={!canSkip}
-            onPress={handleSkip}
-            style={!canSkip && styles.bottomButtonDisabled}
-          >
-            <SkipForward size={22} color={canSkip ? colors.text.secondary : colors.text.faint} />
-          </DepthButton>
-        </View>
+          {quiz.error ? (
+            <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.submissionError}>
+              {quiz.error} Your answer is still here. Please try again.
+            </Text>
+          ) : null}
+          <View style={styles.bottomBar}>
+            <QuizActionButton
+              label="Submit"
+              loading={quiz.status === 'submitting'}
+              disabled={!canSubmit}
+              onPress={() => {
+                if (canSubmit) patternRef.current?.submit();
+              }}
+              style={styles.submitButton}
+            />
+            <QuizActionButton
+              label="Skip"
+              secondary
+              disabled={!canSkip}
+              onPress={handleSkip}
+              icon={<SkipForward size={18} color={colors.text.primary} />}
+              style={styles.skipButton}
+            />
+          </View>
         </View>
       )}
 
@@ -776,144 +792,157 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
         onDismiss={() => setShowGuestNudge(false)}
       />
       <ClaimAccountModal visible={showClaimModal} onClose={() => setShowClaimModal(false)} />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text.primary,
-    marginRight: spacing.sm,
-  },
-  body: {
-    flex: 1,
-    paddingHorizontal: spacing.md,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-  },
-  emptyTitle: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-  },
-  emptyBody: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-    textAlign: 'center',
-  },
-  errorText: {
-    fontSize: typography.body,
-    color: colors.error.dark,
-    textAlign: 'center',
-  },
-  retryButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface.glassSoft,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
-  },
-  retryButtonText: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.text.secondary,
-  },
-  activeWrapper: {
-    flex: 1,
-  },
-  modeBarContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-  modeBarSide: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  modeBarLabel: {
-    fontSize: typography.small,
-    fontWeight: '700',
-    color: colors.text.secondary,
-  },
-  modeBarStat: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.primary.dark,
-  },
-  questionArea: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  resultsWrapper: {
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
-  nodeCompleteBanner: {
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.success.light,
-  },
-  nodeCompleteText: {
-    textAlign: 'center',
-    fontSize: typography.small,
-    color: colors.success.dark,
-  },
-  advanceHint: {
-    marginTop: spacing.sm,
-    textAlign: 'center',
-    fontSize: typography.small,
-    color: colors.text.muted,
-  },
-  bottomBarOuter: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-  },
-  bottomBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  submitButtonText: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  bottomButtonDisabled: {
-    opacity: 0.45,
-  },
+    screen: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.sm,
+    },
+    headerTitle: {
+      flex: 1,
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text.primary,
+      marginRight: spacing.sm,
+    },
+    closeButton: {
+      minWidth: 44,
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    body: {
+      flex: 1,
+      minHeight: 0,
+      paddingHorizontal: spacing.md,
+    },
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    emptyState: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
+    },
+    emptyTitle: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text.secondary,
+      marginTop: spacing.xs,
+    },
+    emptyBody: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+      textAlign: 'center',
+    },
+    errorText: {
+      fontSize: typography.body,
+      color: colors.error.dark,
+      textAlign: 'center',
+    },
+    retryButton: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.md,
+      backgroundColor: colors.surface.glassSoft,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
+    },
+    retryButtonText: {
+      fontSize: typography.small,
+      fontWeight: '600',
+      color: colors.text.secondary,
+    },
+    activeWrapper: {
+      flex: 1,
+      minHeight: 0,
+    },
+    modeBarContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.sm,
+    },
+    modeBarSide: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    modeBarLabel: {
+      fontSize: typography.small,
+      fontWeight: '700',
+      color: colors.text.secondary,
+    },
+    modeBarStat: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.primary.dark,
+    },
+    questionArea: {
+      flex: 1,
+      minHeight: 0,
+      overflow: 'hidden',
+    },
+    resultsWrapper: {
+      flexGrow: 1,
+      justifyContent: 'center',
+    },
+    nodeCompleteBanner: {
+      marginTop: spacing.md,
+      padding: spacing.md,
+      borderRadius: radii.md,
+      backgroundColor: colors.success.light,
+    },
+    nodeCompleteText: {
+      textAlign: 'center',
+      fontSize: typography.small,
+      color: colors.success.dark,
+    },
+    advanceHint: {
+      marginTop: spacing.sm,
+      textAlign: 'center',
+      fontSize: typography.small,
+      color: colors.text.muted,
+    },
+    bottomBarOuter: {
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.text.faint,
+      backgroundColor: colors.background,
+    },
+    bottomBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    submitButton: { flex: 1, minWidth: 0 },
+    skipButton: { flexShrink: 1 },
+    submissionError: {
+      fontSize: typography.small,
+      color: colors.text.primary,
+      marginBottom: spacing.sm,
+    },
   });
 }

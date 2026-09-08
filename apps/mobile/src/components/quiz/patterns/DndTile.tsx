@@ -19,6 +19,7 @@ import type { IDraggable } from '@my-backpack/shared';
 import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useTheme } from '../../../theme/ThemeContext';
+import { useQuestionScrollRef } from '../QuestionScrollArea';
 
 export function playAsset(path?: string): void {
   const url = resolveAssetUrl(path);
@@ -71,13 +72,25 @@ export interface DndTileProps {
 }
 
 export const DndTile = forwardRef(function DndTile(
-  { item, size, showLabel, highlight, disabled, isChild, draggable, onTap, onDragStart, onDropAttempt }: DndTileProps,
+  {
+    item,
+    size,
+    showLabel,
+    highlight,
+    disabled,
+    isChild,
+    draggable,
+    onTap,
+    onDragStart,
+    onDropAttempt,
+  }: DndTileProps,
   ref: Ref<DndTileHandle>
 ) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const scrollRef = useQuestionScrollRef();
 
   useImperativeHandle(ref, () => ({
     snapBack: () => {
@@ -108,7 +121,13 @@ export const DndTile = forwardRef(function DndTile(
     })
     .onEnd((e) => {
       if (onDropAttempt) runOnJS(onDropAttempt)(item, e.absoluteX, e.absoluteY);
+    })
+    .onFinalize(() => {
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
     });
+
+  if (scrollRef) panGesture.blocksExternalGesture(scrollRef);
 
   const composedGesture = draggable ? Gesture.Race(tapGesture, panGesture) : tapGesture;
 
@@ -165,7 +184,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     tileLabel: {
       fontSize: typography.body,
       fontWeight: '700',
-      color: colors.text.primary,
+      color: colors.glassText.primary,
     },
   });
 }

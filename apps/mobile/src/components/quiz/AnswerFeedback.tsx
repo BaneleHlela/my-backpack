@@ -5,13 +5,9 @@
 // TTS (Prompt 3)" section) — explanation always (no prerecorded equivalent exists), feedback
 // text only when feedback.audioUrl isn't set (that prerecorded clip wins instead).
 //
-// The card is a DepthView (../DepthView.tsx) and the advance button a DepthButton
-// (../DepthButton.tsx) — the same "3D gloss plate" chrome used everywhere else in this restyle
-// (see QuizSessionScreen's module comment). The correct/incorrect/skipped ring that used to be
-// a plain `borderColor` is now DepthView's `shadowColor` — an opaque tint drawn where the rim
-// peeks out from behind the inset face, so it reads as a colored ring around the whole card
-// rather than a thin 1-2px border line.
-import { Image, Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+// Feedback scrolls within the available safe-area height; the next/finish action stays visible.
+import { Image, Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '../AppText';
 import { CheckCircle2, SkipForward, Volume2, XCircle } from 'lucide-react-native';
 import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
@@ -20,8 +16,7 @@ import { playAudioUrl } from '../../lib/audio';
 import { resolveAssetUrl } from '../../lib/assetUrl';
 import { fonts } from '../../theme/fonts';
 import { SpokenText } from './SpokenText';
-import { DepthView } from '../DepthView';
-import { DepthButton } from '../DepthButton';
+import { QuizActionButton } from './QuizActionButton';
 import { useTheme } from '../../theme/ThemeContext';
 
 interface AnswerFeedbackProps {
@@ -52,7 +47,8 @@ export function AnswerFeedback({
 }: AnswerFeedbackProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-  const { width: windowWidth } = useWindowDimensions();
+  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const isChild = ageGroup === 'child';
 
   const headline = wasSkipped
@@ -65,11 +61,11 @@ export function AnswerFeedback({
         ? 'Try again next time!'
         : 'Not quite';
 
-  const ringColor = wasSkipped ? colors.text.faint : isCorrect ? colors.success.DEFAULT : colors.error.DEFAULT;
-  // The card face itself is always solid white (see the DepthView `color` prop below) regardless
-  // of app theme, so text drawn on it must stay on the fixed dark-on-light `glassText` scale —
-  // never `text.*`, which flips to pale/cream tones in dark mode and would go illegible here.
-  const headlineColor = wasSkipped ? colors.glassText.secondary : isCorrect ? colors.success.dark : colors.error.dark;
+  const ringColor = wasSkipped
+    ? colors.text.faint
+    : isCorrect
+      ? colors.success.DEFAULT
+      : colors.error.DEFAULT;
 
   const feedback = isCorrect ? content.successFeedback : content.tryAgainFeedback;
   const avatarUrl =
@@ -77,91 +73,90 @@ export function AnswerFeedback({
       ? ASSETS.AVATARS.image(content.avatar.avatarId, feedback?.avatarEmotion ?? content.avatar.emotion)
       : undefined;
 
-  const cardWidth = Math.min(CARD_MAX_WIDTH, windowWidth - spacing.lg * 2);
-  const advanceButtonWidth = cardWidth - CARD_PADDING * 2;
-
   return (
     <Modal transparent animationType="fade" visible onRequestClose={() => {}}>
-      <View style={styles.overlay}>
-        <DepthView
-          width={cardWidth}
-          color="#ffffff"
-          shadowColor={ringColor}
-          borderRadius={radii.lg}
-          contentStyle={styles.cardContent}
+      <View
+        style={[
+          styles.overlay,
+          { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.lg },
+        ]}
+      >
+        <View
+          accessibilityViewIsModal
+          style={[
+            styles.card,
+            {
+              borderColor: ringColor,
+              maxHeight: windowHeight - insets.top - insets.bottom - spacing.lg * 2,
+            },
+          ]}
         >
-          {avatarUrl ? (
-            <Image
-              source={{ uri: avatarUrl }}
-              style={[styles.avatar, isChild && styles.avatarChild]}
-              resizeMode="contain"
-            />
-          ) : null}
-
-          <View style={styles.headerColumn}>
-            {wasSkipped ? (
-              <SkipForward size={28} color={colors.glassText.muted} />
-            ) : isCorrect ? (
-              <CheckCircle2 size={28} color={colors.success.DEFAULT} />
-            ) : (
-              <XCircle size={28} color={colors.error.DEFAULT} />
-            )}
-            <Text style={[styles.headline, { color: headlineColor }, isChild && styles.headlineChild]}>
-              {headline}
-            </Text>
-            <Text style={styles.pointsText}>
-              {pointsAwarded} / {maxPoints} points
-            </Text>
-
-            {!wasSkipped && feedback?.text ? (
-              feedback.audioUrl ? (
-                <View style={styles.feedbackTextRow}>
-                  <Text style={styles.feedbackText}>{feedback.text}</Text>
-                  <Pressable
-                    onPress={() => playAudioUrl(resolveAssetUrl(feedback.audioUrl)!)}
-                    hitSlop={8}
-                    style={styles.audioButton}
-                  >
-                    <Volume2 size={14} color={colors.glassText.secondary} />
-                  </Pressable>
-                </View>
-              ) : (
-                <SpokenText
-                  text={feedback.text}
-                  lang={lang}
-                  textStyle={styles.feedbackText}
-                  containerStyle={styles.spokenRow}
-                />
-              )
-            ) : null}
-
-            {!isCorrect && content.correctAnswer ? (
-              <Text style={styles.correctAnswerText}>
-                Correct answer: <Text style={styles.correctAnswerValue}>{content.correctAnswer}</Text>
-              </Text>
-            ) : null}
-
-            {!wasSkipped && content.explanation ? (
-              <SpokenText
-                text={content.explanation}
-                lang={lang}
-                textStyle={styles.explanationText}
-                containerStyle={styles.spokenRow}
+          <ScrollView style={styles.cardScroll} contentContainerStyle={styles.cardContent}>
+            {avatarUrl ? (
+              <Image
+                source={{ uri: avatarUrl }}
+                style={[styles.avatar, isChild && styles.avatarChild]}
+                resizeMode="contain"
               />
             ) : null}
-          </View>
 
-          <DepthButton
-            width={advanceButtonWidth}
-            height={isChild ? 60 : 52}
-            color={colors.primary.DEFAULT}
-            borderRadius={radii.md}
-            onPress={onAdvance}
-            style={styles.advanceButton}
-          >
-            <Text style={styles.advanceButtonText}>{isLastQuestion ? 'Finish' : 'Next question'}</Text>
-          </DepthButton>
-        </DepthView>
+            <View style={styles.headerColumn}>
+              {wasSkipped ? (
+                <SkipForward size={28} color={colors.text.secondary} />
+              ) : isCorrect ? (
+                <CheckCircle2 size={28} color={colors.success.DEFAULT} />
+              ) : (
+                <XCircle size={28} color={colors.error.DEFAULT} />
+              )}
+              <Text accessibilityRole="header" style={[styles.headline, isChild && styles.headlineChild]}>
+                {headline}
+              </Text>
+              <Text style={styles.pointsText}>
+                {pointsAwarded} / {maxPoints} points
+              </Text>
+
+              {!wasSkipped && feedback?.text ? (
+                feedback.audioUrl ? (
+                  <View style={styles.feedbackTextRow}>
+                    <Text style={styles.feedbackText}>{feedback.text}</Text>
+                    <Pressable
+                      onPress={() => playAudioUrl(resolveAssetUrl(feedback.audioUrl)!)}
+                      hitSlop={8}
+                      style={styles.audioButton}
+                    >
+                      <Volume2 size={18} color={colors.text.secondary} />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <SpokenText
+                    text={feedback.text}
+                    lang={lang}
+                    textStyle={styles.feedbackText}
+                    containerStyle={styles.spokenRow}
+                  />
+                )
+              ) : null}
+
+              {!isCorrect && content.correctAnswer ? (
+                <Text style={styles.correctAnswerText}>
+                  Correct answer: <Text style={styles.correctAnswerValue}>{content.correctAnswer}</Text>
+                </Text>
+              ) : null}
+
+              {!wasSkipped && content.explanation ? (
+                <SpokenText
+                  text={content.explanation}
+                  lang={lang}
+                  textStyle={styles.explanationText}
+                  containerStyle={styles.spokenRow}
+                />
+              ) : null}
+            </View>
+          </ScrollView>
+          <View style={styles.footer}>
+            <QuizActionButton label={isLastQuestion ? 'Finish' : 'Next question'} onPress={onAdvance} />
+          </View>
+        </View>
       </View>
     </Modal>
   );
@@ -176,9 +171,20 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       justifyContent: 'center',
       padding: spacing.lg,
     },
+    card: {
+      width: '100%',
+      maxWidth: CARD_MAX_WIDTH,
+      flexShrink: 1,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      backgroundColor: colors.background,
+      overflow: 'hidden',
+    },
+    cardScroll: { flexShrink: 1 },
     cardContent: {
       padding: CARD_PADDING,
     },
+    footer: { padding: CARD_PADDING, paddingTop: spacing.sm },
     avatar: {
       width: 64,
       height: 64,
@@ -197,13 +203,14 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontFamily: fonts.display.bold,
       fontSize: typography.heading,
       textAlign: 'center',
+      color: colors.text.primary,
     },
     headlineChild: {
       fontSize: typography.headingLg,
     },
     pointsText: {
       fontSize: typography.small,
-      color: colors.glassText.secondary,
+      color: colors.text.secondary,
       textAlign: 'center',
     },
     feedbackTextRow: {
@@ -214,8 +221,9 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       marginTop: spacing.xs,
     },
     feedbackText: {
+      flexShrink: 1,
       fontSize: typography.small,
-      color: colors.glassText.secondary,
+      color: colors.text.secondary,
       marginTop: spacing.xs,
       textAlign: 'center',
     },
@@ -226,40 +234,29 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       justifyContent: 'center',
     },
     audioButton: {
-      width: 24,
-      height: 24,
+      width: 44,
+      height: 44,
       borderRadius: radii.sm,
       alignItems: 'center',
       justifyContent: 'center',
-      // Not `colors.surface.glassSoft` — that's a white-based translucent tint meant to sit over
-      // a wallpaper/blur, which would be invisible against this card's own solid white face. A
-      // dark-based tint instead, same in both themes.
-      backgroundColor: 'rgba(31,41,55,0.06)',
+      borderWidth: 1,
+      borderColor: colors.text.faint,
     },
     correctAnswerText: {
       fontSize: typography.small,
-      color: colors.glassText.secondary,
+      color: colors.text.secondary,
       marginTop: spacing.xs,
       textAlign: 'center',
     },
     correctAnswerValue: {
       fontWeight: '700',
-      color: colors.glassText.primary,
+      color: colors.text.primary,
     },
     explanationText: {
       fontSize: typography.small,
-      color: colors.glassText.secondary,
+      color: colors.text.secondary,
       marginTop: spacing.xs,
       textAlign: 'center',
-    },
-    advanceButton: {
-      alignSelf: 'center',
-      marginTop: spacing.lg,
-    },
-    advanceButtonText: {
-      fontSize: typography.body,
-      fontWeight: '700',
-      color: '#fff',
     },
   });
 }

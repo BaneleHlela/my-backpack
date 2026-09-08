@@ -37,11 +37,7 @@ export const createSessionHandler = catchAsync(async (req: Request, res: Respons
   }
 
   try {
-    const { session, firstQuestion } = await createQuizSession(
-      profileId,
-      resolvedQuizId,
-      settings ?? {}
-    );
+    const { session, firstQuestion } = await createQuizSession(profileId, resolvedQuizId, settings ?? {});
     sendSuccess(res, { session, firstQuestion }, 201);
   } catch (err) {
     throw new AppError(err instanceof Error ? err.message : 'Failed to create session', 400);
@@ -77,10 +73,16 @@ export const captureAnswerHandler = catchAsync(async (req: Request, res: Respons
   if (
     !body.questionId ||
     !body.responseType ||
-    body.rawResponse === undefined ||
-    body.timeToAnswerMs === undefined
+    typeof body.rawResponse !== 'string' ||
+    typeof body.timeToAnswerMs !== 'number' ||
+    !Number.isFinite(body.timeToAnswerMs) ||
+    body.timeToAnswerMs < 0
   ) {
     throw new AppError('questionId, responseType, rawResponse and timeToAnswerMs are required', 400);
+  }
+
+  if (!body.rawResponse.trim() && body.wasSkipped !== true && body.wasTimedOut !== true) {
+    throw new AppError('Answer the question or use Skip to continue.', 400);
   }
 
   try {
@@ -187,10 +189,12 @@ export const listQuizHistoryHandler = catchAsync(async (req: Request, res: Respo
   sendSuccess(res, result);
 });
 
-export const getHistoryFilterOptionsHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
-  const profileId = req.profile?._id.toString();
-  if (!profileId) throw new AppError('Unauthorized', 401);
+export const getHistoryFilterOptionsHandler = catchAsync(
+  async (req: Request, res: Response): Promise<void> => {
+    const profileId = req.profile?._id.toString();
+    if (!profileId) throw new AppError('Unauthorized', 401);
 
-  const result = await getHistoryFilterOptions(profileId);
-  sendSuccess(res, result);
-});
+    const result = await getHistoryFilterOptions(profileId);
+    sendSuccess(res, result);
+  }
+);

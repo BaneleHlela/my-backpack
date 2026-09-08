@@ -60,7 +60,19 @@ const answerRecordSchema = new Schema<IAnswerRecordDocument>(
       enum: ['mcq_selection', 'text_input', 'voice_transcript', 'true_false'],
       required: true,
     },
-    rawResponse: { type: String, required: true },
+    rawResponse: {
+      type: String,
+      default: '',
+      // A skip/timeout deliberately has no response. Mongoose's required string validator
+      // rejects '', even though captureAnswer already grades these records as zero points.
+      required: function (this: IAnswerRecordDocument) {
+        return !this.wasSkipped && !this.wasTimedOut;
+      },
+      validate: {
+        validator: (value: string) => value === '' || value.trim().length > 0,
+        message: 'An answer is required unless the question was skipped or timed out.',
+      },
+    },
     selectedOptionIndex: { type: Number },
     maxPoints: { type: Number, required: true },
     pointsAwarded: { type: Number, required: true },
