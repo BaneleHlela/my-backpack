@@ -1,3 +1,4 @@
+# Main point: School is not limited in the classroom. School is community. Either study areas, computer labs, engineering centers, etc. Projects creates a mix of school and business together. As it should be. For e.g. a developer. 
 # Testing Centres — The Physical Layer
 
 My Backpack is a digital product, but it has a physical ambition: to create locations where South African learners can write formal assessments when the app says they're ready. Testing centres are what make My Backpack a complete alternative to the traditional exam calendar — not just a learning tool, but a pathway to real qualifications.

@@ -7,7 +7,9 @@
 // logoutAsync, fetchActiveProfile, completeProfileSetup) — forgotPassword/
 // resetPassword/verifyEmail/resendVerification have no mobile screen yet
 // (see docs/technical/mobile-architecture.md) so aren't ported until one
-// exists.
+// exists. Guest mode (August 2026, see docs/technical/guest-mode.md) added
+// two more: continueAsGuest and claimAccount — web has no guest mode yet,
+// so these are mobile-only, not ports of anything on web.
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type {
@@ -16,8 +18,11 @@ import type {
   LoginResponse,
   RegisterResponse,
   SelectProfileResponse,
+  GuestSignupResponse,
+  ClaimAccountResponse,
   ApiResponse,
   IProfile,
+  AgeGroup,
   ProfileSetupDto,
 } from '@my-backpack/shared';
 import type { AxiosError } from 'axios';
@@ -77,20 +82,63 @@ function resetState(state: AuthState) {
 
 // Replaces web's cookie-based checkAuth — native has no persistent cookie
 // jar, so the refresh token is read back out of SecureStore explicitly.
-export const bootstrapAuth = createAsyncThunk('auth/bootstrapAuth', async () => {
+export const bootstrapAuth = createAsyncThunk('auth/bootstrapAuth', async (_, { dispatch }) => {
   const refreshToken = await getRefreshToken();
   if (!refreshToken) {
     return { authenticated: false as const };
   }
 
+  let accessToken: string;
   try {
     const { data } = await api.post<ApiResponse<{ accessToken: string }>>('/auth/refresh', { refreshToken });
-    return { authenticated: true as const, accessToken: data.data.accessToken, refreshToken };
+    accessToken = data.data.accessToken;
   } catch {
     await deleteRefreshToken();
     return { authenticated: false as const };
   }
+
+  // Commit the access token to the store *before* dispatching anything else — api.ts's
+  // request interceptor reads Authorization from store.getState().auth.accessToken
+  // synchronously, not from this thunk's local `accessToken` variable, so fetchActiveProfile
+  // below would otherwise go out unauthenticated (401), which the response interceptor's own
+  // failed refresh-retry (refreshToken isn't in the store yet either, for the same reason)
+  // would then resolve by dispatching logout() — wiping activeProfile right as
+  // bootstrapAuth.fulfilled was about to restore the tokens. This was a real bug, not
+  // hypothetical: fixed here.
+  dispatch(setAccessToken(accessToken));
+
+  // Both awaited (not fire-and-forget) so isCheckingAuth doesn't flip false — unblocking
+  // ProtectedRoute — until activeProfile/profiles are actually populated. Previously
+  // fetchActiveProfile was dispatched fire-and-forget from _layout.tsx's AuthBootstrap right
+  // after bootstrapAuth resolved, leaving a render frame where isCheckingAuth was already
+  // false but isLoadingProfile hadn't flipped true yet and activeProfile was still null —
+  // anything gating on activeProfile in that frame (e.g. index.tsx's last-route resume) read
+  // a false "no profile" signal and acted on it immediately. fetchProfiles (the full
+  // account-wide list "other profiles to switch to" needs — see ProfileSwitcherModal) was
+  // previously never fetched at all on a bootstrap resume, only ever populated by the login
+  // screen's response, which a resumed session skips entirely. A failure in either is
+  // non-fatal: the access token is still valid, ProtectedRoute/ResumeRedirect and
+  // ProfileSwitcherModal just fall back to their existing "no profile yet"/"no other
+  // profiles" handling.
+  await Promise.all([dispatch(fetchActiveProfile()), dispatch(fetchProfiles())]);
+
+  return { authenticated: true as const, accessToken, refreshToken };
 });
+
+// GET /profiles — the account's full profile list (ProfileSummary[]), same shape login's
+// response already carries. Only ever previously populated by login.fulfilled, which a
+// bootstrap-resumed session (no login screen involved) never runs — see bootstrapAuth above.
+export const fetchProfiles = createAsyncThunk(
+  'auth/fetchProfiles',
+  async (_, { rejectWithValue }) => {
+    try {
+      const { data } = await api.get<ApiResponse<ProfileSummary[]>>('/profiles');
+      return data.data;
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error, 'Failed to load profiles'));
+    }
+  }
+);
 
 export const fetchActiveProfile = createAsyncThunk(
   'auth/fetchActiveProfile',
@@ -167,6 +215,42 @@ export const selectProfile = createAsyncThunk(
   }
 );
 
+// POST /api/auth/guest — skips the partial-token/select-profile round trip entirely (there's
+// exactly one profile, nothing to verify). The response's `profile` is only ProfileSummary-
+// shaped (not the full IProfile activeProfile needs — no accountId/education/preferences/
+// progress), so this thunk only sets the token half of the session; the caller (Login screen)
+// dispatches fetchActiveProfile() right after, same two-step pattern already used by
+// ProfileSwitcherModal's/select-profile.tsx's doSelectAndNavigate.
+export const continueAsGuest = createAsyncThunk(
+  'auth/continueAsGuest',
+  async (payload: { displayName?: string; ageGroup?: AgeGroup } | undefined, { rejectWithValue }) => {
+    try {
+      const { data } = await api.post<ApiResponse<GuestSignupResponse>>('/auth/guest', payload ?? {});
+      if (data.data.refreshToken) {
+        await saveRefreshToken(data.data.refreshToken);
+      }
+      return data.data;
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error, 'Failed to continue as guest'));
+    }
+  }
+);
+
+// POST /api/auth/claim — adds email/password credentials to the guest account already in use.
+// No logout/re-login: the caller keeps its current session, this just flips isGuest off locally
+// once the server confirms it.
+export const claimAccount = createAsyncThunk(
+  'auth/claimAccount',
+  async ({ email, password }: { email: string; password: string }, { rejectWithValue }) => {
+    try {
+      const { data } = await api.post<ApiResponse<ClaimAccountResponse>>('/auth/claim', { email, password });
+      return data.data;
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error, 'Failed to save progress'));
+    }
+  }
+);
+
 export const logoutAsync = createAsyncThunk('auth/logoutAsync', async () => {
   try {
     await api.post('/auth/logout');
@@ -239,6 +323,10 @@ const authSlice = createSlice({
       .addCase(fetchActiveProfile.rejected, (state) => {
         state.isLoadingProfile = false;
       })
+      // fetchProfiles
+      .addCase(fetchProfiles.fulfilled, (state, action) => {
+        state.profiles = action.payload;
+      })
       // completeProfileSetup
       .addCase(completeProfileSetup.pending, (state) => {
         state.isLoading = true;
@@ -297,6 +385,37 @@ const authSlice = createSlice({
         state.partialToken = null;
       })
       .addCase(selectProfile.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      // continueAsGuest
+      .addCase(continueAsGuest.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(continueAsGuest.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.accessToken = action.payload.accessToken;
+        state.isAuthenticated = true;
+        state.partialToken = null;
+      })
+      .addCase(continueAsGuest.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      // claimAccount
+      .addCase(claimAccount.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(claimAccount.fulfilled, (state, action) => {
+        state.isLoading = false;
+        if (state.activeProfile) {
+          state.activeProfile = { ...state.activeProfile, isGuest: false };
+        }
+        state.successMessage = `Progress saved! A verification link was sent to ${action.payload.email}.`;
+      })
+      .addCase(claimAccount.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       })

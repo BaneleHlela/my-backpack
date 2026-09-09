@@ -21,24 +21,19 @@
 // the question right after), so it's not reproduced here.
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import {
-  Image,
-  ImageBackground,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Image, ImageBackground, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Text } from '../../AppText';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Lightbulb, Volume2 } from 'lucide-react-native';
-import { ASSETS, darkColors, lightColors, borderWidth, radii, spacing, typography } from '@my-backpack/shared';
+import { ASSETS, lightColors, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useSpeak } from '../../../lib/useSpeak';
 import { useTheme } from '../../../theme/ThemeContext';
+import { useQuestionScrollRef } from '../QuestionScrollArea';
+import { fonts } from '../../../theme/fonts';
 import type { QuestionPatternHandle, QuestionPatternReadyProps } from './questionPatternTypes';
 
 interface DndSinglePatternProps extends QuestionPatternReadyProps {
@@ -90,13 +85,24 @@ interface DraggableTileProps {
 }
 
 const DraggableTile = forwardRef(function DraggableTile(
-  { item, size, showLabel, highlight, disabled, isChild, onTapAudio, onDragAudio, onDropAttempt }: DraggableTileProps,
+  {
+    item,
+    size,
+    showLabel,
+    highlight,
+    disabled,
+    isChild,
+    onTapAudio,
+    onDragAudio,
+    onDropAttempt,
+  }: DraggableTileProps,
   ref: Ref<DraggableTileHandle>
 ) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const scrollRef = useQuestionScrollRef();
 
   useImperativeHandle(ref, () => ({
     snapBack: () => {
@@ -126,7 +132,13 @@ const DraggableTile = forwardRef(function DraggableTile(
     })
     .onEnd((e) => {
       runOnJS(onDropAttempt)(item, e.absoluteX, e.absoluteY);
+    })
+    .onFinalize(() => {
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
     });
+
+  if (scrollRef) panGesture.blocksExternalGesture(scrollRef);
 
   const composedGesture = Gesture.Race(tapGesture, panGesture);
 
@@ -177,6 +189,9 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   );
   const [genKey, setGenKey] = useState(0);
   const submittedRef = useRef(false);
+  // Counts rejected (retryUntilCorrect) drops for the current question — sent with the final
+  // correct submission so the server can deduct a point per wrong attempt.
+  const wrongAttemptsRef = useRef(0);
   const tileRefs = useRef<Map<string, DraggableTileHandle>>(new Map());
   const dropZoneRef = useRef<View>(null);
   const dropZoneRectRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -189,12 +204,20 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
     setHintActive(false);
     setHintButtonReady(helpers.hintDelaySeconds === 0);
     setWrongAttempt(false);
-    setOrderedDraggables(helpers.shuffleDraggables ? shuffle(content.draggables ?? []) : (content.draggables ?? []));
+    setOrderedDraggables(
+      helpers.shuffleDraggables ? shuffle(content.draggables ?? []) : (content.draggables ?? [])
+    );
     setGenKey((k) => k + 1);
     submittedRef.current = false;
+    wrongAttemptsRef.current = 0;
     tileRefs.current.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
+
+  // A rejected request re-enables this same mounted question, including auto-submit ones.
+  useEffect(() => {
+    if (!disabled) submittedRef.current = false;
+  }, [disabled]);
 
   useEffect(() => {
     if (helpers.hintDelaySeconds === 0 || hintButtonReady) return;
@@ -209,20 +232,23 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   const submit = (finalPlacedId: string) => {
     if (!dropZone || disabled || submittedRef.current) return;
     submittedRef.current = true;
-    onAnswer(JSON.stringify({ placements: [{ draggableId: finalPlacedId, dropZoneId: dropZone.id }] }));
+    onAnswer(
+      JSON.stringify({
+        placements: [{ draggableId: finalPlacedId, dropZoneId: dropZone.id }],
+        wrongAttempts: wrongAttemptsRef.current,
+      })
+    );
   };
 
-  // autoSubmit questions (all 6 vowels dnd_single variants) have no manual submit moment — the
-  // global Submit button stays disabled for the whole question, matching "always visible but
-  // disabled when not used".
+  // Auto-submit still fires on drop; the footer also allows a manual retry after a failed request.
   useImperativeHandle(ref, () => ({
     submit: () => {
-      if (!helpers.autoSubmit && placedId) submit(placedId);
+      if (placedId) submit(placedId);
     },
   }));
 
   useEffect(() => {
-    onReadyChange?.(!helpers.autoSubmit && placedId !== null && !disabled);
+    onReadyChange?.(Boolean(dropZone) && placedId !== null && !disabled);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placedId, helpers.autoSubmit, disabled]);
 
@@ -276,7 +302,9 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
 
     const isCorrectDrop = dropZone.requiredDraggableIds.includes(item.id);
     if (helpers.retryUntilCorrect && !isCorrectDrop) {
-      // Rejected — never reaches onAnswer, item bounces back to the pool.
+      // Rejected — never reaches onAnswer, item bounces back to the pool. Counted toward the
+      // point deduction applied once the question is finally submitted.
+      wrongAttemptsRef.current += 1;
       tileRefs.current.get(item.id)?.snapBack();
       playAsset(content.tryAgainFeedback?.audioUrl);
       setWrongAttempt(true);
@@ -308,10 +336,10 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   const dragAreaBackground = resolveAssetUrl(content.dragAreaImageUrl);
   const dropZoneBackground = resolveAssetUrl(dropZone.imageUrl) ?? ASSETS.DROP_ZONES.CLASSROOM_BOARD;
   const wrongAvatarUrl = content.avatar
-    ? ASSETS.AVATARS.image(content.avatar.avatarId, content.tryAgainFeedback?.avatarEmotion ?? content.avatar.emotion)
-    : undefined;
-  const promptAvatarUrl = content.avatar
-    ? ASSETS.AVATARS.image(content.avatar.avatarId, content.avatar.emotion)
+    ? ASSETS.AVATARS.image(
+        content.avatar.avatarId,
+        content.tryAgainFeedback?.avatarEmotion ?? content.avatar.emotion
+      )
     : undefined;
   const promptText = content.avatar?.dialogue ?? content.prompt;
 
@@ -319,10 +347,6 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
     <View style={styles.container}>
       {promptText ? (
         <View style={styles.promptRow}>
-          {/* {content.avatar?.dialogue && promptAvatarUrl ? (
-            <Image source={{ uri: promptAvatarUrl }} style={styles.promptAvatar} resizeMode="contain" />
-          ) : null} */}
-
           <View style={[styles.promptBubble, isChild && styles.promptBubbleChild]}>
             <Text style={[styles.promptText, isChild && styles.promptTextChild]}>{promptText}</Text>
           </View>
@@ -361,7 +385,10 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
             disabled={disabled || Boolean(placedId)}
             isChild={isChild}
             onTapAudio={playItemAudio}
-            onDragAudio={playItemAudio}
+            onDragAudio={(item) => {
+              measureDropZone();
+              playItemAudio(item);
+            }}
             onDropAttempt={handleDropAttempt}
           />
         ))}
@@ -369,10 +396,15 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
 
       <View
         ref={dropZoneRef}
+        collapsable={false}
         onLayout={measureDropZone}
         style={[styles.dropZone, isChild && styles.dropZoneChild, wrongAttempt && styles.dropZoneWrong]}
       >
-        <ImageBackground source={{ uri: dropZoneBackground }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        <ImageBackground
+          source={{ uri: dropZoneBackground }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
         {placedItem ? (
           <DraggableTile
             key={`${genKey}-placed-${placedItem.id}`}
@@ -399,7 +431,11 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   if (!dragAreaBackground) return body;
 
   return (
-    <ImageBackground source={{ uri: dragAreaBackground }} style={styles.dragAreaBackground} resizeMode="cover">
+    <ImageBackground
+      source={{ uri: dragAreaBackground }}
+      style={styles.dragAreaBackground}
+      resizeMode="cover"
+    >
       {body}
     </ImageBackground>
   );
@@ -407,133 +443,127 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
-  dragAreaBackground: {
-    flex: 1,
-    borderRadius: radii.md,
-    overflow: 'hidden',
-  },
-  container: {
-    flex: 1,
-    gap: spacing.md,
-    padding: spacing.sm,
-    overflow: 'hidden',
-    borderColor: colors.primary.dark,
-    borderWidth: borderWidth.lg,
-    borderRadius: radii.md,
-  },
-  promptRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  promptAvatar: {
-    width: 32,
-    height: 32,
-  },
-  promptBubble: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: radii.lg,
-    borderWidth: borderWidth.lg,
-    borderColor: colors.primary.light,
-    padding: spacing.md,
-  },
-  promptBubbleChild: {
-    padding: spacing.md,
-    borderWidth: 3,
-  },
-  promptText: {
-    fontSize: typography.heading,
-    color: lightColors.text.primary,
-    fontWeight: '700',
-  },
-  promptTextChild: {
-    fontSize: typography.headingLg,
-    fontWeight: '700',
-    textAlign: 'center',
-    color: lightColors.text.primary,
-  },
-  promptButtons: {
-    gap: spacing.xs,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.warning.light,
-    borderWidth: borderWidth.lg,
-    borderColor: colors.primary.light,
-  },
-  iconButtonDisabled: {
-    opacity: 0.4,
-  },
-  replayButton: {},
-  hintButton: {},
-  poolRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  tile: {
-    width: 64,
-    height: 64,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface.glassStrong,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
-  },
-  tileChild: {
-    borderRadius: radii.lg,
-    borderWidth: 3,
-    borderColor: colors.primary.light,
-    backgroundColor: '#fff',
-  },
-  tileHighlight: {
-    borderColor: colors.warning.DEFAULT,
-    borderWidth: 3,
-  },
-  tileImage: {
-    width: '70%',
-    height: '70%',
-  },
-  tileLabel: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  dropZone: {
-    flex: 1,
-    borderRadius: radii.lg,
-    borderWidth: borderWidth.lg,
-    borderStyle: 'dashed',
-    borderColor: colors.surface.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    aspectRatio: 2 / 1,
-    maxWidth: '100%',
-  },
-  dropZoneChild: {
-    borderWidth: 3,
-    borderColor: colors.primary.light,
-  },
-  dropZoneWrong: {
-    borderColor: colors.error.DEFAULT,
-  },
-  dropZoneLabel: {
-    fontSize: typography.small,
-    color: colors.text.muted,
-  },
-  wrongAvatar: {
-    width: 72,
-    height: 72,
-    alignSelf: 'center',
-  },
+    dragAreaBackground: {
+      flexGrow: 1,
+      borderRadius: radii.md,
+      overflow: 'hidden',
+    },
+    container: {
+      flexGrow: 1,
+      gap: spacing.md,
+      padding: spacing.sm,
+    },
+    promptRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    promptBubble: {
+      flex: 1,
+      backgroundColor: '#fff',
+      borderRadius: radii.lg,
+      borderWidth: 2,
+      borderColor: colors.primary.light,
+      padding: spacing.md,
+    },
+    promptBubbleChild: {
+      padding: spacing.md,
+      borderWidth: 3,
+    },
+    promptText: {
+      fontSize: typography.bodyChild,
+      lineHeight: 28,
+      color: lightColors.text.primary,
+    },
+    promptTextChild: {
+      fontFamily: fonts.display.bold,
+      fontSize: typography.headingLg,
+      lineHeight: 36,
+      textAlign: 'center',
+      color: lightColors.text.primary,
+    },
+    promptButtons: {
+      gap: spacing.xs,
+    },
+    iconButton: {
+      width: 44,
+      height: 44,
+      borderRadius: radii.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.warning.light,
+      borderWidth: 1,
+      borderColor: colors.primary.light,
+    },
+    iconButtonDisabled: {
+      opacity: 0.4,
+    },
+    replayButton: {},
+    hintButton: {},
+    poolRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    tile: {
+      width: 64,
+      height: 64,
+      borderRadius: radii.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface.glassStrong,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
+    },
+    tileChild: {
+      borderRadius: radii.lg,
+      borderWidth: 3,
+      borderColor: colors.primary.light,
+      backgroundColor: '#fff',
+    },
+    tileHighlight: {
+      borderColor: colors.warning.DEFAULT,
+      borderWidth: 3,
+    },
+    tileImage: {
+      width: '70%',
+      height: '70%',
+    },
+    tileLabel: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.glassText.primary,
+    },
+    dropZone: {
+      minHeight: 160,
+      width: '100%',
+      borderRadius: radii.lg,
+      borderWidth: 2,
+      borderStyle: 'dashed',
+      borderColor: colors.surface.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+      aspectRatio: 2 / 1,
+      maxWidth: '100%',
+    },
+    dropZoneChild: {
+      borderWidth: 3,
+      borderColor: colors.primary.light,
+    },
+    dropZoneWrong: {
+      borderColor: colors.error.DEFAULT,
+    },
+    dropZoneLabel: {
+      fontSize: typography.small,
+      color: colors.text.muted,
+    },
+    wrongAvatar: {
+      width: 72,
+      height: 72,
+      alignSelf: 'center',
+    },
   });
 }

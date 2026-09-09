@@ -36,7 +36,8 @@
       "expo-audio",
       "expo-asset",
       "expo-splash-screen",
-      "expo-video"
+      "expo-video",
+      "expo-font"
     ],
     "extra": {
       "router": {},

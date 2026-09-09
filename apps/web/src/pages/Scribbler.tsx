@@ -6,35 +6,14 @@ const colors = {
     highlight: '#DCC8FF',
 }
 
+
 const Scribbler = () => {
     return (
         <div className="w-full h-screen bg-amber-600 flex justify-center items-center">
-            {/* Button */}
-            <div
-                style={{ backgroundColor: colors.shadow }}
-                className="
-                    relative z-2
-                    w-[100px] h-[98px]
-                    rounded-full
-                    overflow-visible
-                "
-            >
-                {/* Main face */}
-                <div
-                    style={{ backgroundColor: colors.main }}
-                    className="
-                        absolute
-                        bottom-10 left-0
-                        w-full h-full
-                        rounded-full
-                        overflow-hidden
-                        border-4
-                        border-[#B58CFF]
-                    "
-                >
-                    {/* Directional top highlight */}
-                    {/* Inset the top half gloss */}
-                </div>
+            {/* Padded Border View */}
+            {/* Outer shell */}
+            <div className="border-2 border-dashed border-purple-700 p-2 w-[200px] rounded-[32px] aspect-square">
+                <div className="w-full h-full bg-purple-700 border-inherit rounded-[30px]"></div>
             </div>
         </div>
     )

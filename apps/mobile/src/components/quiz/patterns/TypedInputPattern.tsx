@@ -13,7 +13,8 @@
 // use the "audio:" prefix, that takes priority.
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import type { Ref } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Text } from '../../AppText';
 import { Volume2 } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers, QuestionType } from '@my-backpack/shared';
@@ -22,6 +23,7 @@ import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { SpokenText } from '../SpokenText';
 import { useTheme } from '../../../theme/ThemeContext';
+import { fonts } from '../../../theme/fonts';
 import type { QuestionPatternHandle, QuestionPatternReadyProps } from './questionPatternTypes';
 
 interface TypedInputPatternProps extends QuestionPatternReadyProps {
@@ -47,17 +49,28 @@ export const TypedInputPattern = forwardRef(function TypedInputPattern(
   const promptIsAudio = content.prompt?.startsWith('audio:') ?? false;
 
   useEffect(() => {
+    let cancelled = false;
     setValue('');
-    setAudioUrl(promptIsAudio ? resolveAssetUrl(content.prompt!.slice('audio:'.length)) ?? null : null);
+    setAudioUrl(promptIsAudio ? (resolveAssetUrl(content.prompt!.slice('audio:'.length)) ?? null) : null);
+    setAudioLoading(false);
 
     if (!promptIsAudio && type === 'text_input_audio' && termId) {
       setAudioLoading(true);
       api
         .get(`/vocab/terms/${termId}`)
-        .then((res) => setAudioUrl(res.data.data.term.audioUrl ?? null))
-        .catch(() => setAudioUrl(null))
-        .finally(() => setAudioLoading(false));
+        .then((res) => {
+          if (!cancelled) setAudioUrl(res.data.data.term.audioUrl ?? null);
+        })
+        .catch(() => {
+          if (!cancelled) setAudioUrl(null);
+        })
+        .finally(() => {
+          if (!cancelled) setAudioLoading(false);
+        });
     }
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [termId, type, content.prompt]);
 
@@ -77,9 +90,16 @@ export const TypedInputPattern = forwardRef(function TypedInputPattern(
     <View style={styles.wrapper}>
       <View style={styles.promptRow}>
         {promptIsAudio || type === 'text_input_audio' ? (
-          <Text style={styles.prompt}>{content.prompt}</Text>
+          <Text style={styles.prompt}>
+            {promptIsAudio ? 'Listen, then type what you hear.' : content.prompt}
+          </Text>
         ) : (
-          <SpokenText text={content.prompt ?? ''} lang={lang} containerStyle={styles.spokenPrompt} />
+          <SpokenText
+            text={content.prompt ?? ''}
+            lang={lang}
+            textStyle={styles.prompt}
+            containerStyle={styles.spokenPrompt}
+          />
         )}
         {content.promptAudioUrl ? (
           <Pressable
@@ -92,7 +112,7 @@ export const TypedInputPattern = forwardRef(function TypedInputPattern(
         ) : null}
       </View>
 
-      {type === 'text_input_audio' ? (
+      {promptIsAudio || type === 'text_input_audio' ? (
         <View style={styles.audioRow}>
           <Pressable
             onPress={() => audioUrl && playAudioUrl(audioUrl)}
@@ -108,16 +128,22 @@ export const TypedInputPattern = forwardRef(function TypedInputPattern(
         </View>
       ) : null}
 
-      <TextInput
-        value={value}
-        onChangeText={setValue}
-        onSubmitEditing={submit}
-        editable={!disabled}
-        placeholder="Type your answer..."
-        placeholderTextColor={colors.text.faint}
-        autoCapitalize="none"
-        style={styles.input}
-      />
+      <View style={styles.answerField}>
+        <Text style={styles.instruction}>Your answer</Text>
+        <TextInput
+          value={value}
+          onChangeText={setValue}
+          onSubmitEditing={submit}
+          editable={!disabled}
+          placeholder="Type your answer..."
+          placeholderTextColor={colors.text.faint}
+          accessibilityLabel="Your answer"
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="done"
+          style={styles.input}
+        />
+      </View>
     </View>
   );
 });
@@ -125,7 +151,7 @@ export const TypedInputPattern = forwardRef(function TypedInputPattern(
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
     wrapper: {
-      gap: spacing.md,
+      gap: spacing.lg,
       padding: spacing.md,
     },
     promptRow: {
@@ -135,33 +161,38 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     prompt: {
       flex: 1,
-      fontSize: typography.body,
+      fontSize: typography.bodyChild,
       color: colors.text.primary,
+      lineHeight: 28,
+      fontWeight: '600',
     },
     spokenPrompt: {
       flex: 1,
     },
     audioButton: {
-      width: 28,
-      height: 28,
+      width: 44,
+      height: 44,
       borderRadius: radii.sm,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surface.glassSoft,
+      borderWidth: 1,
+      borderColor: colors.text.faint,
     },
     audioRow: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       alignItems: 'center',
       gap: spacing.sm,
     },
     playAudioButton: {
+      minHeight: 48,
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.xs,
       paddingHorizontal: spacing.sm,
       paddingVertical: spacing.sm,
       borderRadius: radii.md,
-      backgroundColor: colors.primary.DEFAULT,
+      backgroundColor: colors.primary.dark,
     },
     playAudioButtonDisabled: {
       opacity: 0.5,
@@ -176,14 +207,18 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       color: colors.text.muted,
     },
     input: {
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.sm,
+      minHeight: 56,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
       borderRadius: radii.md,
-      borderWidth: 1,
-      borderColor: colors.surface.border,
-      backgroundColor: colors.surface.glassSoft,
+      borderWidth: 2,
+      borderColor: colors.primary.light,
+      backgroundColor: colors.background,
+      fontFamily: fonts.body.regular,
       fontSize: typography.body,
       color: colors.text.primary,
     },
+    answerField: { gap: spacing.sm },
+    instruction: { fontSize: typography.small, color: colors.text.secondary },
   });
 }

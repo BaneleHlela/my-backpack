@@ -22,12 +22,12 @@ items:
 | # | Title | Item type | Draggables | Audio-on-tap | Question count | Pass mark |
 |---|---|---|---|---|---|---|
 | 1 | Meet the Vowels (video) | lesson | — | — | — | — |
-| 2 | Learn to Drag | quiz | 1 (target only) | ON | 10 | 100% |
-| 3 | Learn to Drag — Solo | quiz | 1 (target only) | OFF | 10 | 100% |
-| 4 | Pick the Sound | quiz | 2 (target + 1 distractor) | ON | 10 | 100% |
-| 5 | Pick the Sound — Solo | quiz | 2 (target + 1 distractor) | OFF | 10 | 100% |
-| 6 | All the Vowels | quiz | 5 (all) | ON | 10 | 100% |
-| 7 | Vowels Challenge | quiz | 5 (all) | OFF | 10 | 100% |
+| 2 | Learn to Drag | quiz | 1 (target only) | ON | 10 | 70% |
+| 3 | Learn to Drag — Solo | quiz | 1 (target only) | OFF | 10 | 70% |
+| 4 | Pick the Sound | quiz | 2 (target + 1 distractor) | ON | 10 | 70% |
+| 5 | Pick the Sound — Solo | quiz | 2 (target + 1 distractor) | OFF | 10 | 70% |
+| 6 | All the Vowels | quiz | 5 (all) | ON | 10 | 70% |
+| 7 | Vowels Challenge | quiz | 5 (all) | OFF | 10 | 70% |
 
 All six quiz items use question `type: 'dnd_single'` — one drop zone, one correct
 draggable, distractor count is what escalates (1 → 2 → 5). "Audio-on-tap" means
@@ -37,18 +37,29 @@ tapped"); "OFF" variants simply omit it. No new helper flags needed.
 10 questions per quiz item, built by cycling the 5-vowel set twice
 (`[...vowels, ...vowels]`) so each vowel appears exactly twice per quiz.
 
-Marking: fixed question count + fixed pass % (`passingScore: 1.0` on the node's item ref)
-for these roadmap quiz items. Confidence-threshold marking (using the existing
+Marking: fixed question count + fixed pass % (`passingScore: 0.7` on the node's item ref —
+was `1.0` until August 2026, see the wrong-attempt point deduction note below) for these
+roadmap quiz items. Confidence-threshold marking (using the existing
 `LearningRecord.confidenceScore` / `AdaptiveProfile.masteryThreshold`) is reserved for
 dynamic quizzes later — not used here.
 
 **Unskippable mode:** all 6 quiz variants (both languages) set
 `defaultHelpers.retryUntilCorrect: true`. A wrong drop is rejected entirely client-side in
 `DndSinglePattern` — checked against `content.dropZones[0].requiredDraggableIds` before ever
-calling `onAnswer` — so it's never submitted to the server (no AnswerRecord, no partial-credit
-scoring) and bounces back to the pool with a brief red flash + the question's
-`tryAgainFeedback` audio. The host quiz page hides its "Skip question" button whenever the current question resolves `retryUntilCorrect: true`. The learner cannot move to the next
-question without first getting the current one right.
+calling `onAnswer` — so it's never submitted to the server as its own `AnswerRecord` — and
+bounces back to the pool with a brief red flash + the question's `tryAgainFeedback` audio. The
+host quiz page hides its "Skip question" button whenever the current question resolves
+`retryUntilCorrect: true`. The learner cannot move to the next question without first getting
+the current one right.
+
+**Wrong-attempt point deduction (August 2026):** each rejected drop is no longer scoring-free —
+it's counted client-side and sent along with the eventual correct submission; the server
+deducts 1 point per wrong attempt from that question's `maxPoints` (floored at 0, see
+`evaluateDnDAnswer` in `quizSession.service.ts`). Because a quiz's `scoreRatio` is
+`totalPointsAwarded / totalPointsAvailable`, this pass mark was dropped from 100% to 70% (see
+the table above) — at 100%, a single mis-drop anywhere across a 10-question run would have
+permanently failed the quiz item and blocked progress, defeating the point of "unskippable but
+retriable."
 
 **Auto-advance:** passing a quiz item (or completing a lesson item) now auto-navigates
 straight to the next item in the node after a short pause (so the learner sees their score

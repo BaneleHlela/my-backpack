@@ -2,7 +2,8 @@
 // answer, correct answer, points, and explanation, reconstructed server-side from persisted
 // AnswerRecord + Question documents. Ports apps/web's pages/quizHistory/QuizHistoryReviewPage.tsx.
 import { useEffect } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../../../src/components/AppText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { CheckCircle2, HelpCircle, RotateCcw, SkipForward, XCircle } from 'lucide-react-native';
@@ -12,8 +13,10 @@ import { GlassCard } from '../../../src/components/GlassCard';
 import { Menubar } from '../../../src/components/Menubar';
 import { PrimaryButton } from '../../../src/components/PrimaryButton';
 import { useTheme } from '../../../src/theme/ThemeContext';
+import { fonts } from '../../../src/theme/fonts';
 import { fetchSessionReview, resetReview } from '../../../src/features/quizHistory/quizHistorySlice';
 import { canRetake, navigateToRetake } from '../../../src/components/quiz/quizHistoryLinks';
+import { useSafeGoBack } from '../../../src/lib/navigation';
 import type { AppDispatch, RootState } from '../../../src/store/store';
 
 // Mirrors quizSession.service.ts's DND_TYPES — DnD rawResponse is a JSON placements blob, not
@@ -45,6 +48,7 @@ export default function QuizHistoryReviewScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
+  const goBack = useSafeGoBack();
   const dispatch = useDispatch<AppDispatch>();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const { review, reviewStatus, reviewError } = useSelector((state: RootState) => state.quizHistory);
@@ -68,11 +72,10 @@ export default function QuizHistoryReviewScreen() {
 
   return (
     <View style={styles.flex}>
-      <View style={styles.header}>
-        <Menubar label="Back to history" onBackPress={() => router.back()} />
-      </View>
+      <ScrollView contentContainerStyle={styles.content} stickyHeaderIndices={[0]}>
+        <Menubar label="Back to history" onBackPress={goBack} />
 
-      {reviewStatus === 'loading' ? (
+        {reviewStatus === 'loading' ? (
         <ActivityIndicator color={colors.primary.light} style={styles.loading} />
       ) : null}
 
@@ -83,7 +86,7 @@ export default function QuizHistoryReviewScreen() {
       ) : null}
 
       {reviewStatus === 'succeeded' && review && session ? (
-        <ScrollView contentContainerStyle={styles.content}>
+        <>
           <GlassCard style={styles.summaryCard}>
             <Text style={styles.eyebrow}>{session.quizTitle}</Text>
             <Text style={styles.eyebrowMuted}>
@@ -158,8 +161,9 @@ export default function QuizHistoryReviewScreen() {
             disabled={!retakeable}
             style={styles.retakeButton}
           />
-        </ScrollView>
+        </>
       ) : null}
+      </ScrollView>
     </View>
   );
 }
@@ -167,11 +171,10 @@ export default function QuizHistoryReviewScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     flex: { flex: 1 },
-    header: { padding: spacing.lg, paddingBottom: spacing.sm },
     loading: { paddingVertical: spacing.xl },
     margin: { marginHorizontal: spacing.lg },
     errorText: { fontSize: typography.small, color: colors.error.dark, textAlign: 'center' },
-    content: { padding: spacing.lg, paddingTop: 0, gap: spacing.md },
+    content: { padding: spacing.md, paddingTop: 0, gap: spacing.md },
     summaryCard: { alignItems: 'center' },
     eyebrow: {
       fontSize: 11,
@@ -181,7 +184,7 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: 0.5,
     },
     eyebrowMuted: { fontSize: 11, color: colors.text.faint, marginTop: 2 },
-    scoreHeading: { fontSize: typography.headingLg, fontWeight: '700', color: colors.text.primary, marginTop: spacing.xs },
+    scoreHeading: { fontFamily: fonts.display.bold, fontSize: typography.headingLg, color: colors.text.primary, marginTop: spacing.xs },
     scoreSubtext: { fontSize: typography.small, color: colors.text.muted, marginTop: 2 },
     statsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md, alignSelf: 'stretch' },
     statBox: {

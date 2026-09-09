@@ -1,6 +1,6 @@
 # Question Types Reference
 
-My Backpack supports 21 question types across two categories: text-based questions and drag-and-drop (DnD) questions. Every question type is designed to test a different aspect of understanding — recognition, production, contextual use, or ordering.
+My Backpack supports 22 question types across two categories: text-based questions and drag-and-drop (DnD) questions. Every question type is designed to test a different aspect of understanding — recognition, production, contextual use, or ordering.
 
 All question data lives in the `content` field of the Question document (a `Schema.Types.Mixed` field). Always cast to `IQuestionContent` immediately after retrieval. The full TypeScript interface is defined in `apps/api/src/modules/question/question.types.ts`.
 
@@ -141,6 +141,28 @@ Options:
 
 ---
 
+### `mcq_general` — Plain Multiple Choice (Not Tied to a Vocab Term)
+
+**Description:** A neutral multiple-choice question with no `termId`/`definitionId` — every other `mcq_*` type is specifically about vocabulary term/definition content, so this is the one to reach for when a question is just "here's a prompt and four options" (e.g. a book-to-course chapter quiz hand-authored outside the vocab pipeline). Renders identically to the other MCQ types — same options-list UI, same `content.correctAnswer`/`content.explanation` shape, same exact-match grading.
+
+**Example:**
+```
+Prompt: "By Noether's theorem, which symmetry of physical law is directly responsible for conservation of momentum?"
+Options:
+  A) Symmetry under shifts in time
+  B) Symmetry under shifts in space ✓
+  C) Symmetry under rotations
+  D) Symmetry under reflections
+```
+
+**Default maxPoints:** 5  
+**Available for:** child, teen, adult  
+**Generation:** Manual (hand-authored content seeded directly — never produced by the auto/AI vocab-generation pipeline)  
+**Helpers:** Supports hint, explanation  
+**When to use:** General-knowledge or course-topic MCQ content that isn't anchored to a `Term`/`Definition` pair — e.g. a roadmap Topic quiz seeded from a book chapter or hand-drafted lesson content.
+
+---
+
 ### `fill_blank_typed` — Sentence with Blank, Type the Word
 
 **Description:** The learner sees a sentence with a blank and must type the exact word that belongs there.
@@ -277,8 +299,14 @@ DnD questions use three sub-documents inside `content`:
 
 The rawResponse format for all DnD answers:
 ```json
-{ "placements": [{ "draggableId": "...", "dropZoneId": "..." }] }
+{ "placements": [{ "draggableId": "...", "dropZoneId": "..." }], "wrongAttempts": 0 }
 ```
+
+`wrongAttempts` is optional (defaults to 0). It only does anything on `helpers.retryUntilCorrect`
+questions (`IQuestionHelpers.retryUntilCorrect`, `packages/shared/types/question.ts`) — the
+learner-facing pattern counts each locally-rejected wrong drop and sends the running total
+alongside the eventual correct submission; `evaluateDnDAnswer()` server-side deducts 1 point per
+wrong attempt from `maxPoints`, floored at 0.
 
 **Illustration fields:** `content.dragAreaImageUrl` sets a background image for the
 whole drag-and-drop widget (draggable tray + drop zone), distinct from

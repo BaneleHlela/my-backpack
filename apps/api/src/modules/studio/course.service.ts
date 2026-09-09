@@ -13,6 +13,12 @@ import Subject from '../../models/core/subject.model';
 import Quiz from '../../models/learning/quiz.model';
 import { AppError } from '../../utils/AppError';
 import { isDuplicateKeyError } from './studio.utils';
+import { extractPdfText } from '../../services/bookIngestion/pdfExtraction';
+import { suggestChapterStructure, ProposedChapter } from '../../services/bookIngestion/chapterStructure';
+import {
+  createChaptersFromBook,
+  ChapterInput,
+} from '../../services/bookIngestion/chapterIngestion';
 
 export interface CreateCourseInput {
   subjectId: string;
@@ -106,4 +112,63 @@ export async function deleteCourse(courseId: string): Promise<void> {
 
   course.isActive = false;
   await course.save();
+}
+
+// ── Book-to-course pipeline (Phases 2-3) ──────────────────
+// See docs/content/book-to-course-design.md for the full design, including the
+// extraction-vs-judgment split (2a mechanical, 2b AI) and why chapter creation (Phase 3) is a
+// separate approval step from the AI proposal (Phase 2).
+
+export interface SuggestBookStructureResult {
+  chapters: ProposedChapter[];
+  extractedText: string;
+}
+
+// Phase 2: POST .../courses/:courseId/suggest-structure. Runs 2a (deterministic extraction)
+// then 2b (AI proposal) and returns both — the frontend holds extractedText in memory to
+// submit back in Phase 3 rather than re-extracting. Persists nothing.
+export async function suggestBookStructure(
+  courseId: string,
+  pdfPath: string
+): Promise<SuggestBookStructureResult> {
+  const course = await Course.findOne({ _id: courseId, isActive: true });
+  if (!course) throw new AppError('Course not found', 404);
+  if (!pdfPath) throw new AppError('pdfPath is required', 400);
+
+  const extractedText = await extractPdfText(pdfPath);
+  
+  const chapters = await suggestChapterStructure(extractedText);
+  console.log(chapters);
+  return { chapters, extractedText };
+}
+
+export interface ApplyBookChaptersInput {
+  pdfPath: string;
+  extractedText: string;
+  chapters: ChapterInput[];
+}
+
+// Phase 3: POST .../courses/:courseId/book-chapters. The admin-edited version of Phase 2's
+// proposal (titles/ranges may have changed, chapters added/removed/reordered). Thin pass-through
+// to chapterIngestion.ts's createChaptersFromBook — kept here only so course.controller.ts can
+// go on calling exclusively into course.service.ts, matching every other handler in this file.
+export async function applyBookChapters(
+  courseId: string,
+  input: ApplyBookChaptersInput
+): Promise<ICourseDocument> {
+  if (!input.pdfPath) throw new AppError('pdfPath is required', 400);
+  if (!input.extractedText) throw new AppError('extractedText is required', 400);
+  return createChaptersFromBook(courseId, input);
+}
+
+// Strips the (potentially large) raw bookSource.extractedText from a course response and
+// replaces it with a derived hasBookSource boolean — extractedText is never needed by the
+// frontend (see ICourseBookSource's comment in course.model.ts). Used by every dashboard
+// course-write response (create/update/apply-book-chapters) rather than the raw Mongoose
+// document.
+export function toDashboardCourseResponse(course: ICourseDocument): Record<string, unknown> {
+  const obj = course.toObject() as Record<string, unknown> & { bookSource?: unknown };
+  const hasBookSource = !!obj.bookSource;
+  delete obj.bookSource;
+  return { ...obj, hasBookSource };
 }

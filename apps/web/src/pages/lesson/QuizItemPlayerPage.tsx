@@ -305,6 +305,7 @@ export default function QuizItemPlayerPage() {
               onQuizAgain={handleQuizAgain}
               onReturnToDictionary={() => navigate(`/subject/${subjectSlug}/course/${courseSlug}`)}
               returnLabel="Back to roadmap"
+              onReview={quiz.sessionId ? () => navigate(`/quiz-history/${quiz.sessionId}`) : undefined}
             />
             {itemCompletion?.nodeCompleted && (
               <motion.div

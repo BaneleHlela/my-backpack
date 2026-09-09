@@ -1,7 +1,8 @@
 // Ports apps/web's DictionaryPage/components/SearchBar.tsx — same 400ms
 // debounce pattern (setTimeout/clearTimeout work identically in RN).
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Text } from '../AppText';
 import { Search, Volume2 } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { radii, spacing, typography } from '@my-backpack/shared';

@@ -1,3 +1,29 @@
+/* Brand fonts — self-hosted via @fontsource (same "bundled, not CDN" approach apps/mobile takes
+   with @expo-google-fonts), one weight file per import. Nunito Sans (body/reading copy) is wired
+   as Tailwind's `sans` default in tailwind.config.ts, so it applies app-wide via Preflight's
+   `html { font-family: theme('fontFamily.sans') }` — no per-component changes needed. Fredoka
+   (display/headings) is applied to every h1-h6 below for the same zero-touch reason, and
+   available anywhere else via the `font-display` utility class. See
+   packages/shared/constants/theme.ts's `fontFamilies` (the single source of truth for both
+   apps) and docs/design/brand-guide.md. */
+@import '@fontsource/nunito-sans/400.css';
+@import '@fontsource/nunito-sans/500.css';
+@import '@fontsource/nunito-sans/600.css';
+@import '@fontsource/nunito-sans/700.css';
+@import '@fontsource/nunito-sans/800.css';
+@import '@fontsource/fredoka/400.css';
+@import '@fontsource/fredoka/500.css';
+@import '@fontsource/fredoka/600.css';
+@import '@fontsource/fredoka/700.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* brand-guide.md: decorative fonts are reserved for headings/labels, never reading content —
+     every semantic heading gets the display font here so no page has to opt in by hand. */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: theme('fontFamily.display');
+  }
+}

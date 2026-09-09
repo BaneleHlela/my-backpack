@@ -8,6 +8,7 @@ export interface ProfileSummary {
   ageGroup: AgeGroup;
   isOwner: boolean;
   isSetupComplete: boolean;
+  isGuest: boolean;
   hasPin: boolean;
 }
 

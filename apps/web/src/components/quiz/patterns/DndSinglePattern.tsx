@@ -12,7 +12,10 @@
 // content.dropZones[].requiredDraggableIds before ever calling onAnswer. A wrong drop shows
 // content.tryAgainFeedback and bounces the item back to the pool — it is never submitted to
 // the server, so there is no "wrong attempt" AnswerRecord and no way to skip past it (the
-// host page hides its Skip button in this mode). Only a correct drop calls onAnswer.
+// host page hides its Skip button in this mode). Only a correct drop calls onAnswer. Each
+// rejected drop is still counted locally (wrongAttemptsRef) and sent along with the eventual
+// correct submission's rawResponse — evaluateDnDAnswer() server-side deducts one point per
+// wrong attempt from maxPoints (floored at 0) so retrying still costs something.
 import { useEffect, useRef, useState } from 'react';
 import {
   DndContext,
@@ -190,6 +193,9 @@ export default function DndSinglePattern({
     helpers.shuffleDraggables ? shuffle(draggables) : draggables
   );
   const submittedRef = useRef(false);
+  // Counts rejected (retryUntilCorrect) drops for the current question — sent with the final
+  // correct submission so the server can deduct a point per wrong attempt.
+  const wrongAttemptsRef = useRef(0);
 
   // Replay always speaks the dialogue live (word-highlighted) rather than playing
   // avatar.dialogueAudioUrl — an explicit product decision for this control, overriding the
@@ -218,6 +224,7 @@ export default function DndSinglePattern({
     setWrongAttempt(false);
     setOrderedDraggables(helpers.shuffleDraggables ? shuffle(content.draggables ?? []) : (content.draggables ?? []));
     submittedRef.current = false;
+    wrongAttemptsRef.current = 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
 
@@ -243,7 +250,10 @@ export default function DndSinglePattern({
     if (disabled || submittedRef.current || !finalPlacedId) return;
     submittedRef.current = true;
     onAnswer(
-      JSON.stringify({ placements: [{ draggableId: finalPlacedId, dropZoneId: dropZone.id }] })
+      JSON.stringify({
+        placements: [{ draggableId: finalPlacedId, dropZoneId: dropZone.id }],
+        wrongAttempts: wrongAttemptsRef.current,
+      })
     );
   };
 
@@ -264,6 +274,8 @@ export default function DndSinglePattern({
       const isCorrectDrop = dropZone.requiredDraggableIds.includes(active.id as string);
       if (helpers.retryUntilCorrect && !isCorrectDrop) {
         // Rejected client-side — never reaches onAnswer, item bounces back to the pool.
+        // Counted toward the point deduction applied once the question is finally submitted.
+        wrongAttemptsRef.current += 1;
         playAudio(content.tryAgainFeedback?.audioUrl);
         setWrongAttempt(true);
         setTimeout(() => setWrongAttempt(false), 700);

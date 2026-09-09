@@ -6,17 +6,22 @@ import { StatusBar } from 'expo-status-bar';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
-import { Chewy_400Regular } from '@expo-google-fonts/chewy';
 import {
   Fredoka_400Regular,
   Fredoka_500Medium,
   Fredoka_600SemiBold,
   Fredoka_700Bold,
 } from '@expo-google-fonts/fredoka';
+import {
+  NunitoSans_400Regular,
+  NunitoSans_500Medium,
+  NunitoSans_600SemiBold,
+  NunitoSans_700Bold,
+} from '@expo-google-fonts/nunito-sans';
 import { store } from '../src/store/store';
 import type { AppDispatch, RootState } from '../src/store/store';
 import { injectStore } from '../src/lib/api';
-import { bootstrapAuth, fetchActiveProfile } from '../src/features/auth/authSlice';
+import { bootstrapAuth } from '../src/features/auth/authSlice';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
 import { LaunchScreen } from '../src/components/LaunchScreen';
 
@@ -27,32 +32,33 @@ void SplashScreen.preventAutoHideAsync();
 function AuthBootstrap() {
   const dispatch = useDispatch<AppDispatch>();
   const isCheckingAuth = useSelector((state: RootState) => state.auth.isCheckingAuth);
-  const { theme } = useTheme();
+  const { theme, isReady: themeReady } = useTheme();
   // 'light' status bar content (white icons/text) reads correctly against this app's dark
-  // wallpaper/background; flips to 'dark' automatically if/when a light theme ever ships (see
-  // ThemeContext's ACTIVE_THEME note — no toggle exists yet, dark is the only active theme).
+  // wallpaper/background; flips to 'dark' automatically for a learner who's toggled to light
+  // mode (ProfileSwitcherModal's toggle row, see ThemeContext.tsx).
   const statusBarStyle = theme === 'dark' ? 'light' : 'dark';
   const [nativeSplashHidden, setNativeSplashHidden] = useState(false);
-  // Chewy (display headings) + Fredoka (body/labels) — Quiz Modes screens only for now, see
-  // docs/technical/mobile-architecture.md's "Fonts (Quiz Modes)" section. [loaded, error] mirrors
+  // Fredoka (display/headings, see src/theme/fonts.ts) + Nunito Sans (body — the app-wide
+  // default applied via src/components/AppText.tsx) — the app's two brand fonts, see
+  // docs/technical/mobile-architecture.md's "Fonts" section. [loaded, error] mirrors
   // expo-font's useFonts contract; either outcome unblocks the splash hand-off below.
   const [fontsLoaded, fontError] = useFonts({
-    Chewy_400Regular,
     Fredoka_400Regular,
     Fredoka_500Medium,
     Fredoka_600SemiBold,
     Fredoka_700Bold,
+    NunitoSans_400Regular,
+    NunitoSans_500Medium,
+    NunitoSans_600SemiBold,
+    NunitoSans_700Bold,
   });
   const fontsReady = fontsLoaded || !!fontError;
 
+  // bootstrapAuth now fetches the active profile itself (awaited internally) before
+  // resolving — see authSlice.ts's bootstrapAuth for why that used to be a separate,
+  // un-awaited dispatch here.
   useEffect(() => {
-    const init = async () => {
-      const result = await dispatch(bootstrapAuth());
-      if (bootstrapAuth.fulfilled.match(result) && result.payload.authenticated) {
-        dispatch(fetchActiveProfile());
-      }
-    };
-    void init();
+    void dispatch(bootstrapAuth());
   }, [dispatch]);
 
   // Hands off from the static, spinner-less native splash image to
@@ -67,7 +73,7 @@ function AuthBootstrap() {
     }
   }, [nativeSplashHidden, fontsReady]);
 
-  if (isCheckingAuth || !fontsReady) {
+  if (isCheckingAuth || !fontsReady || !themeReady) {
     return (
       <>
         <StatusBar style={statusBarStyle} />

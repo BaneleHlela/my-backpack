@@ -78,7 +78,8 @@ export interface IAnswerRecord {
   _id: string;
   profileId: string;
   questionId: string;
-  termId: string;
+  // Optional — mirrors Question.termId; absent for questions with no vocab term (e.g. mcq_general).
+  termId?: string;
   miniAppId: string;
   sessionId: string;
   responseType: ResponseType;

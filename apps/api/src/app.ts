@@ -37,8 +37,13 @@ app.use(
   })
 );
 
-// Parsing
-app.use(express.json());
+// Parsing — default body-parser JSON limit is 100kb, too small for the book-to-course
+// pipeline's POST /dashboard/courses/:courseId/book-chapters, which round-trips a whole book's
+// extractedText as plain JSON (see docs/content/book-to-course-design.md). One blanket cap
+// across all routes for simplicity, same "single generous limit" convention as the 250MB
+// multer cap on asset uploads (asset.routes.ts) — a raw extracted-text string this size is
+// still nowhere near that, but a few MB of book text needs real headroom over the 100kb default.
+app.use(express.json({ limit: '25mb' }));
 app.use(cookieParser());
 
 // Passport (no sessions — JWT only)
@@ -54,6 +59,18 @@ const authLimiter = rateLimit({
   message: { success: false, message: 'Too many requests, please try again later' },
 });
 app.use('/api/auth', authLimiter);
+
+// Stricter limit on the two unauthenticated, zero-cost-to-call endpoints that create a new
+// database record — layered on top of authLimiter above, not a replacement for it.
+const creationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please try again later' },
+});
+app.use('/api/auth/register', creationLimiter);
+app.use('/api/auth/guest', creationLimiter);
 
 // Routes
 app.use('/api/auth', authRouter);

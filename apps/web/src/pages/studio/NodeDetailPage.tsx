@@ -5,7 +5,7 @@
 // reorder exist), so authored item order is fixed at creation time for v1.
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Loader2, Plus, FileText, ListChecks } from 'lucide-react';
+import { ChevronLeft, Loader2, Plus, FileText, ListChecks, Sparkles } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../../app/store';
 import {
@@ -14,6 +14,7 @@ import {
   updateNode,
   createLesson,
   createQuiz,
+  generateNodeBookQuestions,
 } from '../../features/studio/studioSlice';
 import CurriculumTagsEditor from '../../features/studio/components/CurriculumTagsEditor';
 import type { ICurriculumTag } from '@my-backpack/shared';
@@ -33,6 +34,8 @@ export default function NodeDetailPage() {
   const [justSaved, setJustSaved] = useState(false);
   const [isAddingLesson, setIsAddingLesson] = useState(false);
   const [isAddingQuiz, setIsAddingQuiz] = useState(false);
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+  const [bookQuestionsError, setBookQuestionsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!allCoursesLoaded) void dispatch(fetchAllCourses());
@@ -99,6 +102,20 @@ export default function NodeDetailPage() {
     }
   };
 
+  // Book-to-course pipeline, Phase 4a — generates AI questions from this Topic's slice of the
+  // course's book text and attaches a new quiz to it. See docs/content/book-to-course-design.md.
+  const handleGenerateBookQuestions = async () => {
+    setBookQuestionsError(null);
+    setIsGeneratingQuestions(true);
+    const result = await dispatch(generateNodeBookQuestions({ nodeId }));
+    if (generateNodeBookQuestions.fulfilled.match(result)) {
+      await dispatch(fetchNodeDetail(nodeId));
+    } else {
+      setBookQuestionsError((result.payload as string) ?? 'Failed to generate practice questions');
+    }
+    setIsGeneratingQuestions(false);
+  };
+
   return (
     <div className="max-w-3xl">
       <button
@@ -155,6 +172,22 @@ export default function NodeDetailPage() {
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-bold text-gray-800">Items</h2>
         <div className="flex gap-2">
+          {parentCourse?.hasBookSource && (
+            <button
+              type="button"
+              onClick={() => void handleGenerateBookQuestions()}
+              disabled={isGeneratingQuestions}
+              title="Generate AI practice questions from this Topic's slice of the course's book"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-teal-100/80 text-teal-700 hover:bg-teal-200/80 disabled:opacity-60 transition-colors"
+            >
+              {isGeneratingQuestions ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="w-3.5 h-3.5" />
+              )}
+              Generate practice questions
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void handleAddLesson()}
@@ -175,6 +208,8 @@ export default function NodeDetailPage() {
           </button>
         </div>
       </div>
+
+      {bookQuestionsError && <p className="text-sm text-red-500 mb-3">{bookQuestionsError}</p>}
 
       {currentNode.items.length === 0 && (
         <p className="text-sm text-gray-400 py-6 text-center bg-white/20 rounded-2xl border border-white/30">

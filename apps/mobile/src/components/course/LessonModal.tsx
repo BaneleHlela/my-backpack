@@ -5,9 +5,14 @@
 // (file OaE5PxSOT5p8Fby7SUpoP7, node 54:1739/54:1763): drag handle, Videos/Notes tab switcher,
 // heading, video card(s), "Mark As Completed" button (violet/dark, exact Figma colour).
 //
-// Notes tab has no real content or authoring path yet — Figma only designed the Videos state, so
-// this is a placeholder ("No available notes for this lesson." + a disabled "Add notes" button),
-// not a built-out notes UI.
+// Notes tab (August 2026 addendum — book-to-course pipeline): renders any 'notes'/'steps'
+// resources the lesson actually has (react-native-markdown-display, same renderer
+// SteppedNotesViewer already used pre-Phase-C) — most importantly the book-to-course pipeline's
+// draft "Read pages X–Y: *Title*" notes resource, which this tab was previously discarding
+// entirely regardless of content. Figma never designed a Notes state, so there's still no
+// authoring UI reachable from here (that stays a Content Studio-only edit) — but a lesson that
+// actually has notes content now shows it instead of the "No available notes" placeholder,
+// which is now reserved for lessons that truly have none.
 //
 // Video-watch tracking (August 2026): a lesson with at least one video resource is, by default,
 // no longer completed by an unconditional tap — the learner must watch every video (LessonVideo's
@@ -29,14 +34,19 @@
 // when `activeLessonId` transitions from null to a value, so every open is a fresh mount — this
 // component's own state never needs a lessonId-keyed reset effect.
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { useDispatch, useSelector } from 'react-redux';
+import { BlurView } from 'expo-blur';
+import Markdown from 'react-native-markdown-display';
 import { BookOpen, Video, X } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { ApiResponse, ItemCompletionResult } from '@my-backpack/shared';
 import api from '../../lib/api';
 import { fetchLesson, clearLesson } from '../../features/roadmap/roadmapSlice';
 import { LessonVideo } from '../lesson/LessonVideo';
+import { SteppedNotesViewer } from '../lesson/SteppedNotesViewer';
+import { createMarkdownStyles } from '../lesson/markdownStyles';
 import { PrimaryButton } from '../PrimaryButton';
 import type { AppDispatch, RootState } from '../../store/store';
 import { useTheme } from '../../theme/ThemeContext';
@@ -57,6 +67,10 @@ const CONTINUE_ANYWAY_TIMEOUT_MS = 90000;
 export default function LessonModal({ lessonId, onClose, onCompleted }: LessonModalProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  // Only used by the notes markdown below — content sits inside its own glass-styled card
+  // (styles.notesCard), so glassText (not text) is the correct token set here, same reasoning
+  // as SteppedNotesViewer's own use of it.
+  const markdownStyles = createMarkdownStyles(colors);
   const dispatch = useDispatch<AppDispatch>();
   const { currentLesson, currentLessonProgress, isLoading } = useSelector(
     (state: RootState) => state.roadmap
@@ -91,6 +105,12 @@ export default function LessonModal({ lessonId, onClose, onCompleted }: LessonMo
 
   const videoResources = currentLesson
     ? [...currentLesson.resources].filter((r) => r.type === 'video').sort((a, b) => a.position - b.position)
+    : [];
+  const notesResources = currentLesson
+    ? [...currentLesson.resources].filter((r) => r.type === 'notes').sort((a, b) => a.position - b.position)
+    : [];
+  const stepsResources = currentLesson
+    ? [...currentLesson.resources].filter((r) => r.type === 'steps').sort((a, b) => a.position - b.position)
     : [];
 
   const allVideosWatched =
@@ -182,11 +202,27 @@ export default function LessonModal({ lessonId, onClose, onCompleted }: LessonMo
                     ) : null
                   )
                 )
-              ) : (
+              ) : notesResources.length === 0 && stepsResources.length === 0 ? (
                 <View style={styles.notesEmpty}>
                   <Text style={styles.emptyText}>No available notes for this lesson.</Text>
                   <PrimaryButton title="Add notes" onPress={() => {}} disabled />
                 </View>
+              ) : (
+                <>
+                  {notesResources.map((resource, i) =>
+                    resource.markdown ? (
+                      <View key={`notes-${i}`} style={styles.notesCard}>
+                        <BlurView intensity={30} tint="light" style={StyleSheet.absoluteFill} />
+                        <Markdown style={markdownStyles}>{resource.markdown}</Markdown>
+                      </View>
+                    ) : null
+                  )}
+                  {stepsResources.map((resource, i) =>
+                    resource.steps?.length ? (
+                      <SteppedNotesViewer key={`steps-${i}`} steps={resource.steps} />
+                    ) : null
+                  )}
+                </>
               )}
             </ScrollView>
           )}
@@ -295,6 +331,18 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: spacing.md,
       paddingVertical: spacing.lg,
+    },
+    notesCard: {
+      padding: spacing.md,
+      borderRadius: radii.md,
+      backgroundColor: colors.surface.glassSoft,
+      // Clips the BlurView's absoluteFill to the rounded corners — matching GlassCard.tsx's own
+      // wrapper recipe. Without the BlurView here, this translucent white fill (surface.glass* is
+      // unchanged between themes — see theme.ts) composites against LessonModal's flat solid
+      // colors.background sheet into a dark, muddy fill in dark mode, making glassText.primary
+      // (near-black) illegible on top of it — the exact "grey text invisible in dark mode" bug
+      // class documented on IThemeColors.glassText.
+      overflow: 'hidden',
     },
     completeButton: {
       backgroundColor: colors.primary.dark,

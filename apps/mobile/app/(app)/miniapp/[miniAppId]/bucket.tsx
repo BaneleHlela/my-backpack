@@ -1,7 +1,8 @@
 // Ports apps/web's BucketPage/BucketPage.tsx — status filter tabs, sort,
 // list of bucketed terms with confidence/accuracy info and a remove action.
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../../../../src/components/AppText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { BookOpen } from 'lucide-react-native';
@@ -18,6 +19,7 @@ import {
 } from '../../../../src/features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../../../src/store/store';
 import { useTheme } from '../../../../src/theme/ThemeContext';
+import { fonts } from '../../../../src/theme/fonts';
 
 type StatusFilter = 'all' | 'learning' | 'mastered' | 'paused';
 type SortOption = 'recent' | 'alphabetical' | 'confidence' | 'accuracy' | 'lastPracticed' | 'dueForReview';
@@ -99,82 +101,59 @@ export default function BucketScreen() {
 
   return (
     <View style={styles.flex}>
-      <View style={styles.header}>
-        <Menubar
-          label={`Back to ${name ?? 'Dictionary'}`}
-          onBackPress={() => router.replace({ pathname: '/(app)/miniapp/[miniAppId]', params: { miniAppId, name } })}
-          style={styles.menubar}
-        />
-        <Text style={styles.title}>My Bucket</Text>
-
-        <View style={styles.tabs}>
-          {STATUS_TABS.map((tab) => (
-            <Pressable
-              key={tab.value}
-              onPress={() => dispatch(setBucketStatusFilter(tab.value))}
-              style={[styles.tab, bucketStatusFilter === tab.value ? styles.tabActive : null]}
-            >
-              <Text style={[styles.tabText, bucketStatusFilter === tab.value ? styles.tabTextActive : null]}>
-                {tab.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
-          {SORT_OPTIONS.map((opt) => (
-            <Pressable
-              key={opt.value}
-              onPress={() => setSortBy(opt.value)}
-              style={[styles.sortChip, sortBy === opt.value ? styles.sortChipActive : null]}
-            >
-              <Text style={[styles.sortChipText, sortBy === opt.value ? styles.sortChipTextActive : null]}>
-                {opt.label}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
-
-      {bucketLoading ? <ActivityIndicator color={colors.primary.light} style={styles.loading} /> : null}
-
-      {bucketError && !bucketLoading ? (
-        <GlassCard intensity="soft" style={styles.margin}>
-          <Text style={styles.errorText}>{bucketError}</Text>
-        </GlassCard>
-      ) : null}
-
-      {!bucketLoading && !bucketError && sortedBucket.length === 0 ? (
-        <View style={styles.emptyState}>
-          <BookOpen size={40} color={colors.primary.light} />
-          <Text style={styles.emptyTitle}>Your bucket is empty</Text>
-          <Text style={styles.emptyBody}>
-            Search the dictionary and add words you want to learn — they'll show up here.
-          </Text>
-          <PrimaryButton
-            title="Browse the dictionary"
-            onPress={() => router.replace({ pathname: '/(app)/miniapp/[miniAppId]', params: { miniAppId, name } })}
-            style={styles.emptyButton}
-          />
-        </View>
-      ) : null}
-
-      {!bucketLoading && !bucketError && sortedBucket.length > 0 ? (
-        <FlatList
-          data={sortedBucket}
-          keyExtractor={(item) => item.entry._id}
-          contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          renderItem={({ item }) => (
-            <BucketEntryCard
-              entry={item}
-              onSelect={goToTerm}
-              onRemove={(termId) => dispatch(removeBucketEntry({ termId, miniAppId }))}
-              isRemoving={removingTermIds.includes(item.entry.termId)}
+      <FlatList
+        stickyHeaderIndices={[0]}
+        data={sortedBucket}
+        keyExtractor={(item) => item.entry._id}
+        contentContainerStyle={styles.listContent}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <Menubar
+              label={`Back to ${name ?? 'Dictionary'}`}
+              onBackPress={() => router.replace({ pathname: '/(app)/miniapp/[miniAppId]', params: { miniAppId, name } })}
+              style={styles.menubar}
             />
-          )}
-        />
-      ) : null}
+            <Text style={styles.title}>My Bucket</Text>
+
+            <View style={styles.tabs}>
+              {STATUS_TABS.map((tab) => (
+                <Pressable
+                  key={tab.value}
+                  onPress={() => dispatch(setBucketStatusFilter(tab.value))}
+                  style={[styles.tab, bucketStatusFilter === tab.value ? styles.tabActive : null]}
+                >
+                  <Text style={[styles.tabText, bucketStatusFilter === tab.value ? styles.tabTextActive : null]}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
+              {SORT_OPTIONS.map((opt) => (
+                <Pressable
+                  key={opt.label}
+                  onPress={() => setSortBy(opt.value)}
+                  style={[styles.sortChip, sortBy === opt.value ? styles.sortChipActive : null]}
+                >
+                  <Text style={[styles.sortChipText, sortBy === opt.value ? styles.sortChipTextActive : null]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <BucketEntryCard
+            entry={item}
+            onSelect={goToTerm}
+            onRemove={(termId) => dispatch(removeBucketEntry({ termId, miniAppId }))}
+            isRemoving={removingTermIds.includes(item.entry.termId)}
+          />
+        )}
+      />
     </View>
   );
 }
@@ -185,15 +164,15 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     flex: 1,
   },
   header: {
-    padding: spacing.lg,
+    padding: spacing.md,
     paddingBottom: spacing.sm,
   },
   menubar: {
     marginBottom: spacing.sm,
   },
   title: {
+    fontFamily: fonts.display.bold,
     fontSize: typography.headingLg,
-    fontWeight: '700',
     color: colors.text.primary,
     marginBottom: spacing.md,
   },
@@ -278,7 +257,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     marginTop: spacing.sm,
   },
   listContent: {
-    padding: spacing.lg,
+    padding: spacing.md,
     paddingTop: 0,
   },
   separator: {

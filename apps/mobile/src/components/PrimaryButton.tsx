@@ -1,4 +1,5 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Text } from './AppText';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { useTheme } from '../theme/ThemeContext';
 

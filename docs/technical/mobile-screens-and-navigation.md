@@ -83,6 +83,7 @@ flowchart TD
     Guard -->|full token, setup incomplete| ProfileSetup[Profile Setup]
     Guard -->|full token, setup complete| Home
     Login -->|success| SelectProfile
+    Login -->|Continue as guest\nsee guest-mode.md| Home
     SelectProfile -->|profile chosen| Guard
     ProfileSetup --> Home
     Home --> Subject
@@ -202,8 +203,8 @@ The native splash image stays up (`SplashScreen.preventAutoHideAsync()`) while a
 ### Authentication
 
 **Route:** `/(auth)/login` · **File:** `(auth)/login.tsx`
-Email + password over the wallpaper background. Handles one case beyond a wrong password specifically: logging in against an unverified email surfaces a distinct "check your inbox" message rather than a generic error.
-**Data:** `auth` slice, `login` thunk. **Goes to:** success → `replace('/select-profile')`; Signup link → `/(auth)/signup`.
+Email + password over the wallpaper background. Handles one case beyond a wrong password specifically: logging in against an unverified email surfaces a distinct "check your inbox" message rather than a generic error. A third action, "Continue as guest" (August 2026 — see [guest-mode.md](guest-mode.md)), sits below the Sign in/Sign up block as a visually secondary text link — the fast path, not the primary one.
+**Data:** `auth` slice, `login` thunk (guest path: `continueAsGuest` then `fetchActiveProfile`). **Goes to:** success → `replace('/select-profile')`; guest → `replace('/(app)/home')` directly, no Select Profile hop; Signup link → `/(auth)/signup`.
 
 **Route:** `/(auth)/signup` · **File:** `(auth)/signup.tsx`
 Name + email + password + confirm, with client-side length/match checks before the API call. On success the form is swapped in place for a "check your inbox" message (no separate route) with a link back to Login.
@@ -367,7 +368,18 @@ Rough placement: `(auth)/forgot-password.tsx`, `(auth)/reset-password/[token].ts
 
 ### 6.2 A proper launch screen
 
-"Launch" today is just `expo-splash-screen`'s default behaviour — the plugin is listed in `app.json` with no image/background/resize configuration, so nothing designed actually happens while `bootstrapAuth()` resolves. Given the brand has a defined visual identity (and `docs/design/asset-locations.md` already reserves — but hasn't populated — a GCS folder for onboarding illustrations), this is a natural first-impression moment to design deliberately rather than leave at the platform default.
+**Updated — this is stale.** A designed launch screen already exists: `LaunchScreen.tsx` is a
+deliberately branded logo+spinner treatment, reused across every loading gate in the app (not
+just the cold-start `bootstrapAuth()` moment this section originally described). This section
+previously claimed nothing designed happens here at all — not accurate as of the screens that
+now render it.
+
+Separately, and genuinely new (guest mode, August 2026 — see
+[guest-mode.md](guest-mode.md)): the Login screen gained a third entry-point choice,
+"Continue as guest," alongside Sign in / Sign up. Don't conflate the two — the launch screen is
+about what's shown *while things load*; the guest entry point is about *which auth path* a
+learner picks once Login itself is showing. Nothing about `LaunchScreen.tsx` changed to
+accommodate guest mode.
 
 ### 6.3 A 404 / not-found route
 
@@ -375,11 +387,31 @@ Expo Router has a standard convention for this — a `+not-found.tsx` at the app
 
 ### 6.4 Settings / Account — and the profile-switch gap it needs to solve
 
-The biggest structural gap found: **there is currently no way to sign out, or switch to a different profile, from anywhere inside `(app)`.** The only "Sign out" button in the app lives on the Select Profile screen, reachable today only via a fresh login or a guard redirect. Once a profile is active, the learner is in `(app)` with no account-level screen at all — matches CLAUDE.md's own checklist, which still has "Profile management screens" unticked.
+**Updated — this gap is solved.** `Menubar.tsx` (present on every `(app)` screen, tapping the
+avatar) plus `ProfileSwitcherModal.tsx` (August 2026) now provide exactly what this section
+originally called for: sign out, and switching to a different profile, from anywhere inside
+`(app)`. The design this section sketched — "the account stays authenticated while only the
+active-profile selection resets" — is what got built: `ProfileSwitcherModal` calls the same
+`selectProfile` → `fetchActiveProfile` → resume-last-route flow `select-profile.tsx` uses,
+without ever touching `/select-profile` itself, so the guard conflict this section warned about
+never comes up.
 
-This isn't just "add a Settings screen with a Sign-out row," though. `ProtectedRoute`'s Select-Profile branch actively redirects to Home whenever a full `accessToken` exists (§4.1), so a naive "Switch profile" link would just bounce back to Home. And unlike the moment right after login, the `partialToken` Select Profile normally depends on is cleared the instant a profile is first chosen (`selectProfile.fulfilled` nulls it out) — so there's no fallback token to lean on either. A real profile-switcher needs a distinct path: either the account stays authenticated while only the active-profile selection resets (a new "switch profile" action, plus a guard branch that allows Select Profile with a full token when reached deliberately), or a dedicated re-list-profiles call that doesn't require re-deriving anything from a login step. Worth designing this explicitly rather than hitting the guard conflict mid-implementation.
+`ProfileSwitcherModal` also now carries (guest mode, August 2026 — see
+[guest-mode.md](guest-mode.md)) a **"Save your progress" row**, shown only when the active
+profile is a guest (`activeProfile.isGuest`), opening `ClaimAccountModal` to add email/password
+credentials to the same account in place — no logout, no new profile.
 
-Rough placement: `(app)/settings/index.tsx`, reachable from Home — and the natural eventual home for profile-management screens (edit profile, change PIN, avatar).
+**Still open, not fixed by any of the above:** "Add Profile" (in the same modal) is still a dead
+end for anyone already holding a full access token — it navigates to `/select-profile`, which
+`ProtectedRoute`'s `requireFullToken:false` guard immediately redirects back to `/(app)/home`
+the moment a full token exists (§4.1's bottom-right guard cell). No "create a new profile" form
+exists on either platform yet — CLAUDE.md's checklist still has "Profile management screens"
+unticked. Guest mode's own build explicitly declined to fix this while touching the same modal
+— see guest-mode.md's "what was deliberately not built here."
+
+Rough placement for the remaining gap: `(app)/settings/index.tsx` or a proper "create profile"
+screen reachable from `ProfileSwitcherModal`'s "Add Profile" row — the natural eventual home for
+profile-management screens (edit profile, change PIN, avatar) more broadly.
 
 ### 6.5 OAuth on native
 

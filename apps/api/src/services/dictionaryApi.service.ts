@@ -1,40 +1,60 @@
-﻿// Wraps the Free Dictionary API (https://api.dictionaryapi.dev/api/v2/entries/en/{word}).
-// searchWord() makes the HTTP request and returns the raw API entries.
+// Wraps the Merriam-Webster Collegiate Dictionary API.
+// searchWord() makes the HTTP request and normalises Merriam-Webster's response into the
+// dictionary shape used by the rest of the vocabulary service.
 // parseAndStoreTerm() is idempotent: it creates Term + Definition documents on first lookup,
 // or returns the existing documents if the word was already searched before.
-//
-// The API can return multiple "entries" for the same word (each entry may cover different
-// etymologies or parts of speech). We flatten all meanings from all entries into individual
-// Definition documents, deduplicating synonyms/antonyms at the definition level.
 import https from 'https';
 import Term, { ITermDocument } from '../models/apps/language/vocabulary/term.model';
 import Definition, { IDefinitionDocument } from '../models/apps/language/vocabulary/definition.model';
 
-interface ApiDefinition {
+interface MerriamWebsterPronunciation {
+  mw?: string;
+  sound?: {
+    audio?: string;
+  };
+}
+
+interface MerriamWebsterEntry {
+  meta?: {
+    id?: string;
+    stems?: string[];
+  };
+  hwi?: {
+    hw?: string;
+    prs?: MerriamWebsterPronunciation[];
+  };
+  fl?: string;
+  shortdef?: string[];
+  suppl?: {
+    examples?: Array<{ t?: string }>;
+  };
+}
+
+interface DictionaryApiDefinition {
   definition: string;
   example?: string;
   synonyms: string[];
   antonyms: string[];
 }
 
-interface ApiMeaning {
+interface DictionaryApiMeaning {
   partOfSpeech: string;
-  definitions: ApiDefinition[];
+  definitions: DictionaryApiDefinition[];
   synonyms: string[];
   antonyms: string[];
 }
 
-interface ApiPhonetic {
+interface DictionaryApiPhonetic {
   text?: string;
   audio?: string;
 }
 
-interface ApiEntry {
+interface DictionaryApiEntry {
   word: string;
   phonetic?: string;
   origin?: string;
-  phonetics?: ApiPhonetic[];
-  meanings: ApiMeaning[];
+  phonetics?: DictionaryApiPhonetic[];
+  meanings: DictionaryApiMeaning[];
 }
 
 export interface ParsedTerm {
@@ -43,52 +63,142 @@ export interface ParsedTerm {
   isNew: boolean;
 }
 
-// Requests to the Free Dictionary API give up after this long — a hang here previously had
-// nothing else to catch it (no server or client timeout either), so the request would sit open
-// until Render's proxy (or Cloudflare, on a fronted domain) killed it, surfacing as an opaque
-// 502/522 to the browser instead of a clean, fast error.
+const MERRIAM_WEBSTER_API_KEY = process.env.MERRIAM_WEBSTER_API_KEY;
 const DICTIONARY_API_TIMEOUT_MS = 8000;
+const DICTIONARY_API_BASE_URL = 'https://www.dictionaryapi.com/api/v3/references/collegiate/json';
 
-// Fetches a word from the Free Dictionary API. Throws on 404 (word not found), API errors, or timeout.
-export function searchWord(word: string): Promise<ApiEntry[]> {
+if (!MERRIAM_WEBSTER_API_KEY) {
+  console.warn('MERRIAM_WEBSTER_API_KEY is not configured; vocabulary searches will fail until it is set.');
+}
+
+function buildAudioUrl(audio: string): string {
+  let subdirectory: string;
+
+  if (audio.startsWith('bix')) {
+    subdirectory = 'bix';
+  } else if (audio.startsWith('gg')) {
+    subdirectory = 'gg';
+  } else if (/^[0-9_]/.test(audio)) {
+    subdirectory = 'number';
+  } else {
+    subdirectory = audio.charAt(0);
+  }
+
+  return `https://media.merriam-webster.com/audio/prons/en/us/mp3/${subdirectory}/${audio}.mp3`;
+}
+
+function stripMarkup(text: string): string {
+  return text
+    .replace(/\{\/?.*?\|/g, '')
+    .replace(/\{\/?.*?\}/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function toDictionaryEntries(entries: MerriamWebsterEntry[]): DictionaryApiEntry[] {
+  return entries
+    .filter((entry) => Array.isArray(entry.shortdef) && entry.shortdef.length > 0)
+    .map((entry) => {
+      const word = (entry.meta?.stems?.[0] ?? entry.meta?.id ?? '').split(':')[0].trim();
+      const pronunciation = entry.hwi?.prs?.find((p) => p.mw)?.mw;
+      const audio = entry.hwi?.prs?.find((p) => p.sound?.audio)?.sound?.audio;
+      const examples = (entry.suppl?.examples ?? [])
+        .map((example) => example.t)
+        .filter((example): example is string => Boolean(example))
+        .map(stripMarkup);
+
+      return {
+        word,
+        phonetic: pronunciation,
+        phonetics: audio ? [{ audio: buildAudioUrl(audio) }] : [],
+        meanings: [
+          {
+            partOfSpeech: entry.fl ?? 'unknown',
+            definitions: (entry.shortdef ?? []).map((definition, index) => ({
+              definition: stripMarkup(definition),
+              example: examples[index] ?? examples[0],
+              synonyms: [],
+              antonyms: [],
+            })),
+            synonyms: [],
+            antonyms: [],
+          },
+        ],
+      };
+    });
+}
+
+// Fetches a word from Merriam-Webster's Collegiate Dictionary API.
+// Merriam-Webster returns either dictionary entries or an array of spelling suggestions.
+export function searchWord(word: string): Promise<DictionaryApiEntry[]> {
   const normalised = word.toLowerCase().trim();
-  const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(normalised)}`;
+
+  if (!normalised) {
+    return Promise.reject(new Error('Word not found: ""'));
+  }
+
+  if (!MERRIAM_WEBSTER_API_KEY) {
+    return Promise.reject(new Error('Merriam-Webster API key is not configured'));
+  }
+
+  const url = `${DICTIONARY_API_BASE_URL}/${encodeURIComponent(normalised)}?key=${encodeURIComponent(MERRIAM_WEBSTER_API_KEY)}`;
 
   return new Promise((resolve, reject) => {
     const req = https.get(url, (res) => {
       let raw = '';
+
       res.on('data', (chunk: Buffer) => {
         raw += chunk.toString();
       });
+
       res.on('end', () => {
-        if (res.statusCode === 404) {
-          reject(new Error(`Word not found: "${word}"`));
-          return;
-        }
         if (res.statusCode !== 200) {
-          reject(new Error(`Dictionary API returned status ${String(res.statusCode)}`));
+          reject(new Error(`Merriam-Webster API returned status ${String(res.statusCode)}`));
           return;
         }
+
         try {
-          const data = JSON.parse(raw) as ApiEntry[];
-          resolve(data);
+          const data = JSON.parse(raw) as unknown;
+
+          if (!Array.isArray(data)) {
+            reject(new Error('Invalid Merriam-Webster API response'));
+            return;
+          }
+
+          const entries = data.filter(
+            (item): item is MerriamWebsterEntry => typeof item === 'object' && item !== null
+          );
+          const parsedEntries = toDictionaryEntries(entries);
+
+          if (parsedEntries.length === 0) {
+            const suggestions = data.filter((item): item is string => typeof item === 'string');
+            const suggestionText = suggestions.length > 0
+              ? ` Suggestions: ${suggestions.slice(0, 5).join(', ')}`
+              : '';
+            reject(new Error(`Word not found: "${word}".${suggestionText}`));
+            return;
+          }
+
+          resolve(parsedEntries);
         } catch {
-          reject(new Error('Failed to parse Dictionary API response'));
+          reject(new Error('Failed to parse Merriam-Webster API response'));
         }
       });
+
       res.on('error', (err: Error) => reject(err));
     });
+
     req.on('error', (err: Error) => reject(err));
     req.setTimeout(DICTIONARY_API_TIMEOUT_MS, () => {
-      req.destroy(new Error('Dictionary API request timed out'));
+      req.destroy(new Error('Merriam-Webster API request timed out'));
     });
   });
 }
 
-// Creates Term + Definition documents from raw API entries.
+// Creates Term + Definition documents from normalised dictionary entries.
 // Idempotent — returns existing documents if the word was previously stored.
 export async function parseAndStoreTerm(
-  entries: ApiEntry[],
+  entries: DictionaryApiEntry[],
   miniAppId: string
 ): Promise<ParsedTerm> {
   const first = entries[0];
@@ -120,7 +230,6 @@ export async function parseAndStoreTerm(
   for (const entry of entries) {
     for (const meaning of entry.meanings) {
       for (const def of meaning.definitions) {
-        // Merge synonyms/antonyms from the meaning level and the definition level
         const synonyms = Array.from(new Set([...meaning.synonyms, ...def.synonyms]));
         const antonyms = Array.from(new Set([...meaning.antonyms, ...def.antonyms]));
 

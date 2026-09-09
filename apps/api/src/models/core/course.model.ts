@@ -11,6 +11,19 @@ export interface ICourseCurriculumTag {
   gradeLevel: string;
 }
 
+// Set when this Course was created (or later populated) via the book-to-course pipeline —
+// see docs/content/book-to-course-design.md. `pdfPath` is a GCS path (not a full URL, the
+// usual convention), `extractedText` is the raw, mechanically-extracted book text used both
+// to propose/create chapters (Phases 2-3) and to ground the AI Helper (Phase 5). Deliberately
+// NOT exposed on ICourseSummary or any public/dashboard read serializer — extractedText can
+// be large (a whole book) and the frontend never needs it directly; where Studio needs to know
+// only *whether* a course has a book attached, a derived `hasBookSource` boolean is added to
+// the relevant dashboard course-write response instead (see course.controller.ts).
+export interface ICourseBookSource {
+  pdfPath: string;
+  extractedText: string;
+}
+
 export interface ICourseDocument extends Document {
   _id: Types.ObjectId;
   subjectId: Types.ObjectId;
@@ -23,6 +36,7 @@ export interface ICourseDocument extends Document {
   curriculumTags: ICourseCurriculumTag[];
   team?: unknown; // Reserved for future multi-instructor/team feature — see
                   // docs/product/course-marketplace-vision.md. No shape or behavior yet.
+  bookSource?: ICourseBookSource;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -40,6 +54,14 @@ const courseCurriculumTagSchema = new Schema<ICourseCurriculumTag>(
   { _id: false }
 );
 
+const courseBookSourceSchema = new Schema<ICourseBookSource>(
+  {
+    pdfPath: { type: String, required: true },
+    extractedText: { type: String, required: true },
+  },
+  { _id: false }
+);
+
 const courseSchema = new Schema<ICourseDocument>(
   {
     subjectId: { type: Schema.Types.ObjectId, ref: 'Subject', required: true },
@@ -51,6 +73,7 @@ const courseSchema = new Schema<ICourseDocument>(
     miniAppIds: { type: [Schema.Types.ObjectId], ref: 'MiniApp', default: [] },
     curriculumTags: { type: [courseCurriculumTagSchema], default: [] },
     team: { type: Schema.Types.Mixed },
+    bookSource: { type: courseBookSourceSchema, default: undefined },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

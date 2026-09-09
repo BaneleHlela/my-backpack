@@ -24,7 +24,10 @@ export interface IAnswerRecordDocument extends Document {
   _id: Types.ObjectId;
   profileId: Types.ObjectId;
   questionId: Types.ObjectId;
-  termId: Types.ObjectId;
+  // Optional — mirrors Question.termId. Absent for questions with no vocab term backing them
+  // (e.g. mcq_general, some mcq_audio) — those skip the adaptive-learning/LearningRecord step
+  // entirely (see quizSession.service.ts's captureAnswer).
+  termId?: Types.ObjectId;
   miniAppId: Types.ObjectId;
   sessionId: Types.ObjectId;
   responseType: ResponseType;
@@ -49,7 +52,7 @@ const answerRecordSchema = new Schema<IAnswerRecordDocument>(
   {
     profileId: { type: Schema.Types.ObjectId, ref: 'Profile', required: true },
     questionId: { type: Schema.Types.ObjectId, ref: 'Question', required: true },
-    termId: { type: Schema.Types.ObjectId, ref: 'Term', required: true },
+    termId: { type: Schema.Types.ObjectId, ref: 'Term' },
     miniAppId: { type: Schema.Types.ObjectId, ref: 'MiniApp', required: true },
     sessionId: { type: Schema.Types.ObjectId, ref: 'QuizSession', required: true },
     responseType: {
@@ -57,7 +60,19 @@ const answerRecordSchema = new Schema<IAnswerRecordDocument>(
       enum: ['mcq_selection', 'text_input', 'voice_transcript', 'true_false'],
       required: true,
     },
-    rawResponse: { type: String, required: true },
+    rawResponse: {
+      type: String,
+      default: '',
+      // A skip/timeout deliberately has no response. Mongoose's required string validator
+      // rejects '', even though captureAnswer already grades these records as zero points.
+      required: function (this: IAnswerRecordDocument) {
+        return !this.wasSkipped && !this.wasTimedOut;
+      },
+      validate: {
+        validator: (value: string) => value === '' || value.trim().length > 0,
+        message: 'An answer is required unless the question was skipped or timed out.',
+      },
+    },
     selectedOptionIndex: { type: Number },
     maxPoints: { type: Number, required: true },
     pointsAwarded: { type: Number, required: true },

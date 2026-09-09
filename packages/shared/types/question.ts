@@ -15,6 +15,7 @@ export type QuestionType =
   | 'text_input_audio'
   | 'text_input_example'
   | 'mcq_audio'
+  | 'mcq_general'
   | 'dnd_single'
   | 'dnd_select'
   | 'dnd_count'
@@ -80,7 +81,9 @@ export interface IQuestionHelpers {
   hintsAllowed: number;
   hintDelaySeconds: number;
   retryUntilCorrect: boolean; // DnD: wrong drops are rejected client-side and must be retried —
-                              // never submitted to the server; no skip is offered while true
+                              // never submitted to the server; no skip is offered while true.
+                              // Each rejected attempt costs 1 point (deducted from maxPoints,
+                              // floored at 0) once the question is finally answered correctly.
   shuffleDraggables: boolean; // DnD: randomize the draggable pool's display order once per
                               // question load, instead of the authored content.draggables order
 }

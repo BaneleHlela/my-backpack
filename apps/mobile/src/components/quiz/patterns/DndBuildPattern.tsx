@@ -18,18 +18,13 @@
 //     the learner can fix one letter without restarting the whole word.
 // helpers.retryUntilCorrect, where a future question does set it, still applies per-blank the
 // same way it does for dnd_single: a wrong tile is rejected at drop time (bounces back +
-// tryAgainFeedback) rather than ever landing.
+// tryAgainFeedback) rather than ever landing. Each rejection is counted locally
+// (wrongAttemptsRef) and sent with the eventual submission — evaluateDnDAnswer() server-side
+// deducts one point per wrong attempt from maxPoints (floored at 0).
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import {
-  Image,
-  ImageBackground,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Image, ImageBackground, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Text } from '../../AppText';
 import { Lightbulb, Volume2 } from 'lucide-react-native';
 import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
@@ -37,6 +32,7 @@ import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useSpeak } from '../../../lib/useSpeak';
 import { DndTile, DndTileHandle, Rect, clampTileSize, playAsset, pointInRect, shuffle } from './DndTile';
 import { useTheme } from '../../../theme/ThemeContext';
+import { fonts } from '../../../theme/fonts';
 import type { QuestionPatternHandle, QuestionPatternReadyProps } from './questionPatternTypes';
 
 interface DndBuildPatternProps extends QuestionPatternReadyProps {
@@ -71,6 +67,9 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
   );
   const [genKey, setGenKey] = useState(0);
   const submittedRef = useRef(false);
+  // Counts rejected (retryUntilCorrect) drops for the current question — sent with the final
+  // submission so the server can deduct a point per wrong attempt.
+  const wrongAttemptsRef = useRef(0);
   const tileRefs = useRef<Map<string, DndTileHandle>>(new Map());
   const zoneRefs = useRef<Map<string, View>>(new Map());
   const zoneRectsRef = useRef<Map<string, Rect>>(new Map());
@@ -82,13 +81,20 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
     setHintsRemaining(helpers.hintsAllowed);
     setHintActive(false);
     setHintButtonReady(helpers.hintDelaySeconds === 0);
-    setOrderedDraggables(helpers.shuffleDraggables ? shuffle(content.draggables ?? []) : (content.draggables ?? []));
+    setOrderedDraggables(
+      helpers.shuffleDraggables ? shuffle(content.draggables ?? []) : (content.draggables ?? [])
+    );
     setGenKey((k) => k + 1);
     submittedRef.current = false;
+    wrongAttemptsRef.current = 0;
     tileRefs.current.clear();
     zoneRectsRef.current.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
+
+  useEffect(() => {
+    if (!disabled) submittedRef.current = false;
+  }, [disabled]);
 
   useEffect(() => {
     if (helpers.hintDelaySeconds === 0 || hintButtonReady) return;
@@ -110,7 +116,7 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
     if (disabled || submittedRef.current || !allFilled) return;
     submittedRef.current = true;
     const placementsArr = dropZones.map((z) => ({ draggableId: placements[z.id]!, dropZoneId: z.id }));
-    onAnswer(JSON.stringify({ placements: placementsArr }));
+    onAnswer(JSON.stringify({ placements: placementsArr, wrongAttempts: wrongAttemptsRef.current }));
   };
 
   useEffect(() => {
@@ -118,17 +124,15 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allFilled]);
 
-  // autoSubmit questions submit themselves the instant every blank fills — the global Submit
-  // button stays disabled for those the whole time, matching "always visible but disabled when
-  // not used".
+  // Auto-submit once when filled, but allow a manual retry if that request fails.
   useImperativeHandle(ref, () => ({
     submit: () => {
-      if (!helpers.autoSubmit) submit();
+      submit();
     },
   }));
 
   useEffect(() => {
-    onReadyChange?.(!helpers.autoSubmit && allFilled && !disabled);
+    onReadyChange?.(allFilled && !disabled);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allFilled, helpers.autoSubmit, disabled]);
 
@@ -144,7 +148,9 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
       return;
     }
 
-    const targetZone = dropZones.find((z) => pointInRect(absoluteX, absoluteY, zoneRectsRef.current.get(z.id)));
+    const targetZone = dropZones.find((z) =>
+      pointInRect(absoluteX, absoluteY, zoneRectsRef.current.get(z.id))
+    );
     if (!targetZone) {
       tileRefs.current.get(item.id)?.snapBack();
       return;
@@ -152,6 +158,8 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
 
     const isCorrectDrop = targetZone.requiredDraggableIds.includes(item.id);
     if (helpers.retryUntilCorrect && !isCorrectDrop) {
+      // Counted toward the point deduction applied once the question is finally submitted.
+      wrongAttemptsRef.current += 1;
       tileRefs.current.get(item.id)?.snapBack();
       playAsset(content.tryAgainFeedback?.audioUrl);
       setWrongZoneId(targetZone.id);
@@ -192,7 +200,10 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
 
   const dragAreaBackground = resolveAssetUrl(content.dragAreaImageUrl);
   const wrongAvatarUrl = content.avatar
-    ? ASSETS.AVATARS.image(content.avatar.avatarId, content.tryAgainFeedback?.avatarEmotion ?? content.avatar.emotion)
+    ? ASSETS.AVATARS.image(
+        content.avatar.avatarId,
+        content.tryAgainFeedback?.avatarEmotion ?? content.avatar.emotion
+      )
     : undefined;
   const promptAvatarUrl = content.avatar
     ? ASSETS.AVATARS.image(content.avatar.avatarId, content.avatar.emotion)
@@ -241,6 +252,7 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
                 if (v) zoneRefs.current.set(zone.id, v);
                 else zoneRefs.current.delete(zone.id);
               }}
+              collapsable={false}
               onLayout={() => measureZone(zone.id)}
               style={[
                 styles.blank,
@@ -283,7 +295,10 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
             draggable
             isChild={isChild}
             onTap={playItemAudio}
-            onDragStart={playItemAudio}
+            onDragStart={(item) => {
+              dropZones.forEach((zone) => measureZone(zone.id));
+              playItemAudio(item);
+            }}
             onDropAttempt={handleDropAttempt}
           />
         ))}
@@ -298,7 +313,11 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
   if (!dragAreaBackground) return body;
 
   return (
-    <ImageBackground source={{ uri: dragAreaBackground }} style={styles.dragAreaBackground} resizeMode="cover">
+    <ImageBackground
+      source={{ uri: dragAreaBackground }}
+      style={styles.dragAreaBackground}
+      resizeMode="cover"
+    >
       {body}
     </ImageBackground>
   );
@@ -306,98 +325,100 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
-  dragAreaBackground: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  promptRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  promptAvatar: {
-    width: 32,
-    height: 32,
-  },
-  promptBubble: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: radii.lg,
-    borderWidth: 2,
-    borderColor: colors.primary.light,
-    padding: spacing.sm,
-  },
-  promptBubbleChild: {
-    padding: spacing.md,
-    borderWidth: 3,
-  },
-  promptText: {
-    fontSize: typography.body,
-    color: colors.text.primary,
-  },
-  promptTextChild: {
-    fontSize: typography.headingLg,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  promptButtons: {
-    gap: spacing.xs,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.warning.light,
-  },
-  iconButtonDisabled: {
-    opacity: 0.4,
-  },
-  blanksRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  blank: {
-    width: 64,
-    height: 64,
-    borderRadius: radii.md,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: colors.surface.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  blankChild: {
-    borderRadius: radii.lg,
-    borderWidth: 3,
-    borderColor: colors.primary.light,
-  },
-  blankWrong: {
-    borderColor: colors.error.DEFAULT,
-    borderStyle: 'solid',
-  },
-  blankLabel: {
-    fontSize: typography.headingLg,
-    fontWeight: '700',
-    color: colors.text.faint,
-  },
-  poolRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  wrongAvatar: {
-    width: 72,
-    height: 72,
-    alignSelf: 'center',
-  },
+    dragAreaBackground: {
+      flexGrow: 1,
+    },
+    container: {
+      flexGrow: 1,
+      gap: spacing.md,
+      padding: spacing.md,
+    },
+    promptRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+    },
+    promptAvatar: {
+      width: 32,
+      height: 32,
+    },
+    promptBubble: {
+      flex: 1,
+      backgroundColor: '#fff',
+      borderRadius: radii.lg,
+      borderWidth: 2,
+      borderColor: colors.primary.light,
+      padding: spacing.sm,
+    },
+    promptBubbleChild: {
+      padding: spacing.md,
+      borderWidth: 3,
+    },
+    promptText: {
+      fontSize: typography.body,
+      color: colors.glassText.primary,
+      lineHeight: 26,
+    },
+    promptTextChild: {
+      fontFamily: fonts.display.bold,
+      fontSize: typography.headingLg,
+      lineHeight: 36,
+      textAlign: 'center',
+    },
+    promptButtons: {
+      gap: spacing.xs,
+    },
+    iconButton: {
+      width: 44,
+      height: 44,
+      borderRadius: radii.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.warning.light,
+    },
+    iconButtonDisabled: {
+      opacity: 0.4,
+    },
+    blanksRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    blank: {
+      width: 64,
+      height: 64,
+      borderRadius: radii.md,
+      borderWidth: 2,
+      borderStyle: 'dashed',
+      borderColor: colors.surface.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    blankChild: {
+      borderRadius: radii.lg,
+      borderWidth: 3,
+      borderColor: colors.primary.light,
+    },
+    blankWrong: {
+      borderColor: colors.error.DEFAULT,
+      borderStyle: 'solid',
+    },
+    blankLabel: {
+      fontSize: typography.headingLg,
+      fontWeight: '700',
+      color: colors.text.faint,
+    },
+    poolRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    wrongAvatar: {
+      width: 72,
+      height: 72,
+      alignSelf: 'center',
+    },
   });
 }

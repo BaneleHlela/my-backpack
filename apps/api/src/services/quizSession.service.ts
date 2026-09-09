@@ -7,7 +7,8 @@
 //
 // Answer capture (captureAnswer):
 //   — Determines isCorrect and pointsAwarded using 'exact_match' by default.
-//     DnD answers are evaluated via evaluateDnDAnswer.
+//     DnD answers are evaluated via evaluateDnDAnswer, which also applies the
+//     retryUntilCorrect wrong-attempt point deduction (see its own comment below).
 //     Voice answers use gradingMethod: 'pending' (transcription deferred).
 //   — Calls adaptiveLearning.service to update confidenceScore and term status.
 //   — Returns the next unanswered question in the session, or null if all done.
@@ -50,7 +51,16 @@ interface DnDPlacement {
   dropZoneId: string;
 }
 
-// Evaluates a DnD answer. rawResponse is JSON.stringify({ placements: DnDPlacement[] }).
+// Evaluates a DnD answer. rawResponse is
+// JSON.stringify({ placements: DnDPlacement[], wrongAttempts?: number }).
+//
+// wrongAttempts is only meaningful on helpers.retryUntilCorrect questions: since a wrong drop
+// is rejected client-side and never reaches the server (see IQuestionHelpers.retryUntilCorrect),
+// the learner-facing patterns (DndSinglePattern, DndBuildPattern) count each rejected attempt
+// locally and send the running total alongside the final, correct submission. One point is
+// deducted per wrong attempt, floored at 0 — never below zero, never negative-adjusting points
+// upward. Questions that don't use retryUntilCorrect never increment a counter, so this field is
+// always 0 (or absent) for them and pointsAwarded is unaffected.
 export function evaluateDnDAnswer(
   question: IQuestionDocument,
   rawResponse: string
@@ -59,9 +69,11 @@ export function evaluateDnDAnswer(
   const dropZones: IDropZone[] = content.dropZones ?? [];
 
   let placements: DnDPlacement[];
+  let wrongAttempts = 0;
   try {
-    const parsed = JSON.parse(rawResponse) as { placements?: DnDPlacement[] };
+    const parsed = JSON.parse(rawResponse) as { placements?: DnDPlacement[]; wrongAttempts?: number };
     placements = parsed.placements ?? [];
+    wrongAttempts = Math.max(0, Math.floor(parsed.wrongAttempts ?? 0));
   } catch {
     return { isCorrect: false, pointsAwarded: 0 };
   }
@@ -109,7 +121,7 @@ export function evaluateDnDAnswer(
 
   return {
     isCorrect: allZonesCorrect,
-    pointsAwarded: allZonesCorrect ? question.maxPoints : 0,
+    pointsAwarded: allZonesCorrect ? Math.max(0, question.maxPoints - wrongAttempts) : 0,
   };
 }
 

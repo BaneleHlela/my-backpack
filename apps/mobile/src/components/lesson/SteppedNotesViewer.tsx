@@ -1,7 +1,9 @@
 // Renders a Lesson 'steps' resource — a read-only paginated card viewer (not a quiz).
 // Ports apps/web's SteppedNotesViewer.tsx onto plain useState + Prev/Next controls.
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
+import { BlurView } from 'expo-blur';
 import Markdown from 'react-native-markdown-display';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IResourceStep } from '@my-backpack/shared';
@@ -25,6 +27,7 @@ export function SteppedNotesViewer({ steps }: SteppedNotesViewerProps) {
 
   return (
     <View style={styles.wrapper}>
+      <BlurView intensity={30} tint="light" style={StyleSheet.absoluteFill} />
       {step.title ? <Text style={styles.stepTitle}>{step.title}</Text> : null}
       <Markdown style={markdownStyles}>{step.content}</Markdown>
 
@@ -50,6 +53,12 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       padding: spacing.md,
       borderRadius: radii.md,
       backgroundColor: colors.surface.glassSoft,
+      // BlurView + overflow:hidden, matching GlassCard.tsx's own recipe exactly — without it
+      // this translucent white fill (surface.glass* is unchanged between themes) composites
+      // against whatever's actually behind this component (often a flat solid colors.background
+      // sheet, e.g. LessonModal.tsx) into a dark, muddy fill in dark mode, making glassText.primary
+      // illegible on top of it. See markdownStyles.ts's comment on why glassText is used here.
+      overflow: 'hidden',
     },
     stepTitle: {
       fontSize: typography.body,

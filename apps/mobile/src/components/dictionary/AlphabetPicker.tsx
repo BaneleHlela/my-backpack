@@ -1,7 +1,8 @@
 // Ports apps/web's AlphabetPicker.tsx — letter grid as wrapped pressable
 // chips; active/available/unavailable states match web exactly.
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { useDispatch, useSelector } from 'react-redux';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { fetchAlphabet } from '../../features/vocab/vocabSlice';

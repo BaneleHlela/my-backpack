@@ -29,6 +29,7 @@ export const ARCHETYPES: ArchetypeConfig[] = [
       { value: 'mcq_incorrect_usage', label: 'Pick the sentence that uses the word incorrectly' },
       { value: 'mcq_fill_blank', label: 'Sentence with a blank, pick the correct word' },
       { value: 'mcq_audio', label: 'Play audio, pick the correct answer' },
+      { value: 'mcq_general', label: 'Plain multiple choice (not tied to a vocab term)' },
     ],
   },
   {
@@ -102,6 +103,7 @@ export const DEFAULT_MAX_POINTS: Record<QuestionType, number> = {
   text_input_audio: 5,
   text_input_example: 5,
   mcq_audio: 4,
+  mcq_general: 5,
   dnd_single: 4,
   dnd_select: 4,
   dnd_count: 4,

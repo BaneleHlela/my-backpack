@@ -18,6 +18,7 @@
 //   text_input_audio: 5    — hear audio, type the term
 //   text_input_example: 5  — example sentence with word removed, type the term
 //   mcq_audio: 4           — prompt is an audio file path, user selects from options
+//   mcq_general: 5         — plain, non-vocabulary multiple choice (e.g. a book/course topic quiz)
 //   dnd_single: 4          — drag one item to one zone
 //   dnd_select: 4          — drag correct item from multiple options to one zone
 //   dnd_count: 4           — drag a specific quantity of items to a zone
@@ -43,6 +44,7 @@ export type QuestionType =
   | 'text_input_audio'
   | 'text_input_example'
   | 'mcq_audio'
+  | 'mcq_general'
   | 'dnd_single'
   | 'dnd_select'
   | 'dnd_count'
@@ -68,6 +70,7 @@ export const DEFAULT_MAX_POINTS: Record<QuestionType, number> = {
   text_input_audio: 5,
   text_input_example: 5,
   mcq_audio: 4,
+  mcq_general: 5,
   dnd_single: 4,
   dnd_select: 4,
   dnd_count: 4,
@@ -118,7 +121,7 @@ const questionSchema = new Schema<IQuestionDocument>(
         'mcq_term_to_def', 'mcq_def_to_term', 'mcq_correct_usage', 'mcq_incorrect_usage',
         'mcq_fill_blank', 'fill_blank_typed', 'true_false_term_def', 'true_false_def_term',
         'true_false_usage', 'text_input_def', 'text_input_audio', 'text_input_example',
-        'mcq_audio',
+        'mcq_audio', 'mcq_general',
         'dnd_single', 'dnd_select', 'dnd_count', 'dnd_sort',
         'dnd_sequence', 'dnd_match', 'dnd_fill', 'dnd_build',
       ],

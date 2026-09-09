@@ -3,12 +3,14 @@
 // QuizSessionScreen, so the return action is generic (onReturn/returnLabel) rather than
 // roadmap-specific — mirrors web's onReturnToDictionary/returnLabel props. When feedbackMode
 // was 'end', answeredQuestions carries a per-question breakdown withheld during the quiz.
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { BookOpen, CheckCircle2, RotateCcw, SkipForward, Trophy, XCircle } from 'lucide-react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
+import { BookOpen, CheckCircle2, ListChecks, RotateCcw, SkipForward, Trophy, XCircle } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { SessionResults } from '@my-backpack/shared';
 import type { AnsweredQuestionSummary } from '../../features/quiz/quizSlice';
 import { useTheme } from '../../theme/ThemeContext';
+import { fonts } from '../../theme/fonts';
 
 interface QuizResultsProps {
   results: SessionResults;
@@ -20,6 +22,10 @@ interface QuizResultsProps {
   // "why did this run end" business logic lives entirely in QuizSessionScreen (see its
   // gameplay-mechanics section); this component just renders whatever string it's given.
   banner?: string;
+  // Navigates to the full question-by-question review of this session (Quiz History's review
+  // screen, reused directly by sessionId rather than duplicating that UI here) — omitted when
+  // no sessionId is available yet.
+  onReview?: () => void;
 }
 
 export function QuizResults({
@@ -29,6 +35,7 @@ export function QuizResults({
   onReturn,
   returnLabel = 'Back to roadmap',
   banner,
+  onReview,
 }: QuizResultsProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -92,7 +99,14 @@ export function QuizResults({
         </View>
       ) : null}
 
-      <View style={styles.actionsRow}>
+      {onReview && (
+        <Pressable onPress={onReview} style={styles.reviewButton}>
+          <ListChecks size={16} color={colors.text.secondary} />
+          <Text style={styles.secondaryButtonText}>Review questions & answers</Text>
+        </Pressable>
+      )}
+
+      <View style={[styles.actionsRow, onReview && styles.actionsRowWithReview]}>
         <Pressable onPress={onReturn} style={styles.secondaryButton}>
           <BookOpen size={16} color={colors.text.secondary} />
           <Text style={styles.secondaryButtonText}>{returnLabel}</Text>
@@ -116,8 +130,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       marginBottom: spacing.sm,
     },
     scoreText: {
+      fontFamily: fonts.display.bold,
       fontSize: typography.headingLg,
-      fontWeight: '700',
       color: colors.text.primary,
     },
     subText: {
@@ -181,11 +195,27 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       color: colors.text.muted,
       marginTop: 2,
     },
+    reviewButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.md,
+      borderRadius: radii.md,
+      backgroundColor: colors.surface.glassSoft,
+      borderWidth: 1,
+      borderColor: colors.surface.border,
+      marginTop: spacing.lg,
+      width: '100%',
+    },
     actionsRow: {
       flexDirection: 'row',
       gap: spacing.sm,
       marginTop: spacing.lg,
       width: '100%',
+    },
+    actionsRowWithReview: {
+      marginTop: spacing.sm,
     },
     secondaryButton: {
       flex: 1,

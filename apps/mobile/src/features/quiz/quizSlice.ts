@@ -11,7 +11,14 @@
 // `questions[] + currentIndex` pair.
 import { createAsyncThunk, createSlice, isAnyOf } from '@reduxjs/toolkit';
 import type { AxiosError } from 'axios';
-import type { ApiResponse, FeedbackMode, IQuestion, QuizSettings, ResponseType, SessionResults } from '@my-backpack/shared';
+import type {
+  ApiResponse,
+  FeedbackMode,
+  IQuestion,
+  QuizSettings,
+  ResponseType,
+  SessionResults,
+} from '@my-backpack/shared';
 import api from '../../lib/api';
 
 function extractErrorMessage(error: unknown, fallback: string): string {
@@ -75,6 +82,7 @@ interface QuizState {
   error: string | null;
   feedbackMode: FeedbackMode;
   answeredQuestions: AnsweredQuestionSummary[];
+  submissionRequestId: string | null;
 }
 
 const initialState: QuizState = {
@@ -88,6 +96,7 @@ const initialState: QuizState = {
   error: null,
   feedbackMode: 'immediate',
   answeredQuestions: [],
+  submissionRequestId: null,
 };
 
 interface StartSessionResult {
@@ -180,6 +189,18 @@ export const submitAnswer = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error, 'Failed to submit answer'));
     }
+  },
+  {
+    // pending is dispatched synchronously: a second tap cannot post the same answer again.
+    condition: ({ sessionId, questionId, rawResponse, wasSkipped }, { getState }) => {
+      const { quiz } = getState() as { quiz: QuizState };
+      return (
+        quiz.status === 'active' &&
+        quiz.sessionId === sessionId &&
+        quiz.currentQuestion?._id === questionId &&
+        (wasSkipped === true || rawResponse.trim().length > 0)
+      );
+    },
   }
 );
 
@@ -216,6 +237,7 @@ const quizSlice = createSlice({
         state.currentQuestion = state.pendingNextQuestion;
         state.pendingNextQuestion = null;
         state.lastAnswer = null;
+        state.error = null;
         state.status = 'active';
       }
     },
@@ -225,11 +247,14 @@ const quizSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(submitAnswer.pending, (state) => {
+      .addCase(submitAnswer.pending, (state, action) => {
         state.status = 'submitting';
         state.error = null;
+        state.submissionRequestId = action.meta.requestId;
       })
       .addCase(submitAnswer.fulfilled, (state, action) => {
+        if (state.submissionRequestId !== action.meta.requestId) return;
+        state.submissionRequestId = null;
         const questionId = state.currentQuestion?._id ?? '';
         state.lastAnswer = {
           questionId,
@@ -259,11 +284,16 @@ const quizSlice = createSlice({
         state.status = 'awaiting_advance';
       })
       .addCase(submitAnswer.rejected, (state, action) => {
-        state.status = 'error';
-        state.error = action.payload as string;
+        if (state.submissionRequestId !== action.meta.requestId) return;
+        state.submissionRequestId = null;
+        // Keep the same mounted question and answer so a network failure can be retried.
+        state.status = 'active';
+        state.error = (action.payload as string | undefined) ?? 'Unable to submit answer.';
       })
       .addCase(completeSession.pending, (state) => {
         state.status = 'completing';
+        // A timer can end the quiz while an answer request is still in flight.
+        state.submissionRequestId = null;
       })
       .addCase(completeSession.fulfilled, (state, action) => {
         state.status = 'completed';
@@ -281,23 +311,32 @@ const quizSlice = createSlice({
       .addMatcher(isAnyOf(startQuizItemSession.pending, startMiniAppQuizSession.pending), (state) => {
         state.status = 'starting';
         state.error = null;
+        state.submissionRequestId = null;
       })
-      .addMatcher(isAnyOf(startQuizItemSession.fulfilled, startMiniAppQuizSession.fulfilled), (state, action) => {
-        state.sessionId = action.payload.session._id;
-        state.currentQuestion = action.payload.firstQuestion;
-        state.feedbackMode = action.payload.session.settings.feedbackMode;
-        state.answeredQuestions = [];
-        state.progress = {
-          answered: 0,
-          total: action.payload.session.questionIds.length,
-          correct: 0,
-        };
-        state.status = action.payload.firstQuestion ? 'active' : 'completed';
-      })
-      .addMatcher(isAnyOf(startQuizItemSession.rejected, startMiniAppQuizSession.rejected), (state, action) => {
-        state.status = 'error';
-        state.error = action.payload as string;
-      });
+      .addMatcher(
+        isAnyOf(startQuizItemSession.fulfilled, startMiniAppQuizSession.fulfilled),
+        (state, action) => {
+          state.sessionId = action.payload.session._id;
+          state.currentQuestion = action.payload.firstQuestion;
+          state.pendingNextQuestion = null;
+          state.lastAnswer = null;
+          state.feedbackMode = action.payload.session.settings.feedbackMode;
+          state.answeredQuestions = [];
+          state.progress = {
+            answered: 0,
+            total: action.payload.session.questionIds.length,
+            correct: 0,
+          };
+          state.status = action.payload.firstQuestion ? 'active' : 'completed';
+        }
+      )
+      .addMatcher(
+        isAnyOf(startQuizItemSession.rejected, startMiniAppQuizSession.rejected),
+        (state, action) => {
+          state.status = 'error';
+          state.error = action.payload as string;
+        }
+      );
   },
 });
 

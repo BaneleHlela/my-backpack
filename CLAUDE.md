@@ -85,7 +85,7 @@ Never push directly to main. Always merge develop → main via PR.
 
 ## Core Concept: Account → Profiles
 
-One **Account** handles authentication (email, password, OAuth).
+One **Account** handles authentication (email, password, OAuth, or guest — see below).
 An Account can have up to **6 Profiles**. Each Profile is what actually 
 uses the app — has its own progress, settings, age-appropriate content, 
 and learning data. Think Netflix-style profile switching.
@@ -94,7 +94,18 @@ and learning data. Think Netflix-style profile switching.
   gets full access token
 - Child profiles can be PIN-protected
 - Only the owner profile can create, edit, or delete other profiles
-- Maximum 6 profiles per account — enforced at service level
+- Maximum 6 profiles per account — enforced at service level (guest accounts are not capped
+  below this — `POST /api/profiles` doesn't care whether the account has credentials)
+
+### Guest mode (mobile only — see [docs/technical/guest-mode.md](docs/technical/guest-mode.md))
+A guest is a real Account + Profile with no email/password (`Account.isGuest: true`) — not a
+parallel local-only system. `POST /api/auth/guest` creates one and returns a full access token
+directly, skipping the partial-token/select-profile round trip entirely (there's exactly one
+profile, nothing to verify). Every existing `requireProfile`-gated route already works for it
+unchanged. `POST /api/auth/claim` later adds email/password credentials to that same account
+(same profiles, same progress, no logout) — mobile surfaces this as "Save your progress" in
+`ProfileSwitcherModal` plus a one-time nudge after a guest's first completed quiz. Web has no
+guest entry point yet — a deliberately separate, later pass.
 
 ### Auth Flow
 1. Register/Login → partial JWT (accountId only) + refresh token in 
@@ -102,6 +113,7 @@ and learning data. Think Netflix-style profile switching.
 2. Select profile → full JWT (accountId + profileId + ageGroup)
 3. All protected routes require full JWT
 4. Access token: 15 minutes | Refresh token: 7 days
+5. Guest (mobile only): `POST /api/auth/guest` → full JWT directly, no partial-token step
 
 ### Middleware
 - `requireAccount` — verifies JWT, works with partial token
@@ -237,7 +249,13 @@ apps/api/src/models/
 
 ### Account
 Authentication only. Fields: email, password (bcrypt, cost 12), 
-authProviders[], profiles[], activeProfile, isEmailVerified.
+authProviders[] (provider: 'local' | 'google' | 'facebook' | 'guest'), profiles[],
+activeProfile, isEmailVerified, isGuest.
+
+`isGuest` (default `false`) marks a credential-less account created via `POST /api/auth/guest`
+(mobile only — see [docs/technical/guest-mode.md](docs/technical/guest-mode.md)). `POST
+/api/auth/claim` later sets `email`/`password` and flips it back to `false` without touching
+`profiles`/`activeProfile`.
 
 ### Profile
 App usage entity. Fields: accountId, displayName, avatarUrl, ageGroup, 
@@ -259,10 +277,20 @@ A course within a Subject — the umbrella for a roadmap-based learning path (e.
 (unique per subjectId), description, iconUrl, roadmapId, miniAppIds[] (optional convenience
 links, e.g. Dictionary), curriculumTags[], team (reserved, no shape yet — see
 [docs/product/course-marketplace-vision.md](docs/product/course-marketplace-vision.md)),
-isActive.
+bookSource (optional — set by the book-to-course pipeline, see below), isActive.
 
 A Subject can have multiple Courses — replaces the old `Roadmap.findOne({ subjectId })`
 "one roadmap per subject" assumption; fetching a subject's courses is `Course.find({ subjectId })`.
+
+`bookSource` (added August 2026 — see
+[docs/content/book-to-course-design.md](docs/content/book-to-course-design.md)):
+`{ pdfPath: string; extractedText: string }`, set when the course was created (or later
+populated) via the book-to-course pipeline. `pdfPath` is a GCS path (not a full URL, the usual
+convention); `extractedText` is the raw, mechanically-extracted book text, used both to create
+chapters and to ground the AI Helper. Deliberately **not** exposed on `ICourseSummary` or any
+public/dashboard read serializer — it can be the length of a whole book. Dashboard course-write
+responses (create/update/book-chapters) instead carry a derived `hasBookSource: boolean`
+(`course.service.ts`'s `toDashboardCourseResponse`).
 
 ### Term
 Shared across all users. Fields: word, miniAppId, phonetic, origin, 
@@ -302,6 +330,8 @@ mcq_correct_usage:   5   — select sentence using word correctly
 mcq_incorrect_usage: 7   — select sentence using word incorrectly
 mcq_fill_blank:      4   — sentence with blank, select correct word
 mcq_audio:           4   — audio prompt, select correct answer
+mcq_general:         5   — plain MCQ not tied to a vocab term/definition (e.g. a hand-authored
+                            book-chapter topic quiz — see docs/technical/question-types.md)
 fill_blank_typed:    6   — sentence with blank, type exact word
 true_false_term_def: 2   — is this definition correct for this term?
 true_false_def_term: 2   — is this term correct for this definition?
@@ -364,7 +394,13 @@ yet; the second param exists for future use).
 `retryUntilCorrect` — DnD only: a wrong drop is rejected client-side (checked against
 `content.dropZones[].requiredDraggableIds`) and never submitted to the server; the learner
 must get the current question right before advancing, and the host quiz page hides its Skip
-button. All 6 vowels dnd_single quiz variants (isiZulu + English) set this to `true`.
+button. All 6 vowels dnd_single quiz variants (isiZulu + English) set this to `true`. Each
+rejected drop is still counted (client-side `wrongAttemptsRef`, reset per question) and sent
+as `rawResponse`'s `wrongAttempts` field alongside the eventual correct submission —
+`evaluateDnDAnswer()` deducts 1 point per wrong attempt from that question's `maxPoints`,
+floored at 0 (added August 2026; see the wrong-attempt point deduction note under DnD answer
+capture below). This also lowered the vowels quizzes' `passingScore` from `1.0` to `0.7` —
+at 100%, a single mis-drop anywhere in a run would otherwise have permanently failed the quiz.
 `shuffleDraggables` — DnD only: randomizes `content.draggables`' pool display order once per
 question load (`DndSinglePattern` shuffles client-side via `useState` initializer, reshuffled
 in the same effect that resets other per-question state — not re-shuffled on every re-render).
@@ -375,8 +411,12 @@ never silently drops other helper overrides a seed script may have set, e.g.
 `retryUntilCorrect`).
 
 **DnD answer capture:**
-`rawResponse = JSON.stringify({ placements: [{ draggableId, dropZoneId }] })`
-Evaluated by `evaluateDnDAnswer()` in quizSession.service.ts.
+`rawResponse = JSON.stringify({ placements: [{ draggableId, dropZoneId }], wrongAttempts? })`
+Evaluated by `evaluateDnDAnswer()` in quizSession.service.ts. `wrongAttempts` (optional,
+defaults to 0) is only populated on `retryUntilCorrect` questions — see above; it's the count
+of drops locally rejected before the final correct one, and costs 1 point each off
+`maxPoints`, floored at 0. `isCorrect` itself is unaffected — only `pointsAwarded` (which also
+feeds the confidence-score boost, so a heavily-retried question grows mastery more slowly).
 
 **Illustration fields:**
 `IQuestionContent.dragAreaImageUrl` — background image for the entire DnD widget
@@ -641,6 +681,12 @@ POST /api/auth/login
 POST /api/auth/select-profile
 POST /api/auth/logout
 POST /api/auth/refresh
+POST /api/auth/guest      — { displayName?, ageGroup? }; creates a credential-less Account +
+                             owner Profile and returns a full access token directly (mobile only
+                             today — see docs/technical/guest-mode.md)
+POST /api/auth/claim      — { email, password }; requireAccount only (not requireOwner, same
+                             precedent as DELETE /auth/account); adds credentials to the calling
+                             account without touching profiles/activeProfile
 GET  /api/auth/google
 GET  /api/auth/google/callback
 GET  /api/auth/facebook
@@ -721,12 +767,25 @@ PATCH  /api/enrollment/subjects/:subjectId/accessed
 ### AI Chat (Course Chat's AI Helper)
 ```
 GET  /api/ai-chat/course/:courseId/history
-POST /api/ai-chat/course/:courseId/message   — { message }
+POST /api/ai-chat/course/:courseId/message              — { message }
+POST /api/ai-chat/course/:courseId/practice-questions    — {}; book-to-course pipeline Phase 4b
+                                                             (personal, on-demand "Quiz me on
+                                                             this chapter" — see below)
 ```
-Both require `requireProfile`; `POST` also runs `attachContentPrefs` (reads
-`ageGroup`/`simplifiedLanguage` for the system prompt). Rate-limited per-profile: 5s cooldown
-between messages, 50 messages/day. See the `AiChatMessage` entry above and
-[docs/product/course-chat-vision.md](docs/product/course-chat-vision.md).
+`GET`/`POST .../message` require `requireProfile`; `POST .../message` also runs
+`attachContentPrefs` (reads `ageGroup`/`simplifiedLanguage` for the system prompt).
+`POST .../practice-questions` requires `requireProfile` only. All three are rate-limited
+per-profile: 5s cooldown between messages, 50 messages/day (the practice-questions route counts
+as an ordinary turn for this limit, via the same `checkRateLimit`). See the `AiChatMessage`
+entry above and [docs/product/course-chat-vision.md](docs/product/course-chat-vision.md).
+
+`POST .../message` also grounds the AI Helper in the course's book when one is attached
+(`Course.bookSource.extractedText`, added as its own cacheable system-prompt block, model
+switching Haiku→Sonnet past the same token threshold `suggest-structure` uses below).
+`POST .../practice-questions` generates personal (not shared), on-demand practice questions
+from the learner's current chapter, returned inline — not wrapped in a QuizSession/AnswerRecord,
+not persisted as a chat message. See
+[docs/content/book-to-course-design.md](docs/content/book-to-course-design.md).
 
 ### Admin
 ```
@@ -743,6 +802,8 @@ GET  /api/dashboard/assets?type=&search=    — list/browse assets under questio
 POST   /api/dashboard/courses                              — { subjectId, name, slug, description?, curriculumTags? }; also creates the Course's (empty) Roadmap
 PATCH  /api/dashboard/courses/:courseId                     — name/description/iconUrl/miniAppIds/curriculumTags only
 DELETE /api/dashboard/courses/:courseId                     — soft delete (isActive: false); roadmap/nodes/lessons/quizzes/questions untouched
+POST   /api/dashboard/courses/:courseId/suggest-structure    — { pdfPath }; book-to-course pipeline Phase 2 — extracts the PDF's text (mechanical) then asks Claude to propose a chapter list mirroring the book's own structure (judgment); persists nothing, returns { chapters, extractedText }
+POST   /api/dashboard/courses/:courseId/book-chapters        — { pdfPath, extractedText, chapters }; book-to-course pipeline Phase 3 — the admin-approved (possibly edited) proposal; sets Course.bookSource and creates one node + draft 'Reading' lesson per chapter, no quizzes yet
 POST   /api/dashboard/courses/:courseId/nodes               — { title, slug, description?, curriculumTags? }
 PATCH  /api/dashboard/courses/:courseId/nodes/reorder        — { nodeIds: string[] } full ordered list; rewrites Roadmap.nodes[] + each RoadmapNode.position
 
@@ -751,6 +812,7 @@ DELETE /api/dashboard/nodes/:nodeId                          — soft delete; re
 POST   /api/dashboard/nodes/:nodeId/lessons                  — { title, resources: IResource[], requireVideoWatch? }
 POST   /api/dashboard/nodes/:nodeId/quizzes                  — { title, settings? }; always mode:'fixed', miniAppId: <course._id>
 PATCH  /api/dashboard/nodes/:nodeId/items/:itemId/grade-settings — { passingScore?, starThresholds? }; quiz items only, responds with the item's fully-resolved grade settings (see gradeSettings.ts)
+POST   /api/dashboard/nodes/:nodeId/book-questions            — { count? }; book-to-course pipeline Phase 4a (official/curated) — generates AI questions from this node's slice of the course's book text, saves them with nodeId set (a deliberate divergence from POST /questions below, which never sets nodeId), and attaches a new mode:'fixed' Quiz
 
 PATCH  /api/dashboard/lessons/:lessonId                       — title/resources/requireVideoWatch only
 DELETE /api/dashboard/lessons/:lessonId                       — soft delete; removes its entry from the parent node's items[], renumbers the rest
@@ -772,7 +834,10 @@ auth gate + shared asset library. Every Quiz/Question created here gets `miniApp
 **Course's `_id`** (no MiniApp document exists for roadmap content) — same convention the
 Course/Roadmap migration already established. Every delete across this module is a **soft
 delete** — real learner progress can already be attached by the time something gets edited. See
-[docs/content/content-studio-design.md](docs/content/content-studio-design.md).
+[docs/content/content-studio-design.md](docs/content/content-studio-design.md). The
+`suggest-structure`/`book-chapters`/`book-questions` routes are the book-to-course pipeline
+(August 2026) — see
+[docs/content/book-to-course-design.md](docs/content/book-to-course-design.md).
 
 ---
 
@@ -1014,12 +1079,16 @@ my-backpack/
 │   │   ├── constants/
 │   │   │   ├── assets.ts
 │   │   │   └── theme.ts        # lightColors/darkColors (IThemeColors) + spacing/radius/
-│   │   │                        # typography — canonical design-token source for both
-│   │   │                        # apps/web and apps/mobile; keep in sync with
-│   │   │                        # docs/design/brand-guide.md. apps/mobile consumes both
-│   │   │                        # colour objects via src/theme/ThemeContext.tsx
-│   │   │                        # (dark is the default active theme); apps/web still
-│   │   │                        # hardcodes Tailwind classes, no theme system there yet
+│   │   │                        # typography/fontFamilies/fontWeights — canonical design-token
+│   │   │                        # source for both apps/web and apps/mobile; keep in sync with
+│   │   │                        # docs/design/brand-guide.md. apps/mobile consumes the colour
+│   │   │                        # objects via src/theme/ThemeContext.tsx (dark is the default
+│   │   │                        # active theme) and fontFamilies via its own
+│   │   │                        # src/theme/fonts.ts weight-name mapping (RN needs the exact
+│   │   │                        # expo-font-loaded name, e.g. Fredoka_700Bold — see
+│   │   │                        # src/components/AppText.tsx); apps/web reads fontFamilies
+│   │   │                        # directly in tailwind.config.ts but still hardcodes Tailwind
+│   │   │                        # colour classes, no colour theme system there yet
 │   │   └── types/
 │           ├── account.ts
 │           ├── profile.ts
@@ -1246,10 +1315,115 @@ my-backpack/
       quiz directly, skipping the `miniAppId` + `isDefault` lookup the endpoint previously
       required (which only ever resolved a mini-app's *default* quiz, not an arbitrary roadmap
       Topic quiz). See the API Routes Reference above for the three new/changed routes.
+- [x] Guest mode backend (August 2026) — `Account.isGuest: boolean` (default `false`) +
+      `IAuthProvider` gained `'guest'`; `POST /api/auth/guest` (`createGuestAccount` in
+      `auth.service.ts`, modeled on `upsertOAuthAccount`) creates a credential-less Account +
+      owner Profile (`isSetupComplete: true` at creation — the dateOfBirth/education step is
+      deferred, not asked) and returns a full access token directly, skipping the
+      partial-token/select-profile round trip; `POST /api/auth/claim` (`requireAccount`, not
+      `requireOwner` — same precedent as `DELETE /auth/account`) later adds `email`/`password`
+      to that same account and flips `isGuest` back to `false` without touching
+      `profiles`/`activeProfile`. Every existing `requireProfile`-gated route needed zero
+      changes — it only checks `Account.findById`/`Profile.findById`, never credential
+      presence — confirmed against the real dev database (guest created → second profile
+      added, 6-profile cap intact → a real quiz session started/lifecycle-completed → claim
+      flipped `isGuest` off → re-claim correctly rejected), not new code; see
+      [docs/technical/guest-mode.md](docs/technical/guest-mode.md)'s "Verification performed"
+      for the full run and one unrelated pre-existing issue it surfaced. `isGuest` is joined onto every client-facing profile shape
+      (`ProfileSummary`, `IProfile`) from the parent `Account` at the point each is built
+      (`toProfileSummary` in both `auth.service.ts`/`profile.service.ts`; `GET /profiles/me`,
+      `PATCH /profiles/me`, `PATCH /profiles/me/setup` via a `withIsGuest()` controller helper
+      reading the already-loaded `req.account`) — it isn't stored on `Profile` itself. A second,
+      stricter rate limiter (20/hour) sits on `/api/auth/register` and `/api/auth/guest`
+      specifically, layered on top of the existing blanket `authLimiter`. Mobile-only for now —
+      `apps/web` has no guest entry point yet. See
+      [docs/technical/guest-mode.md](docs/technical/guest-mode.md).
+- [x] Book-to-course pipeline backend (August 2026) — a scoped version of the two deferred items
+      below: one specific book, uploaded manually in Studio, turned into a course's Topics plus
+      AI question generation and AI Helper grounding — not a general "any PDF becomes a course"
+      tool. New `Course.bookSource?: { pdfPath, extractedText }` (never exposed on
+      `ICourseSummary`/any public serializer — dashboard course-write responses instead carry a
+      derived `hasBookSource: boolean`, `course.service.ts`'s `toDashboardCourseResponse`). New
+      `apps/api/src/services/bookIngestion/` — `pdfExtraction.ts` (`extractPdfText`, mechanical,
+      `pdf-parse@1.1.1` pinned — `pdf-parse@2.x` ships a completely different class-based API
+      with no default export, so `^` latest would silently break this), `chapterStructure.ts`
+      (`suggestChapterStructure`, AI proposes a chapter list mirroring the book's own structure,
+      persists nothing), `chapterIngestion.ts` (`createChaptersFromBook`, the admin-approved
+      version — sets `bookSource`, creates one `RoadmapNode` + draft `'Reading'` `Lesson` per
+      chapter via the existing `createNode`/`createLesson`, no quizzes), `chapterQuestions.ts`
+      (`generateChapterQuestions`, the shared AI question generator — MCQ/true-false/text-input
+      mix; any calculation/numeric question must be MCQ with numeric options, never typed, since
+      quiz grading does exact string matching with no numeric tolerance), `chapterTextSlice.ts`
+      (`sliceChapterText`, a rough proportional slice of `extractedText` by node position — not
+      exact page numbers), `nodeBookQuestions.ts` (`createBookQuestionsForNode`, Phase 4a —
+      official/curated, saves shared `Question` docs with `nodeId` set explicitly, a deliberate
+      divergence from `studio/question.service.ts`'s `createQuestion`, which never sets `nodeId`
+      — and attaches a new `mode:'fixed'` Quiz), and `modelSelection.ts` (shared
+      Haiku→Sonnet-past-150k-tokens model choice, reused by both chapter-structure generation and
+      AI Helper book-grounding below, not redefined per call site). Three new dashboard routes
+      (`suggest-structure`, `book-chapters`, `book-questions` — see API Routes Reference) plus a
+      fourth on `/api/ai-chat` (`practice-questions`, Phase 4b — personal, on-demand, chat-
+      triggered: `aiChat.service.ts`'s `getPracticeQuestionsForProfile` resolves the learner's
+      current chapter from `ProfileRoadmapProgress.nodeProgress`'s `in_progress` entry — **not**
+      `currentNodeId`, which is dead: declared on the schema but never set or read anywhere in
+      `roadmap.service.ts` — falling back to the start of the book if the learner hasn't started
+      yet; saves questions with `isGeneric: false`, `profileId` set, never added to the shared
+      pool; reuses the existing AI Helper rate limit, no new limiter). `aiChatHelper.service.ts`
+      grounds the AI Helper's system prompt in the book text as its own `cache_control:
+      {type:'ephemeral'}` block, placed before the smaller per-turn persona/context block for
+      cache-hit ordering; `aiChat.service.ts`'s `sendChatMessage` threads `course.bookSource?.
+      extractedText` straight through. See
+      [docs/content/book-to-course-design.md](docs/content/book-to-course-design.md) for the
+      full design, including the two corrections above written out in detail.
+      **Addendum (August 2026): AI response robustness fix** — real testing against a genuine
+      graduate-level textbook (Sean Carroll's *Spacetime and Geometry*) surfaced a long-context
+      "lost in the middle" failure: `chapterStructure.ts`/`chapterQuestions.ts` both put the raw
+      book/chapter excerpt at the very end of the prompt, right before generation, and on a
+      large or content-dense excerpt (a textbook's own worked examples and end-of-chapter
+      problem sets are a real, observed trigger) the model drifted into continuing the
+      excerpt's own pattern — e.g. "answering" practice questions it had just read — instead of
+      following the JSON-array instruction given earlier in the prompt. Fixed two ways: both
+      prompts now repeat the strict output-format instruction (plus an explicit "don't answer
+      questions in the text above") immediately after the excerpt, recency-anchored so it's the
+      last thing the model reads before generating; and a new shared
+      `bookIngestion/aiJson.ts`'s `cleanAndParseJsonArray()` (used by both files in place of a
+      bare `JSON.parse`) falls back to slicing out the first `[` … last `]` substring and
+      parsing that, in case the model still prefaces the JSON with prose despite the
+      instruction.
+      **Second addendum (August 2026): JSON body-size limit** — the same real-book testing hit
+      `PayloadTooLargeError` on `POST /dashboard/courses/:courseId/book-chapters`, whose request
+      body round-trips the whole book's `extractedText` as plain JSON (Phase 3 re-submits what
+      Phase 2's `suggest-structure` returned) — Express's default `express.json()` body limit is
+      100kb, far too small for a book's worth of text. `app.ts`'s `express.json()` now sets
+      `{ limit: '25mb' }` globally (one blanket cap across all routes, same "single generous
+      limit" convention as the 250MB multer cap on asset uploads) rather than scoping a special
+      limit to just this route.
+- [x] `retryUntilCorrect` wrong-attempt point deduction (August 2026) — a rejected DnD drop
+      under `helpers.retryUntilCorrect` was previously scoring-free (never submitted, no
+      consequence, unlimited free retries). `evaluateDnDAnswer()` (`quizSession.service.ts`)
+      now reads an optional `wrongAttempts` field off the DnD `rawResponse` JSON
+      (`{ placements, wrongAttempts? }`, defaults to 0) and deducts 1 point per wrong attempt
+      from `question.maxPoints`, floored at 0 — `isCorrect` is unchanged (the learner did place
+      it correctly, eventually), only `pointsAwarded`. The count itself is tracked entirely
+      client-side: `DndSinglePattern.tsx` (web + mobile) and `DndBuildPattern.tsx` (mobile)
+      each hold a `wrongAttemptsRef`, reset per question, incremented once per drop the
+      existing `retryUntilCorrect` client-side rejection bounces back, and sent alongside the
+      eventual correct submission — no new endpoint, no new `AnswerRecord` field. Questions
+      that don't use `retryUntilCorrect` never increment the counter, so they're unaffected.
+      Because `pointsAwarded` also feeds the confidence-score boost
+      (`+0.15 * learningVelocity * (pointsAwarded/maxPoints)`), a heavily-retried question now
+      grows mastery more slowly too. **Follow-up correction, same pass**: this made the 12
+      seeded vowels quiz variants (isiZulu + English, `passingScore: 1.0`, the primary content
+      that sets `retryUntilCorrect: true`) fail on the very first mis-drop anywhere in a
+      10-question run, since `scoreRatio` (`totalPointsAwarded/totalPointsAvailable`) could no
+      longer reach 100% — defeating the point of "unskippable but retriable." Their seed data
+      (`seed/questions/{isizulu,english}/vowels.questions.ts`) dropped `passingScore` from
+      `1.0` to `0.7` (matching the threshold other assessment-tier quizzes in this seed data
+      already use) — re-run `pnpm --filter api seed` to apply it to existing `RoadmapNode`
+      documents (each vowels node's `items[]` is fully overwritten on every seed run, per the
+      established convention — no migration needed, no learner-progress data touched).
 - [ ] XP and peanuts reward system (deferred)
 - [ ] Test readiness scoring (deferred)
-- [ ] Book/PDF upload pipeline (deferred)
-- [ ] AI-powered content generation from books (deferred)
 
 ### Frontend Web (apps/web)
 - [x] React + Vite + TypeScript + Redux setup
@@ -1435,6 +1609,51 @@ my-backpack/
       docs — the live in-session breakdown (`quizSlice.ts`'s `answeredQuestions`) is ephemeral
       Redux state, lost on navigation/refresh, and was never a source Quiz History could read
       from. Mobile was explicitly out of scope for this pass — see the Backend entry above.
+- [x] Brand fonts — Fredoka + Nunito Sans, app-wide (August 2026) — see the Conventions section's
+      "Two brand fonts" entry and `packages/shared/constants/theme.ts`'s `fontFamilies` for the
+      cross-app source of truth. web-specific part: `@fontsource/fredoka` +
+      `@fontsource/nunito-sans` (self-hosted, no external Google Fonts request — matches
+      apps/mobile's `@expo-google-fonts/*` "bundled, not CDN" approach) installed and imported in
+      `src/index.css`; `tailwind.config.ts`'s `fontFamily.sans`/`fontFamily.display` read
+      `fontFamilies` from the shared package directly. Because Tailwind Preflight sets
+      `font-family` on `html` from `theme('fontFamily.sans')`, Nunito Sans becomes the whole
+      app's body font with **zero component changes** — this is the one advantage apps/web has
+      over apps/mobile here (see that app's own entry below for why it needs a wrapper
+      component instead). Fredoka is applied the same zero-touch way, via a `@layer base` rule
+      in `index.css` targeting every `h1`-`h6`; nothing web-specific needed touching beyond
+      those three files. See `docs/design/brand-guide.md`'s Typography section.
+- [x] Book-to-course pipeline — Studio frontend + AI Helper suggested actions (August 2026) —
+      web half of the pipeline described under Backend above; see
+      [docs/content/book-to-course-design.md](docs/content/book-to-course-design.md). New
+      `features/studio/components/ImportBookModal.tsx`, opened from a new "Import from book"
+      button on `CourseDetailPage.tsx`'s Topics section (next to "Add Topic"; a "📖 Book
+      imported" badge shows once `hasBookSource` is true). Two-step wizard: upload a PDF
+      (reuses the existing `AssetPicker`, `type: 'documents'`) → `suggestBookStructure` thunk
+      calls `POST .../suggest-structure` and shows the proposed chapters as an editable,
+      reorderable list (title, page range) using the existing `@dnd-kit` `SortableList`, matching
+      the convention already used for node/quiz/lesson-resource ordering → `applyBookChapters`
+      thunk calls `POST .../book-chapters` with the (possibly edited) list, then refreshes the
+      course's node list. `NodeDetailPage.tsx` gained a "Generate practice questions" action
+      (shown only when the parent course has `hasBookSource`) calling the new
+      `generateNodeBookQuestions` thunk (`POST .../book-questions`), after which the node's new
+      quiz is visible and editable the normal way. `studioSlice.ts`'s `StudioCourseEntry` gained
+      a derived `hasBookSource: boolean` (never the raw `bookSource`, which the backend
+      deliberately never returns to any client) — populated from dashboard course-write
+      responses only, so it stays `false` until a write happens in this session even though the
+      course actually has a book (the aggregated public `/content/.../courses` list this entry
+      is otherwise built from doesn't carry it either, by the same "never expose extractedText"
+      rule). Course Chat's AI Helper (`CourseChatAiHelperPage.tsx`) gained a row of
+      suggested-action chips above the message input: "Quiz me on this chapter" calls the new
+      `POST /ai-chat/course/:courseId/practice-questions` directly (not sent as a chat message)
+      via a new `fetchPracticeQuestions` thunk on `aiChatSlice.ts`, rendering the returned
+      questions in a new `components/chat/PracticeQuestionsCard.tsx` — a small inline card
+      (prompt, tappable options or a typed-answer field depending on whether the question has
+      `content.options`, reveal correct/incorrect + explanation on selection, step through with
+      "Next question") — deliberately not wired into `QuizSession`/`AnswerRecord`, no progress
+      tracking. Three static conversational starters ("Explain this differently," "Give me an
+      example," "Can you summarize this?") populate/send a normal chat message through the
+      existing send flow, no new endpoint. `packages/shared/types/aiChat.ts` gained
+      `IPracticeQuestionsResponse` alongside `IAiChatSendMessageResponse`.
 - [ ] Profile management screens
 
 ### Frontend Mobile (apps/mobile)
@@ -1918,6 +2137,187 @@ my-backpack/
       screen in the Menubar rollout above that never got one. Verified via `tsc --noEmit` and a
       clean `expo export --platform android` (3955 modules) — not yet confirmed on a real
       device/emulator.
+- [x] Guest mode (August 2026) — "Continue as guest" added to the existing `(auth)/login.tsx`
+      as a visually secondary text link (not a new screen — `LaunchScreen.tsx` already owns the
+      "first impression while loading" concern). `continueAsGuest` (new `authSlice.ts` thunk)
+      posts to `/auth/guest` and sets `accessToken`/`isAuthenticated` directly, skipping
+      `/select-profile` entirely; it doesn't set `activeProfile` itself (the response's
+      `profile` is only `ProfileSummary`-shaped, missing fields the full `IProfile` needs), so
+      the Login screen dispatches `fetchActiveProfile()` right after — the same two-step
+      "select → fetch full profile" shape `select-profile.tsx`/`ProfileSwitcherModal.tsx`'s
+      `doSelectAndNavigate` already use. Claiming (adding email/password to the same
+      account, no logout) is a new `ClaimAccountModal` (mirrors `PinEntryModal.tsx`'s focused
+      centered-`Modal` pattern) backed by a new `claimAccount` thunk, reachable from two
+      places: a "Save your progress" row in `ProfileSwitcherModal.tsx` (shown only when
+      `activeProfile.isGuest`), and a new one-time, dismissible `GuestProgressNudge` shown
+      from `QuizSessionScreen.tsx` after a guest's first completed quiz session — "shown once"
+      is tracked per-profile in `expo-secure-store` (`hasShownGuestNudge`/
+      `markGuestNudgeShown` in `secureStore.ts`), consistent with
+      [docs/business/monetisation.md](docs/business/monetisation.md)'s "no dark patterns"
+      stance (tied to an achievement moment, never blocks navigation). Guest accounts are not
+      capped below the normal 6-profile limit; "Add Profile" stays exactly as much of a dead
+      end for a guest as it already was for a real account (not fixed here). Backend is fully
+      shared/platform-agnostic — `apps/web` has no guest entry point yet, a deliberately
+      separate later pass. See [docs/technical/guest-mode.md](docs/technical/guest-mode.md).
+- [x] Brand fonts — Fredoka + Nunito Sans, app-wide (August 2026) — Chewy removed entirely,
+      Fredoka takes over its old display-heading role; Nunito Sans is new, and is now the app's
+      real default body font everywhere (previously nothing was — every `<Text>` fell back to
+      the OS default). `packages/shared/constants/theme.ts`'s `fontFamilies` is the shared
+      source of truth (see the Conventions entry below and apps/web's mirrored entry above);
+      `src/theme/fonts.ts` maps `display`/`body` to the exact expo-font-loaded names (RN needs
+      the weight baked into the family string, e.g. `Fredoka_700Bold` — there's no family+weight
+      pairing for a statically-loaded font the way CSS has). `app/_layout.tsx`'s `useFonts()`
+      swapped `Chewy_400Regular` for `NunitoSans_400Regular/500Medium/600SemiBold/700Bold`
+      alongside the existing `Fredoka_400Regular/500Medium/600SemiBold/700Bold`;
+      `@expo-google-fonts/chewy` removed from `package.json`.
+      Unlike apps/web (Tailwind Preflight cascades `font-family` from `html` for free), RN's
+      `<Text>` has zero font inheritance — and (confirmed by reading RN 0.86's `Text.js`
+      directly, since this app is on a very new RN/React 19 combination) it no longer reads
+      `Text.defaultProps` either, so the classic "monkey-patch `Text.defaultProps`" trick for a
+      global default font doesn't work on this version. The fix: new
+      `src/components/AppText.tsx`, a `forwardRef` wrapper around RN's real `Text` that applies
+      `fonts.body.regular` as a default style (an explicit `fontFamily` in a passed `style`
+      still wins — array-style flattening applies later entries over earlier ones for the same
+      key). A one-off codemod script swapped every file importing `Text` from `'react-native'`
+      to import it from this wrapper instead (47 files, `AppText.tsx` itself is the one
+      exception) — mechanical import-line changes only, no JSX touched. Fredoka stays
+      explicit/per-instance (no RN equivalent of web's free `h1`-`h6` rule): the four Quiz Modes
+      files that already hardcoded `'Fredoka_400Regular'`-style string literals
+      (`QuizModeSelectScreen.tsx`, `QuizModeCard.tsx`, `QuizSettingsModal.tsx`,
+      `QuizPickerModal.tsx`) now reference `fonts.display.*` instead — same fonts, just
+      centralized, no visual change — plus two real swaps: `QuizModeSelectScreen`'s page
+      heading (previously the app's one Chewy usage) is now `fonts.display.bold`, and
+      `Menubar`'s back-button label (previously plain system-font caps, with a comment
+      explicitly noting Chewy wasn't loaded) is now genuinely Fredoka, since it's loaded
+      app-wide today. Verified via `tsc --noEmit` (clean) and a clean `expo export --platform
+      android` (3974 modules) — not yet confirmed on a real device/emulator, per this project's
+      established "flag what's unverified" convention. See
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Fonts"
+      section for full detail.
+- [x] Visual redesign pass — colorful cards, animated FAB/launch screen, full-bleed auth
+      (August 2026) — a broad styling pass across the Course/Subject/Home flow and the
+      pre-app screens, referencing a set of external design mockups (not a Figma source this
+      time). New `expo-linear-gradient` dependency. New shared primitives:
+      `GradientProgressBar.tsx` (gradient-filled progress bar, replaces flat fills in
+      `CourseScreen`/`QuizProgress`), `GradientListCard.tsx` (colorful full-width card — diagonal
+      gradient cycled from `theme/accentPalette.ts`'s 6-tone palette, two translucent "blob"
+      circles for a procedural background-pattern look, title + optional bottom progress row),
+      `MiniAppGridCard.tsx` (2-column pastel grid tile), `ComingSoonOverlay.tsx` (extracted from
+      `CourseScreen`'s inline pattern, now reused by the auth screens' OAuth buttons and
+      select-profile's new tile), `AuthScreenBackground.tsx` (gradient wash +
+      `illustrations/FloatingBlobs.tsx`/`FloatingSparkles.tsx` — hand-built `react-native-svg` +
+      Reanimated decorative loops, not an external Lottie file; no such library is installed and
+      none was added). **Course screen** (`subject/[subjectSlug]/course/[courseSlug]/index.tsx`):
+      the 4 always-visible `CoursePathActions` FABs became one bottom-left toggle that expands a
+      vertical stack of the same 4 actions with a staggered scale/translateY/rotateX "flip out
+      from behind the toggle" animation (opens bottom-to-top, closes top-to-bottom); the header's
+      course name + progress bar now share one column (`minWidth: 25%`, `maxWidth: 50%`,
+      `numberOfLines={1}`), showing only the `%` — the "X of Y items complete" text moved to the
+      course card on the Subject screen instead; the roadmap-loading state now renders
+      `LaunchScreenBody` instead of a bare spinner. **Subject screen**
+      (`subject/[subjectSlug]/index.tsx`): Mini-Apps grid moved above Courses; each course is now
+      a `GradientListCard` with a real completed/total progress bar, sourced from a new additive
+      `courseProgressById` map on `roadmapSlice.ts` (populated as a side effect of the existing
+      `fetchRoadmapByCourse.fulfilled`, keyed by `action.meta.arg`) — fired once per listed
+      course; deliberately reuses the existing `GET /roadmap/course/:courseId` endpoint rather
+      than adding profile-scoped progress to the unauthenticated `GET /content/.../courses` route,
+      since subjects only have 1-3 courses today. **Home screen** (`home.tsx`): subject list is
+      now `GradientListCard` too, progress read directly from the already-fetched
+      `enrollment.progressSummary` (no new call). **Auth/profile screens** (`login.tsx`,
+      `signup.tsx`, `select-profile.tsx`, `profile-setup.tsx`): dropped the centered `GlassCard`
+      in favor of `AuthScreenBackground`'s full-bleed layout; `TextField.tsx` gained an opt-in
+      `showToggle` prop (Eye/EyeOff from `lucide-react-native`, off by default — no change for
+      existing callers) used by every password field; login/signup gained placeholder "Continue
+      with Google/Facebook" buttons that show `ComingSoonOverlay`; select-profile gained a
+      "+ Add profile" tile that does the same (a real create-profile flow is out of scope — this
+      matches the existing accepted "Add Profile is a no-op" convention documented under
+      `ProfileSwitcherModal` below). **Launch screen** (`LaunchScreen.tsx`): the bare logo +
+      `ActivityIndicator` became a continuously "breathing" logo (scale/rotate loop) with
+      orbiting `FloatingSparkles`, a one-shot fade+slide-in "My Backpack" wordmark, and a 3-dot
+      pulsing loader — both exports (`LaunchScreenBody`/`LaunchScreen`) kept their existing call
+      signatures, so no call sites changed. **Fredoka sweep**: every text style keyed to
+      `typography.heading`/`typography.headingLg` app-wide now has an explicit
+      `fontFamily: fonts.display.*` (was previously inconsistent — e.g. the auth headings had
+      none, silently falling back to the `AppText` body-font default); deliberately left alone:
+      emoji-sized glyphs, the PIN pad's digit keys, and a DnD word-build pattern's
+      fill-in-the-blank underscore glyph, none of which are semantically "headings." Restyling
+      every other page in the app (Bucket, Dictionary, Quiz History, etc.) beyond the ones above
+      was out of scope for this pass. Verified via `tsc --noEmit` (clean) and a clean
+      `expo export --platform android` (3988 modules) — not yet confirmed on a real
+      device/emulator, per this project's established "flag what's unverified" convention.
+- [x] Book-to-course pipeline — AI Helper suggested actions (August 2026) — mobile half of the
+      web entry above; see
+      [docs/content/book-to-course-design.md](docs/content/book-to-course-design.md). The
+      book-import wizard itself (`ImportBookModal.tsx`) is web-only, matching Content Studio's
+      existing web-only footprint — nothing to port here. `AiHelperChatScreen.tsx` gained the
+      same suggested-action chip row as web, ported 1:1: "Quiz me on this chapter"
+      (`fetchPracticeQuestions` thunk, new on `features/aiChat/aiChatSlice.ts`, calling
+      `POST /ai-chat/course/:courseId/practice-questions` directly) renders a new
+      `components/course/PracticeQuestionsCard.tsx` (`GlassCard`-based, following
+      `ChatBubble.tsx`'s `useTheme()`/`createStyles(colors)` convention — tappable
+      `content.options` or a `TextInput` for typed answers, reveal correct/incorrect +
+      explanation, step through with "Next question"), plus three static conversational
+      starters that populate/send a normal chat message through the existing send flow.
+      `aiChatSlice.ts` gained `practiceQuestionsByCourseId`/`practiceQuestionsStatus`/
+      `practiceQuestionsError` state and a `clearPracticeQuestions` action, mirrored from web's
+      slice. Verified via `tsc --noEmit` (clean) — not yet confirmed on a real device/emulator,
+      per this project's established "flag what's unverified" convention.
+- [x] PaddedView/PaddedButton + varying-color mini-app/quiz cards (August 2026) — new
+      `src/components/PaddedView.tsx`/`PaddedButton.tsx`, siblings to `DepthView.tsx`/
+      `DepthButton.tsx` (same prop shape — `color`, `borderRadius`, `width`/`height`/
+      `aspectRatio`, `children`, `style`, `contentStyle` — so the two families are
+      interchangeable at a call site) but trading DepthView's shadow-peek "3D plate" look for
+      the flat bordered-frame look prototyped in `apps/web/src/pages/Scribbler.tsx` (an outer
+      border+padding shell wrapping an inner filled face, radii kept concentric via
+      `innerRadius = borderRadius - padding`); also picked up a `borderStyle` prop
+      (`'solid' | 'dashed' | 'dotted'`, default `'solid'`) to reproduce Scribbler's
+      `border-dashed`. `padding`/`borderWidth` both default to `0` (off) — with neither set
+      it's a plain rounded color face; both are set explicitly per call site instead of relying
+      on one shared default, since the two usages below want opposite looks. On the Subject
+      screen (`SubjectHomeScreen`), `MiniAppGridCard.tsx` now renders on a `PaddedButton` at
+      `aspectRatio={3 / 4}` (portrait) with `padding={2}`, `borderWidth={2}`,
+      `borderStyle="dashed"` — Scribbler's picture-frame effect reproduced 1:1. Note: RN's
+      dashed+rounded-corner rendering is a known inconsistent case on Android — not yet
+      confirmed on a real Android device. `QuizPickerModal.tsx`'s "Course Quizzes" tab (the
+      Topic quizzes list) rows are `PaddedButton`s too, with `padding={0}`/`borderWidth={0}`
+      (no frame — a flat colored row). Both cycle their fill color from the same
+      `theme/accentPalette.ts` 6-tone palette (already the app's one shared accent-color source,
+      used by `GradientListCard`/`MiniAppGridCard` since the Visual redesign pass above) — the
+      quiz list uses a running counter *not* reset per topic group, so color cycles down the
+      whole flat list rather than repeating within a topic with several quizzes back to back —
+      channeling `ideal_design_example1.webp`'s first phone (a vertical list of flat,
+      varying-pastel subject cards). The Subject screen's Courses section
+      (`GradientListCard`) was deliberately left as-is — only Mini-Apps and the quiz modal were
+      asked for. **Card text correction**: both cards' text (`MiniAppGridCard`'s name,
+      `QuizPickerModal`'s row title/subtitle/lock icon) initially used `accent.dark` for
+      contrast against `accent.light`, matching the pattern `GradientListCard` established —
+      changed to always `colors.text.primary` instead (the theme's own primary text tone: near-
+      black in light mode, near-white/cream in dark mode), regardless of which accent tone a
+      given card landed on. Reason: `darkColors`' `success`/`warning`/`error` accents swap
+      `.light` for a deep 900-level fill in dark mode (not a pale pastel — see
+      `packages/shared/constants/theme.ts`'s `darkColors` comment), so `accent.dark` text could
+      land close in tone to its own `accent.light` background there; `colors.text.primary`
+      sidesteps that per-accent contrast question entirely. Verified via `tsc --noEmit` (clean)
+      — not yet confirmed on a real device/emulator, per this project's established "flag what's
+      unverified" convention.
+- [x] Light/dark theme system, Phase B — user-facing toggle (August 2026) — the gap Phase A
+      explicitly left open: a "Dark mode"/"Light mode" row with a `Switch` now sits directly
+      above Sign out in `ProfileSwitcherModal.tsx`, wired straight to `ThemeContext`'s
+      `theme`/`toggleTheme` (both new — `ThemeContext.tsx` also gained `setTheme` and an
+      `isReady` flag). The choice persists as a **device-level** `expo-secure-store` value
+      (`getThemePreference`/`saveThemePreference`, new in `secureStore.ts`, same file/convention
+      as `lastRoute`/`guestNudgeShown`) — deliberately **not** synced through the existing
+      `Profile.preferences.theme` field (still unwired, unchanged from Phase A), since that
+      would mean `ThemeContext` reading Redux's `activeProfile`, which isn't populated until
+      deep into `authSlice.ts`'s `bootstrapAuth`. `ThemeProvider` reads the saved preference back
+      on mount (async, `SecureStore` has no sync API) and exposes `isReady`; `app/_layout.tsx`'s
+      `AuthBootstrap` folds `!themeReady` into its existing `isCheckingAuth || !fontsReady`
+      splash gate so the app's first real screen never paints in the default theme before
+      flipping to a saved light preference. Verified via `tsc --noEmit` (clean) — not yet
+      confirmed on a real device/emulator, per this project's established "flag what's
+      unverified" convention. See
+      [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Light/
+      dark theme system" section for full detail.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens
@@ -1958,10 +2358,23 @@ my-backpack/
   JSON body (alongside the existing httpOnly cookie) and `/auth/refresh` accepts `{ refreshToken }`
   in the body ahead of the cookie — web's cookie-only flow is unchanged when the header is absent
 - `packages/shared/constants/theme.ts` is the canonical design-token source (colour/spacing/radius/
-  typography) for both apps/web and apps/mobile — keep it in sync with docs/design/brand-guide.md.
-  `lightColors`/`darkColors` are the two colour objects (no plain `colors` export); apps/mobile
-  resolves the active one through `src/theme/ThemeContext.tsx`'s `useTheme()` — never import
-  `lightColors`/`darkColors` directly in a mobile component, always go through the hook
+  typography/fontFamilies/fontWeights) for both apps/web and apps/mobile — keep it in sync with
+  docs/design/brand-guide.md. `lightColors`/`darkColors` are the two colour objects (no plain
+  `colors` export); apps/mobile resolves the active one through `src/theme/ThemeContext.tsx`'s
+  `useTheme()` — never import `lightColors`/`darkColors` directly in a mobile component, always
+  go through the hook
+- Two brand fonts, app-wide on both apps: **Fredoka** (display/headings/short prominent labels)
+  and **Nunito Sans** (body copy — the default everywhere else), replacing the old Chewy (August
+  2026). `fontFamilies` in `theme.ts` is the single source of truth. apps/web wires
+  `fontFamilies.body` in as Tailwind's `sans` default (`tailwind.config.ts`) so it cascades
+  app-wide for free via Preflight, and `fontFamilies.display` to every `h1`-`h6` in
+  `src/index.css` — no per-component changes needed there. apps/mobile has no such CSS
+  cascade: `src/theme/fonts.ts` maps the two families to the exact expo-font-loaded names
+  (`Fredoka_700Bold`, `NunitoSans_400Regular`, etc.), and every mobile `Text` must come from
+  `src/components/AppText.tsx` (a thin wrapper defaulting to `fonts.body.regular`) instead of
+  `'react-native'` directly — that's the "one place" the Nunito Sans default lives, since RN
+  `<Text>` has no font inheritance and no working `Text.defaultProps` on this RN version. Use
+  `fonts.display.*` explicitly for Fredoka headings/labels on mobile.
 - In `apps/mobile`, any `StyleSheet.create` that references theme `colors` must be built by a
   `createStyles(colors)` function called inside the component body (colors come from
   `useTheme()`, a hook, so the styles can't be computed at module scope anymore) — see any

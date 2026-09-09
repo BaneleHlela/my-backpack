@@ -7,7 +7,8 @@
 // no new API call, and no teacher-added supplementary resource data exists yet (that's separate,
 // later, web-side Studio work).
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { BookOpen, Video, X } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { NodeItemWithProgress, RoadmapWithProgress } from '@my-backpack/shared';

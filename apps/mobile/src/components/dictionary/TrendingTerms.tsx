@@ -1,7 +1,8 @@
 // Ports apps/web's TrendingTerms.tsx — horizontal FlatList instead of an
 // overflow-x-auto div.
 import { useEffect } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import { TrendingUp } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { spacing, typography } from '@my-backpack/shared';

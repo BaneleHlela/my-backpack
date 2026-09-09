@@ -7,7 +7,8 @@
 // Course Chat's hub: a browsing screen, not a full-screen player, so AppLayout's ScreenBackground/
 // ProtectedRoute wrapping already covers it with no extra chrome needed here.
 import { useEffect } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../../../src/components/AppText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Eye, History as HistoryIcon, RotateCcw } from 'lucide-react-native';
@@ -16,6 +17,7 @@ import type { QuizHistoryEntry } from '@my-backpack/shared';
 import { GlassCard } from '../../../src/components/GlassCard';
 import { Menubar } from '../../../src/components/Menubar';
 import { useTheme } from '../../../src/theme/ThemeContext';
+import { fonts } from '../../../src/theme/fonts';
 import {
   fetchQuizHistory,
   fetchHistoryFilterOptions,
@@ -24,6 +26,7 @@ import {
   type HistoryStatusFilter,
 } from '../../../src/features/quizHistory/quizHistorySlice';
 import { canRetake, navigateToRetake } from '../../../src/components/quiz/quizHistoryLinks';
+import { useSafeGoBack } from '../../../src/lib/navigation';
 import type { AppDispatch, RootState } from '../../../src/store/store';
 
 const STATUS_TABS: { value: HistoryStatusFilter; label: string }[] = [
@@ -42,6 +45,7 @@ export default function QuizHistoryScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
+  const goBack = useSafeGoBack();
   const dispatch = useDispatch<AppDispatch>();
   const { contextId: initialContextId, nodeId: initialNodeId } = useLocalSearchParams<{
     contextId?: string;
@@ -88,183 +92,164 @@ export default function QuizHistoryScreen() {
 
   return (
     <View style={styles.flex}>
-      <View style={styles.header}>
-        <Menubar label="Back" onBackPress={() => router.back()} />
-        <Text style={styles.title}>Quiz History</Text>
+      <FlatList
+        stickyHeaderIndices={[0]}
+        data={items}
+        keyExtractor={(item) => item.sessionId}
+        contentContainerStyle={styles.listContent}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <Menubar label="Back" onBackPress={goBack} />
+            <Text style={styles.title}>Quiz History</Text>
 
-        <View style={styles.tabs}>
-          {STATUS_TABS.map((tab) => (
-            <Pressable
-              key={tab.value}
-              onPress={() => dispatch(setHistoryFilters({ status: tab.value }))}
-              style={[styles.tab, filters.status === tab.value ? styles.tabActive : null]}
-            >
-              <Text style={[styles.tabText, filters.status === tab.value ? styles.tabTextActive : null]}>
-                {tab.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-          <Pressable
-            onPress={() => dispatch(setHistoryFilters({ contextId: undefined, nodeId: undefined }))}
-            style={[styles.chip, !filters.contextId ? styles.chipActive : null]}
-          >
-            <Text style={[styles.chipText, !filters.contextId ? styles.chipTextActive : null]}>All courses</Text>
-          </Pressable>
-          {(filterOptions?.courses ?? []).map((c) => (
-            <Pressable
-              key={c.id}
-              onPress={() => dispatch(setHistoryFilters({ contextId: c.id, nodeId: undefined }))}
-              style={[styles.chip, filters.contextId === c.id ? styles.chipActive : null]}
-            >
-              <Text style={[styles.chipText, filters.contextId === c.id ? styles.chipTextActive : null]}>
-                {c.name}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        {topicsForSelectedCourse.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-            <Pressable
-              onPress={() => dispatch(setHistoryFilters({ nodeId: undefined }))}
-              style={[styles.chip, !filters.nodeId ? styles.chipActive : null]}
-            >
-              <Text style={[styles.chipText, !filters.nodeId ? styles.chipTextActive : null]}>All topics</Text>
-            </Pressable>
-            {topicsForSelectedCourse.map((t) => (
-              <Pressable
-                key={t.nodeId}
-                onPress={() => dispatch(setHistoryFilters({ nodeId: t.nodeId }))}
-                style={[styles.chip, filters.nodeId === t.nodeId ? styles.chipActive : null]}
-              >
-                <Text style={[styles.chipText, filters.nodeId === t.nodeId ? styles.chipTextActive : null]}>
-                  {t.nodeTitle}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        ) : null}
-      </View>
-
-      {status === 'loading' ? <ActivityIndicator color={colors.primary.light} style={styles.loading} /> : null}
-
-      {status === 'failed' ? (
-        <GlassCard intensity="soft" style={styles.margin}>
-          <Text style={styles.errorText}>{error}</Text>
-        </GlassCard>
-      ) : null}
-
-      {status === 'succeeded' && items.length === 0 ? (
-        <View style={styles.emptyState}>
-          <HistoryIcon size={40} color={colors.primary.light} />
-          <Text style={styles.emptyTitle}>No quizzes taken yet</Text>
-          <Text style={styles.emptyBody}>
-            Take a quiz from a course or the Dictionary and it'll show up here.
-          </Text>
-        </View>
-      ) : null}
-
-      {items.length > 0 ? (
-        <FlatList
-          data={items}
-          keyExtractor={(item) => item.sessionId}
-          contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          ListFooterComponent={
-            totalPages > 1 ? (
-              <View style={styles.pagination}>
+            <View style={styles.tabs}>
+              {STATUS_TABS.map((tab) => (
                 <Pressable
-                  disabled={page <= 1}
-                  onPress={() => dispatch(setHistoryPage(page - 1))}
-                  style={[styles.pageButton, page <= 1 ? styles.pageButtonDisabled : null]}
+                  key={tab.value}
+                  onPress={() => dispatch(setHistoryFilters({ status: tab.value }))}
+                  style={[styles.tab, filters.status === tab.value ? styles.tabActive : null]}
                 >
-                  <Text style={styles.pageButtonText}>Prev</Text>
-                </Pressable>
-                <Text style={styles.pageLabel}>
-                  Page {page} of {totalPages}
-                </Text>
-                <Pressable
-                  disabled={page >= totalPages}
-                  onPress={() => dispatch(setHistoryPage(page + 1))}
-                  style={[styles.pageButton, page >= totalPages ? styles.pageButtonDisabled : null]}
-                >
-                  <Text style={styles.pageButtonText}>Next</Text>
-                </Pressable>
-              </View>
-            ) : null
-          }
-          renderItem={({ item }) => {
-            const badge = scoreBadgeColors(item);
-            const retakeable = canRetake(item);
-            return (
-              <GlassCard intensity="soft">
-                <View style={styles.rowTop}>
-                  <View style={styles.rowTextWrap}>
-                    <Text style={styles.rowTitle} numberOfLines={1}>
-                      {item.quizTitle}
-                    </Text>
-                    <Text style={styles.rowSubtitle} numberOfLines={1}>
-                      {item.contextName}
-                      {item.nodeTitle ? ` · ${item.nodeTitle}` : ''}
-                    </Text>
-                    <Text style={styles.rowDate}>
-                      {formatDate(item.completedAt ?? item.startedAt)}
-                      {item.status === 'abandoned' ? ' · Abandoned' : ''}
-                    </Text>
-                  </View>
-                  <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.badgeText, { color: badge.text }]}>{item.percentageScore}%</Text>
-                  </View>
-                </View>
-
-                <View style={styles.rowBottom}>
-                  <Text style={styles.correctText}>
-                    {item.correct}/{item.totalQuestions} correct
+                  <Text style={[styles.tabText, filters.status === tab.value ? styles.tabTextActive : null]}>
+                    {tab.label}
                   </Text>
-                  <View style={styles.actionsRow}>
-                    <Pressable
-                      onPress={() =>
-                        router.push({
-                          pathname: '/(app)/quiz-history/[sessionId]',
-                          params: { sessionId: item.sessionId },
-                        })
-                      }
-                      style={styles.actionButton}
-                    >
-                      <Eye size={14} color={colors.text.secondary} />
-                      <Text style={styles.actionButtonText}>Review</Text>
-                    </Pressable>
-                    <Pressable
-                      disabled={!retakeable}
-                      onPress={() => retakeable && navigateToRetake(router, item)}
-                      style={[
-                        styles.actionButton,
-                        styles.retakeButton,
-                        !retakeable ? styles.retakeButtonDisabled : null,
-                      ]}
-                    >
-                      <RotateCcw size={14} color="#fff" />
-                      <Text style={styles.retakeButtonText}>Retake</Text>
-                    </Pressable>
-                  </View>
+                </Pressable>
+              ))}
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+              <Pressable
+                onPress={() => dispatch(setHistoryFilters({ contextId: undefined, nodeId: undefined }))}
+                style={[styles.chip, !filters.contextId ? styles.chipActive : null]}
+              >
+                <Text style={[styles.chipText, !filters.contextId ? styles.chipTextActive : null]}>All courses</Text>
+              </Pressable>
+              {(filterOptions?.courses ?? []).map((c) => (
+                <Pressable
+                  key={c.id}
+                  onPress={() => dispatch(setHistoryFilters({ contextId: c.id, nodeId: undefined }))}
+                  style={[styles.chip, filters.contextId === c.id ? styles.chipActive : null]}
+                >
+                  <Text style={[styles.chipText, filters.contextId === c.id ? styles.chipTextActive : null]}>
+                    {c.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            {topicsForSelectedCourse.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                <Pressable
+                  onPress={() => dispatch(setHistoryFilters({ nodeId: undefined }))}
+                  style={[styles.chip, !filters.nodeId ? styles.chipActive : null]}
+                >
+                  <Text style={[styles.chipText, !filters.nodeId ? styles.chipTextActive : null]}>All topics</Text>
+                </Pressable>
+                {topicsForSelectedCourse.map((t) => (
+                  <Pressable
+                    key={t.nodeId}
+                    onPress={() => dispatch(setHistoryFilters({ nodeId: t.nodeId }))}
+                    style={[styles.chip, filters.nodeId === t.nodeId ? styles.chipActive : null]}
+                  >
+                    <Text style={[styles.chipText, filters.nodeId === t.nodeId ? styles.chipTextActive : null]}>
+                      {t.nodeTitle}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
+          </View>
+        }
+        ListFooterComponent={
+          totalPages > 1 ? (
+            <View style={styles.pagination}>
+              <Pressable
+                disabled={page <= 1}
+                onPress={() => dispatch(setHistoryPage(page - 1))}
+                style={[styles.pageButton, page <= 1 ? styles.pageButtonDisabled : null]}
+              >
+                <Text style={styles.pageButtonText}>Prev</Text>
+              </Pressable>
+              <Text style={styles.pageLabel}>
+                Page {page} of {totalPages}
+              </Text>
+              <Pressable
+                disabled={page >= totalPages}
+                onPress={() => dispatch(setHistoryPage(page + 1))}
+                style={[styles.pageButton, page >= totalPages ? styles.pageButtonDisabled : null]}
+              >
+                <Text style={styles.pageButtonText}>Next</Text>
+              </Pressable>
+            </View>
+          ) : null
+        }
+        renderItem={({ item }) => {
+          const badge = scoreBadgeColors(item);
+          const retakeable = canRetake(item);
+          return (
+            <GlassCard intensity="soft">
+              <View style={styles.rowTop}>
+                <View style={styles.rowTextWrap}>
+                  <Text style={styles.rowTitle} numberOfLines={1}>
+                    {item.quizTitle}
+                  </Text>
+                  <Text style={styles.rowSubtitle} numberOfLines={1}>
+                    {item.contextName}
+                    {item.nodeTitle ? ` · ${item.nodeTitle}` : ''}
+                  </Text>
+                  <Text style={styles.rowDate}>
+                    {formatDate(item.completedAt ?? item.startedAt)}
+                    {item.status === 'abandoned' ? ' · Abandoned' : ''}
+                  </Text>
                 </View>
-              </GlassCard>
-            );
-          }}
-        />
-      ) : null}
+                <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+                  <Text style={[styles.badgeText, { color: badge.text }]}>{item.percentageScore}%</Text>
+                </View>
+              </View>
+
+              <View style={styles.rowBottom}>
+                <Text style={styles.correctText}>
+                  {item.correct}/{item.totalQuestions} correct
+                </Text>
+                <View style={styles.actionsRow}>
+                  <Pressable
+                    onPress={() =>
+                      router.push({
+                        pathname: '/(app)/quiz-history/[sessionId]',
+                        params: { sessionId: item.sessionId },
+                      })
+                    }
+                    style={styles.actionButton}
+                  >
+                    <Eye size={14} color={colors.text.secondary} />
+                    <Text style={styles.actionButtonText}>Review</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={!retakeable}
+                    onPress={() => retakeable && navigateToRetake(router, item)}
+                    style={[
+                      styles.actionButton,
+                      styles.retakeButton,
+                      !retakeable ? styles.retakeButtonDisabled : null,
+                    ]}
+                  >
+                    <RotateCcw size={14} color="#fff" />
+                    <Text style={styles.retakeButtonText}>Retake</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </GlassCard>
+          );
+        }}
+      />
     </View>
   );
 }
-
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     flex: { flex: 1 },
-    header: { padding: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
-    title: { fontSize: typography.headingLg, fontWeight: '700', color: colors.text.primary },
+    header: { padding: spacing.md, paddingBottom: spacing.sm, gap: spacing.sm },
+    title: { fontFamily: fonts.display.bold, fontSize: typography.headingLg, color: colors.text.primary },
     tabs: {
       flexDirection: 'row',
       backgroundColor: colors.surface.glassSoft,
@@ -294,7 +279,7 @@ function createStyles(colors: ThemeColors) {
     emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.xs },
     emptyTitle: { fontSize: typography.body, fontWeight: '700', color: colors.text.primary },
     emptyBody: { fontSize: typography.small, color: colors.text.secondary, textAlign: 'center', maxWidth: 280 },
-    listContent: { padding: spacing.lg, paddingTop: 0 },
+    listContent: { padding: spacing.md, paddingTop: 0 },
     separator: { height: spacing.sm },
     rowTop: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
     rowTextWrap: { flex: 1 },

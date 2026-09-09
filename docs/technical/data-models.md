@@ -121,12 +121,14 @@ These models represent the permanent structure of the platform: who the users ar
 | `miniAppIds` | ObjectId[] | Optional convenience links to Subject-level MiniApps (e.g. Dictionary) |
 | `curriculumTags` | Array | `[{ curriculum: 'CAPS'\|'IEB'\|'Cambridge'\|'University'\|'Other', gradeLevel: string }]` |
 | `team` | Mixed (optional) | Reserved for the deferred multi-instructor/marketplace feature — no shape or behavior yet, see [docs/product/course-marketplace-vision.md](../product/course-marketplace-vision.md) |
+| `bookSource` | Object (optional) | `{ pdfPath: string, extractedText: string }` — set when this Course was created via the book-to-course pipeline (August 2026). `pdfPath` is a GCS path; `extractedText` is the raw, mechanically-extracted book text used both to create chapters and to ground the AI Helper. See [docs/content/book-to-course-design.md](../content/book-to-course-design.md). |
 | `isActive` | Boolean | Whether this course is live |
 
 **Business rules:**
 - A Subject can now have multiple Courses (e.g. a future subject could offer two competing courses for the same content) — this replaces the old `Roadmap.findOne({ subjectId })` "one roadmap per subject" assumption
 - `Term`/`Question`/`Quiz.miniAppId` for roadmap-linked content (vowels, consonants, CVC words, counting, drag-intro) is scoped to the owning **Course's `_id`**, not a MiniApp — there is no MiniApp document for roadmap content anymore. This is a deliberate reuse of the existing miniAppId-scoping mechanism, not a new field.
 - The one-time migration (`apps/api/src/seed/migrations/2026-07-course-roadmap-restructure.ts`) reused each legacy roadmap-type MiniApp's `_id` as the new Course's `_id`, so all pre-existing Term/Question/Quiz/QuizSession documents referencing that id keep resolving without a mass data migration
+- `bookSource.extractedText` is deliberately **not** exposed on `ICourseSummary` or any public/dashboard read serializer — it can be the length of a whole book. Dashboard course-write responses (create/update/book-chapters) instead carry a derived `hasBookSource: boolean` — see `course.service.ts`'s `toDashboardCourseResponse`.
 
 ---
 
@@ -271,7 +273,7 @@ at 0 lives) and still gets a correct, real results breakdown.
 |---|---|---|
 | `profileId` | ObjectId | The learner |
 | `questionId` | ObjectId | The question answered |
-| `termId` | ObjectId | The term being tested |
+| `termId` | ObjectId (optional) | The term being tested — mirrors `Question.termId`; absent for questions with no vocab term backing them (e.g. `mcq_general`), which skip the adaptive-learning/`LearningRecord` update step entirely |
 | `miniAppId` | ObjectId | Which mini-app |
 | `sessionId` | ObjectId | The QuizSession this answer belongs to |
 | `responseType` | String | How the answer was submitted |
@@ -540,7 +542,7 @@ These models are specific to the vocabulary mini-app and live in `models/apps/la
 | `definitionId` | ObjectId | Optional — the specific definition being tested |
 | `miniAppId` | ObjectId | Which mini-app this question belongs to |
 | `nodeId` | ObjectId | Optional — links to a RoadmapNode for roadmap-specific questions |
-| `type` | String | One of 21 question type identifiers |
+| `type` | String | One of 22 question type identifiers (includes `mcq_general` — a plain, non-vocabulary MCQ type for content not anchored to a term/definition, e.g. a hand-authored book-chapter topic quiz; see [question-types.md](question-types.md)) |
 | `content` | Mixed | Unified content field — all question data lives here |
 | `maxPoints` | Number | Maximum points available |
 | `pointsCanBePartial` | Boolean | Whether partial credit is possible |

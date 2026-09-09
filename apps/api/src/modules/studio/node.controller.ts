@@ -13,6 +13,7 @@ import {
   UpdateNodeInput,
   UpdateNodeItemGradeSettingsInput,
 } from './node.service';
+import { createBookQuestionsForNode } from '../../services/bookIngestion/nodeBookQuestions';
 
 export const createNodeHandler = catchAsync(
   async (req: Request, res: Response): Promise<void> => {
@@ -59,5 +60,17 @@ export const updateNodeItemGradeSettingsHandler = catchAsync(
     const ref = node.items.find((i) => i.itemId.toString() === itemId);
     if (!ref) throw new AppError('Item not found on this node', 404);
     sendSuccess(res, resolveGradeSettings(ref.passingScore, ref.starThresholds));
+  }
+);
+
+// POST /api/dashboard/nodes/:nodeId/book-questions — book-to-course pipeline, Phase 4a
+// (official/curated). Body: { count? }. Generates AI questions from this node's chapter text,
+// saves them as shared Question documents, and attaches a new mode:'fixed' Quiz to the node.
+export const createNodeBookQuestionsHandler = catchAsync(
+  async (req: Request, res: Response): Promise<void> => {
+    const { nodeId } = req.params as { nodeId: string };
+    const { count } = req.body as { count?: number };
+    const node = await createBookQuestionsForNode(nodeId, count);
+    sendSuccess(res, node, 201);
   }
 );

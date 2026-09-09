@@ -83,10 +83,16 @@ with soft, muted accent colours; avoid saturated primary colours, they clash
 with the translucent aesthetic.
 
 **Typography:**
+- Two brand fonts, app-wide on both apps/web and apps/mobile (August 2026) — **Fredoka**
+  (rounded display font — headings, page titles, short prominent labels) and **Nunito Sans**
+  (body/reading copy — everything else, the default typeface). Single source of truth:
+  `packages/shared/constants/theme.ts`'s `fontFamilies`.
 - Clean and readable — legibility is non-negotiable, especially for children
 - Large text sizes for children's interfaces — minimum 18px for body text
 - Clear hierarchy: headings are significantly larger than body text
-- No decorative or handwritten fonts for reading content (reserve these for headings or labels only)
+- No decorative or handwritten fonts for reading content (reserve these for headings or labels
+  only) — this is exactly the Fredoka/Nunito Sans split above, not a general warning against
+  either font
 
 **Imagery and illustrations:**
 - Friendly, diverse, South African context

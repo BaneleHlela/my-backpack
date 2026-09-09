@@ -4,7 +4,8 @@
 // never used where a prerecorded audioUrl already exists; playback is manual (icon button),
 // never autoplay. One accepted regression from web: no live word-by-word highlighting —
 // expo-speech's documented API has no word-boundary callback to drive it.
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../AppText';
 import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 import { Volume2 } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
@@ -36,7 +37,7 @@ export function SpokenText({ text, lang, textStyle, containerStyle }: SpokenText
         aria-label={isSpeaking ? 'Stop reading' : 'Read aloud'}
         style={[styles.button, isSpeaking && styles.buttonActive]}
       >
-        <Volume2 size={14} color={isSpeaking ? colors.primary.DEFAULT : colors.text.secondary} />
+        <Volume2 size={18} color={isSpeaking ? colors.primary.DEFAULT : colors.text.secondary} />
       </Pressable>
     </View>
   );
@@ -55,16 +56,17 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       color: colors.text.primary,
     },
     button: {
-      width: 28,
-      height: 28,
+      width: 44,
+      height: 44,
       borderRadius: radii.sm,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surface.glassSoft,
+      borderWidth: 1,
+      borderColor: colors.text.faint,
       marginTop: 2,
     },
     buttonActive: {
-      backgroundColor: colors.surface.glassStrong,
+      borderColor: colors.primary.DEFAULT,
     },
   });
 }

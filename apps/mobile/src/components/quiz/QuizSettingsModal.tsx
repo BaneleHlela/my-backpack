@@ -11,12 +11,14 @@
 // reflects the new value) and starts the session in one action, matching how the brief scoped
 // Phase 5: starting from the modal's confirm action is equivalent to starting from the card body.
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { Text } from '../AppText';
 import { X } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
 import { PrimaryButton } from '../PrimaryButton';
 import { useTheme } from '../../theme/ThemeContext';
+import { fonts } from '../../theme/fonts';
 import { QUIZ_PLAY_MODE_ICONS, type QuizPlayModeDef, type QuizPlayModeSettings } from './quizPlayModes';
 
 interface QuizSettingsModalProps {
@@ -164,7 +166,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surface.glassSoft,
     },
     headerTitle: {
-      fontFamily: 'Fredoka_600SemiBold',
+      fontFamily: fonts.display.semibold,
       fontSize: typography.heading,
       color: colors.text.primary,
     },
@@ -172,7 +174,7 @@ function createStyles(colors: ThemeColors) {
       gap: spacing.sm,
     },
     sectionLabel: {
-      fontFamily: 'Fredoka_500Medium',
+      fontFamily: fonts.display.medium,
       fontSize: typography.small,
       color: colors.text.muted,
       textTransform: 'uppercase',
@@ -196,7 +198,7 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.primary.DEFAULT,
     },
     optionChipText: {
-      fontFamily: 'Fredoka_500Medium',
+      fontFamily: fonts.display.medium,
       fontSize: typography.small,
       color: colors.text.secondary,
     },
@@ -204,7 +206,7 @@ function createStyles(colors: ThemeColors) {
       color: '#fff',
     },
     noSettingsText: {
-      fontFamily: 'Fredoka_400Regular',
+      fontFamily: fonts.display.regular,
       fontSize: typography.small,
       color: colors.text.secondary,
     },
@@ -218,7 +220,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
     },
     toggleLabel: {
-      fontFamily: 'Fredoka_400Regular',
+      fontFamily: fonts.display.regular,
       fontSize: typography.body,
       color: colors.text.primary,
       flex: 1,

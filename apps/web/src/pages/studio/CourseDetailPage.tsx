@@ -4,7 +4,7 @@
 // dashboard GET.
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import { ChevronLeft, Loader2, Plus, Check, Search, Trash2 } from 'lucide-react';
+import { ChevronLeft, Loader2, Plus, Check, Search, Trash2, BookOpen } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../../app/store';
 import {
@@ -19,6 +19,7 @@ import {
 import AssetPicker from '../../features/studio/components/AssetPicker';
 import CurriculumTagsEditor from '../../features/studio/components/CurriculumTagsEditor';
 import AddNodeModal from '../../features/studio/components/AddNodeModal';
+import ImportBookModal from '../../features/studio/components/ImportBookModal';
 import SortableList, { DragHandle } from '../../features/studio/components/SortableList';
 import { formatQuestionPreview } from '../../features/studio/utils/questionPreview';
 import type { ICurriculumTag } from '@my-backpack/shared';
@@ -47,6 +48,7 @@ export default function CourseDetailPage() {
   const [curriculumTags, setCurriculumTags] = useState<ICurriculumTag[]>([]);
   const [miniAppIds, setMiniAppIds] = useState<string[]>([]);
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
+  const [isImportBookOpen, setIsImportBookOpen] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [localNodeOrder, setLocalNodeOrder] = useState<string[] | null>(null);
   const [questionSearch, setQuestionSearch] = useState('');
@@ -230,14 +232,30 @@ export default function CourseDetailPage() {
 
       {/* Nodes */}
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-bold text-gray-800">Topics</h2>
-        <button
-          type="button"
-          onClick={() => setIsAddNodeOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-violet-100/80 text-violet-700 hover:bg-violet-200/80 transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" /> Add Topic
-        </button>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-bold text-gray-800">Topics</h2>
+          {course.hasBookSource && (
+            <span className="flex items-center gap-1 text-xs font-medium text-teal-700 bg-teal-100/80 px-2 py-0.5 rounded-full">
+              <BookOpen className="w-3 h-3" /> Book imported
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsImportBookOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-teal-100/80 text-teal-700 hover:bg-teal-200/80 transition-colors"
+          >
+            <BookOpen className="w-3.5 h-3.5" /> Import from book
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsAddNodeOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-violet-100/80 text-violet-700 hover:bg-violet-200/80 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add Topic
+          </button>
+        </div>
       </div>
 
       {isLoading && nodesForList.length === 0 && (
@@ -279,6 +297,10 @@ export default function CourseDetailPage() {
 
       {isAddNodeOpen && (
         <AddNodeModal courseId={course._id} onClose={() => setIsAddNodeOpen(false)} />
+      )}
+
+      {isImportBookOpen && (
+        <ImportBookModal courseId={course._id} onClose={() => setIsImportBookOpen(false)} />
       )}
 
       {/* Question Bank — every question scoped to this course (miniAppId === courseId),

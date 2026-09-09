@@ -2,7 +2,8 @@
 // Built as a single top-level FlatList (not stacked ScrollViews) so the
 // browse results' onEndReached pagination fires against a real scroll
 // container — see DictionaryBrowseList.tsx for why.
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../../../../src/components/AppText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Bookmark, Sparkles } from 'lucide-react-native';
@@ -16,6 +17,7 @@ import { setBrowseLetter, type DictionaryTermPreview } from '../../../../src/fea
 import { Menubar } from '../../../../src/components/Menubar';
 import type { AppDispatch, RootState } from '../../../../src/store/store';
 import { useTheme } from '../../../../src/theme/ThemeContext';
+import { fonts } from '../../../../src/theme/fonts';
 
 export default function DictionaryHomeScreen() {
   const { colors } = useTheme();
@@ -50,6 +52,7 @@ export default function DictionaryHomeScreen() {
       onEndReachedThreshold={0.5}
       onEndReached={loadMore}
       renderItem={({ item }) => <BrowseResultRow term={item} onPress={() => goToTerm(item._id)} />}
+      stickyHeaderIndices={[0]}
       ListHeaderComponent={
         <View style={styles.header}>
           <Menubar label="Home" onBackPress={() => router.replace('/(app)/home')} />
@@ -124,7 +127,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     color: colors.text.secondary,
   },
   listContent: {
-    padding: spacing.lg,
+    padding: spacing.md,
   },
   row: {
     gap: spacing.xs,
@@ -156,8 +159,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     color: colors.primary.DEFAULT,
   },
   title: {
+    fontFamily: fonts.display.bold,
     fontSize: typography.headingLg,
-    fontWeight: '700',
     color: colors.text.primary,
     marginBottom: spacing.md,
   },

@@ -6,11 +6,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { ChevronLeft, Loader2, Send } from 'lucide-react';
+import { ChevronLeft, Loader2, Send, Sparkles } from 'lucide-react';
 import type { AppDispatch, RootState } from '../../app/store';
 import { fetchCourseBySlug } from '../../features/courses/coursesSlice';
-import { fetchChatHistory, sendChatMessage } from '../../features/aiChat/aiChatSlice';
+import {
+  fetchChatHistory,
+  sendChatMessage,
+  fetchPracticeQuestions,
+  clearPracticeQuestions,
+} from '../../features/aiChat/aiChatSlice';
 import ChatBubble from '../../components/chat/ChatBubble';
+import PracticeQuestionsCard from '../../components/chat/PracticeQuestionsCard';
+
+// Static conversational starters — populate/send a normal chat message through the existing
+// send flow, no dedicated endpoint. "Quiz me on this chapter" is handled separately below
+// since it calls a different endpoint and renders an inline widget instead of a chat turn.
+const CONVERSATION_STARTERS = ['Explain this differently', 'Give me an example', 'Can you summarize this?'];
 
 export default function CourseChatAiHelperPage() {
   const { subjectSlug, courseSlug } = useParams<{ subjectSlug: string; courseSlug: string }>();
@@ -43,11 +54,19 @@ export default function CourseChatAiHelperPage() {
   }, [dispatch, fieldSlug, subjectSlug, courseSlug, listCourse]);
 
   const courseId = course?._id;
-  const { messagesByCourseId, historyStatus, sendStatus, error } = useSelector(
-    (state: RootState) => state.aiChat
-  );
+  const {
+    messagesByCourseId,
+    historyStatus,
+    sendStatus,
+    error,
+    practiceQuestionsByCourseId,
+    practiceQuestionsStatus,
+    practiceQuestionsError,
+  } = useSelector((state: RootState) => state.aiChat);
   const messages = courseId ? (messagesByCourseId[courseId] ?? []) : [];
+  const practiceQuestions = courseId ? practiceQuestionsByCourseId[courseId] : undefined;
   const isSending = sendStatus === 'sending';
+  const isGeneratingPractice = practiceQuestionsStatus === 'loading';
 
   const [inputText, setInputText] = useState('');
   const [pendingText, setPendingText] = useState<string | null>(null);
@@ -84,6 +103,23 @@ export default function CourseChatAiHelperPage() {
     sendText(pendingText);
   };
 
+  // Book-to-course pipeline, Phase 7 — suggested-action chips. "Quiz me" calls the
+  // practice-questions endpoint directly (not sent as a chat message); the starters below just
+  // populate/send a normal chat message through the existing send flow.
+  const handleQuizMe = () => {
+    if (!courseId || isGeneratingPractice) return;
+    void dispatch(fetchPracticeQuestions(courseId));
+  };
+
+  const handleDismissPractice = () => {
+    if (courseId) dispatch(clearPracticeQuestions(courseId));
+  };
+
+  const handleStarter = (text: string) => {
+    if (isSending) return;
+    sendText(text);
+  };
+
   return (
     <div className="flex flex-col h-[calc(100dvh-60px)] max-w-2xl mx-auto w-full px-4 py-4">
       <button
@@ -113,6 +149,16 @@ export default function CourseChatAiHelperPage() {
           <ChatBubble key={m._id} role={m.role} content={m.content} />
         ))}
 
+        {isGeneratingPractice && (
+          <p className="text-xs text-gray-500 px-1">Putting together a few practice questions…</p>
+        )}
+        {practiceQuestionsError && !isGeneratingPractice && (
+          <p className="text-xs text-rose-600 px-1">{practiceQuestionsError}</p>
+        )}
+        {practiceQuestions && practiceQuestions.length > 0 && (
+          <PracticeQuestionsCard questions={practiceQuestions} onDismiss={handleDismissPractice} />
+        )}
+
         {pendingText && (
           <>
             <ChatBubble role="user" content={pendingText} pending={isSending} />
@@ -130,7 +176,34 @@ export default function CourseChatAiHelperPage() {
         )}
       </div>
 
-      <div className="flex items-end gap-2 mt-3 flex-shrink-0">
+      <div className="flex flex-wrap gap-2 mt-3 flex-shrink-0">
+        <button
+          type="button"
+          onClick={handleQuizMe}
+          disabled={isGeneratingPractice || !courseId}
+          className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full bg-teal-100/80 text-teal-700 hover:bg-teal-200/80 disabled:opacity-60 transition-colors"
+        >
+          {isGeneratingPractice ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <Sparkles className="w-3 h-3" />
+          )}
+          Quiz me on this chapter
+        </button>
+        {CONVERSATION_STARTERS.map((starter) => (
+          <button
+            key={starter}
+            type="button"
+            onClick={() => handleStarter(starter)}
+            disabled={isSending}
+            className="text-xs font-medium px-3 py-1.5 rounded-full bg-white/50 border border-white/60 text-gray-600 hover:bg-white/70 disabled:opacity-60 transition-colors"
+          >
+            {starter}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-end gap-2 mt-2 flex-shrink-0">
         <textarea
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}

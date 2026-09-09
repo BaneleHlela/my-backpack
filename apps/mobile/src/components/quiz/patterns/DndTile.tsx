@@ -10,7 +10,8 @@
 // gesture recipe extracted for reuse by the two new patterns, not a replacement.
 import { forwardRef, useImperativeHandle } from 'react';
 import type { Ref } from 'react';
-import { Image, StyleSheet, Text } from 'react-native';
+import { Image, StyleSheet } from 'react-native';
+import { Text } from '../../AppText';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { radii, typography } from '@my-backpack/shared';
@@ -18,6 +19,7 @@ import type { IDraggable } from '@my-backpack/shared';
 import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useTheme } from '../../../theme/ThemeContext';
+import { useQuestionScrollRef } from '../QuestionScrollArea';
 
 export function playAsset(path?: string): void {
   const url = resolveAssetUrl(path);
@@ -70,13 +72,25 @@ export interface DndTileProps {
 }
 
 export const DndTile = forwardRef(function DndTile(
-  { item, size, showLabel, highlight, disabled, isChild, draggable, onTap, onDragStart, onDropAttempt }: DndTileProps,
+  {
+    item,
+    size,
+    showLabel,
+    highlight,
+    disabled,
+    isChild,
+    draggable,
+    onTap,
+    onDragStart,
+    onDropAttempt,
+  }: DndTileProps,
   ref: Ref<DndTileHandle>
 ) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const scrollRef = useQuestionScrollRef();
 
   useImperativeHandle(ref, () => ({
     snapBack: () => {
@@ -107,7 +121,13 @@ export const DndTile = forwardRef(function DndTile(
     })
     .onEnd((e) => {
       if (onDropAttempt) runOnJS(onDropAttempt)(item, e.absoluteX, e.absoluteY);
+    })
+    .onFinalize(() => {
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
     });
+
+  if (scrollRef) panGesture.blocksExternalGesture(scrollRef);
 
   const composedGesture = draggable ? Gesture.Race(tapGesture, panGesture) : tapGesture;
 
@@ -164,7 +184,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     tileLabel: {
       fontSize: typography.body,
       fontWeight: '700',
-      color: colors.text.primary,
+      color: colors.glassText.primary,
     },
   });
 }

@@ -14,6 +14,7 @@ export interface ProfileSummary {
   ageGroup: AgeGroup;
   isOwner: boolean;
   isSetupComplete: boolean;
+  isGuest: boolean;
   hasPin?: boolean;
 }
 
@@ -53,4 +54,26 @@ export interface SelectProfileRequest {
 
 export interface SelectProfileResponse {
   accessToken: string;
+}
+
+// POST /api/auth/guest
+export interface GuestSignupRequest {
+  displayName?: string;
+  ageGroup?: AgeGroup;
+}
+
+export interface GuestSignupResponse {
+  accessToken: string;
+  profile: ProfileSummary;
+  refreshToken?: string; // present only when X-Client-Type: mobile was sent
+}
+
+// POST /api/auth/claim — adds email/password credentials to an existing guest Account
+export interface ClaimAccountRequest {
+  email: string;
+  password: string;
+}
+
+export interface ClaimAccountResponse {
+  email: string;
 }
