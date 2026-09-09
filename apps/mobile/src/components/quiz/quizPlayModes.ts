@@ -72,12 +72,15 @@ const OPEN_ENDED_QUESTION_COUNT = 200;
 // docs/technical/mobile-architecture.md).
 export function toSessionSettingsOverride(
   settings: QuizPlayModeSettings
-): { questionCount: number; timeLimit?: number; feedbackMode?: FeedbackMode; shuffleQuestions?: boolean } {
+): { questionCount: number; timeLimit?: number; feedbackMode?: FeedbackMode; shuffleQuestions?: boolean; bucketFilter?: 'all' | 'learning' | 'mastered'; bucketIds?: string[] | null; playModeId?: string } {
   return {
     questionCount: settings.questionCount ?? OPEN_ENDED_QUESTION_COUNT,
     timeLimit: settings.duration,
     feedbackMode: settings.feedbackMode,
     shuffleQuestions: settings.shuffleQuestions,
+    bucketFilter: settings.bucketFilter,
+    bucketIds: settings.bucketIds,
+    playModeId: settings.playModeId,
   };
 }
 

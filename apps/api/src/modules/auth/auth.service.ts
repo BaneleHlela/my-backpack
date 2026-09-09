@@ -1,3 +1,4 @@
+import { ensureProfileFavorites } from '../vocab/bucket.service';
 ﻿// Business logic for auth: register, login, profile selection, token refresh, OAuth upsert
 import crypto from 'crypto';
 import Account, { IAccountDocument } from '../../models/core/account.model';
@@ -101,6 +102,7 @@ export async function registerLocal(input: RegisterInput): Promise<RegisterResul
   account.verificationToken = verificationToken;
   account.verificationTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   account.profiles.push(profile._id);
+  await ensureProfileFavorites(profile._id.toString());
   account.activeProfile = profile._id;
   await account.save();
 
@@ -156,6 +158,7 @@ export async function selectProfile(
     if (!valid) throw new Error('Incorrect PIN');
   }
 
+  await ensureProfileFavorites(profile._id.toString());
   account.activeProfile = profile._id;
   await account.save();
 
@@ -233,6 +236,7 @@ export async function upsertOAuthAccount(
   await profile.save();
 
   account.profiles.push(profile._id);
+  await ensureProfileFavorites(profile._id.toString());
   account.activeProfile = profile._id;
   await account.save();
 
@@ -267,6 +271,7 @@ export async function createGuestAccount(
   await profile.save();
 
   account.profiles.push(profile._id);
+  await ensureProfileFavorites(profile._id.toString());
   account.activeProfile = profile._id;
   await account.save();
 

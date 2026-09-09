@@ -32,6 +32,9 @@ export type QuizPlayModeSettingKey =
   | 'none';
 
 export interface QuizPlayModeSettings {
+  bucketFilter?: 'all' | 'learning' | 'mastered';
+  bucketIds?: string[] | null;
+  playModeId?: QuizPlayModeId;
   questionCount?: number;
   duration?: number; // seconds
   hearts?: number;

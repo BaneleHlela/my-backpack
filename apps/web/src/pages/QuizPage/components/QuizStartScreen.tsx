@@ -7,6 +7,9 @@
 // status, but sessions can't filter by it), so the picker offers the three
 // values the API actually accepts.
 import { useState } from 'react';
+import { useQuizBuckets } from '../../../features/buckets/useQuizBuckets';
+import { bucketError } from '../../../features/buckets/useBucketResource';
+import { QuizBucketChoices } from '../../../components/buckets/QuizBucketChoices';
 import { Settings2, Loader2 } from 'lucide-react';
 import type { QuestionType, BucketFilter, FeedbackMode } from '@my-backpack/shared';
 
@@ -48,6 +51,8 @@ const FEEDBACK_MODES: { value: FeedbackMode; label: string; description: string 
 ];
 
 export interface QuizStartSettings {
+  bucketIds?: string[] | null;
+  playModeId?: string;
   questionCount: number;
   bucketFilter: BucketFilter;
   questionTypes?: QuestionType[];
@@ -55,11 +60,23 @@ export interface QuizStartSettings {
 }
 
 interface QuizStartScreenProps {
+  miniAppId: string;
+  initialBucketId?: string;
+  onManageBuckets: () => void;
   isStarting: boolean;
   onStart: (settings: QuizStartSettings) => void;
 }
 
-export default function QuizStartScreen({ isStarting, onStart }: QuizStartScreenProps) {
+export default function QuizStartScreen({ isStarting, onStart, miniAppId, initialBucketId, onManageBuckets }: QuizStartScreenProps) {
+  const choice = useQuizBuckets({ miniAppId, playModeId: 'classic' }, initialBucketId ? [initialBucketId] : undefined);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const start = async (settings: QuizStartSettings) => {
+    if (!choice.ready || saving || isStarting) return;
+    setSaving(true); setError('');
+    try { await choice.save(); onStart({ ...settings, playModeId: 'classic', ...(choice.data?.supported ? { bucketIds: choice.bucketIds } : {}) }); }
+    catch (e) { setError(bucketError(e)); } finally { setSaving(false); }
+  };
   const [customizing, setCustomizing] = useState(false);
   const [questionCount, setQuestionCount] = useState(10);
   const [bucketFilter, setBucketFilter] = useState<BucketFilter>('learning');
@@ -78,11 +95,11 @@ export default function QuizStartScreen({ isStarting, onStart }: QuizStartScreen
   };
 
   const startDefault = () => {
-    onStart({ questionCount: 10, bucketFilter: 'learning', feedbackMode: 'immediate' });
+    void start({ questionCount: 10, bucketFilter: 'learning', feedbackMode: 'immediate' });
   };
 
   const startCustom = () => {
-    onStart({
+    void start({
       questionCount,
       bucketFilter,
       feedbackMode,
@@ -98,9 +115,12 @@ export default function QuizStartScreen({ isStarting, onStart }: QuizStartScreen
         10 questions from the words you're learning.
       </p>
 
+      <QuizBucketChoices choice={choice} onManage={onManageBuckets} />
+      {error && <p role="alert" className="mt-3 text-rose-700">{error}</p>}
+
       <button
         type="button"
-        disabled={isStarting}
+        disabled={isStarting || saving || !choice.ready}
         onClick={startDefault}
         className="w-full mt-6 py-3 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
       >
@@ -222,7 +242,7 @@ export default function QuizStartScreen({ isStarting, onStart }: QuizStartScreen
 
           <button
             type="button"
-            disabled={isStarting}
+            disabled={isStarting || saving || !choice.ready}
             onClick={startCustom}
             className="w-full py-3 rounded-2xl bg-violet-500 text-white font-semibold hover:bg-violet-600 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
           >

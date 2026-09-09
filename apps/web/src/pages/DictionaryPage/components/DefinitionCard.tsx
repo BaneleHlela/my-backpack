@@ -1,8 +1,10 @@
 // One definition of a term, with its own "Add to bucket" button.
+import { useState } from 'react';
+import { BucketPickerDialog } from '../../../components/buckets/BucketPickerDialog';
 import { useDispatch, useSelector } from 'react-redux';
-import { Check, Loader2, Plus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import type { AppDispatch, RootState } from '../../../app/store';
-import { addDefinitionToBucket } from '../../../features/vocab/vocabSlice';
+import { fetchTermDetail } from '../../../features/vocab/vocabSlice';
 import type { DefinitionWithStatus } from '../../../features/vocab/vocabSlice';
 
 interface DefinitionCardProps {
@@ -14,9 +16,9 @@ interface DefinitionCardProps {
 
 export default function DefinitionCard({ termId, miniAppId, index, entry }: DefinitionCardProps) {
   const dispatch = useDispatch<AppDispatch>();
-  const { addingDefinitionIds } = useSelector((state: RootState) => state.vocab);
+  const profileId = useSelector((s: RootState) => s.auth.activeProfile?._id);
+  const [picking, setPicking] = useState(false);
   const { definition, inBucket } = entry;
-  const isAdding = addingDefinitionIds.includes(definition._id);
 
   return (
     <div className="bg-white/30 backdrop-blur rounded-2xl border border-white/40 p-4">
@@ -45,26 +47,18 @@ export default function DefinitionCard({ termId, miniAppId, index, entry }: Defi
 
         <button
           type="button"
-          disabled={inBucket || isAdding}
-          onClick={() =>
-            void dispatch(addDefinitionToBucket({ termId, definitionId: definition._id, miniAppId }))
-          }
+          onClick={() => setPicking(true)}
           className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
             inBucket
               ? 'bg-emerald-100/80 text-emerald-700 cursor-default'
               : 'bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-60'
           }`}
         >
-          {isAdding ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : inBucket ? (
-            <Check className="w-3.5 h-3.5" />
-          ) : (
-            <Plus className="w-3.5 h-3.5" />
-          )}
-          {inBucket ? 'Added' : isAdding ? 'Adding...' : 'Add to bucket'}
+          {inBucket ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+          {inBucket ? 'Saved · manage' : 'Add to buckets'}
         </button>
       </div>
+      {picking && <BucketPickerDialog key={profileId} miniAppId={miniAppId} definitionId={definition._id} onClose={() => setPicking(false)} onSaved={() => { void dispatch(fetchTermDetail(termId)); }} />}
     </div>
   );
 }

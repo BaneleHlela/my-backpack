@@ -17,6 +17,7 @@ interface MerriamWebsterPronunciation {
 interface MerriamWebsterEntry {
   meta?: {
     id?: string;
+    uuid?: string;
     stems?: string[];
   };
   hwi?: {
@@ -31,6 +32,9 @@ interface MerriamWebsterEntry {
 }
 
 interface DictionaryApiDefinition {
+  sourceEntryId?: string;
+  sourceEntryUuid?: string;
+  sourceSenseKey?: string;
   definition: string;
   example?: string;
   synonyms: string[];
@@ -99,7 +103,7 @@ function toDictionaryEntries(entries: MerriamWebsterEntry[]): DictionaryApiEntry
   return entries
     .filter((entry) => Array.isArray(entry.shortdef) && entry.shortdef.length > 0)
     .map((entry) => {
-      const word = (entry.meta?.stems?.[0] ?? entry.meta?.id ?? '').split(':')[0].trim();
+      const word = (entry.meta?.id ?? entry.hwi?.hw ?? entry.meta?.stems?.[0] ?? '').replace(/:\d+$/, '').replace(/\*/g, '').trim();
       const pronunciation = entry.hwi?.prs?.find((p) => p.mw)?.mw;
       const audio = entry.hwi?.prs?.find((p) => p.sound?.audio)?.sound?.audio;
       const examples = (entry.suppl?.examples ?? [])
@@ -116,6 +120,9 @@ function toDictionaryEntries(entries: MerriamWebsterEntry[]): DictionaryApiEntry
             partOfSpeech: entry.fl ?? 'unknown',
             definitions: (entry.shortdef ?? []).map((definition, index) => ({
               definition: stripMarkup(definition),
+              sourceEntryId: entry.meta?.id,
+              sourceEntryUuid: entry.meta?.uuid,
+              sourceSenseKey: 'shortdef:' + index,
               example: examples[index] ?? examples[0],
               synonyms: [],
               antonyms: [],
@@ -206,7 +213,7 @@ export async function parseAndStoreTerm(
 
   const word = first.word.toLowerCase().trim();
 
-  const existing = await Term.findOne({ word });
+  const existing = await Term.findOne({ word, miniAppId });
   if (existing) {
     const definitions = await Definition.find({ termId: existing._id }).sort({ order: 1 });
     return { term: existing, definitions, isNew: false };
@@ -227,7 +234,8 @@ export async function parseAndStoreTerm(
   const definitionDocs: IDefinitionDocument[] = [];
   let order = 0;
 
-  for (const entry of entries) {
+  // Related headwords returned alongside a lookup must not become meanings of the first word.
+  for (const entry of entries.filter((e) => e.word.toLowerCase().trim() === word)) {
     for (const meaning of entry.meanings) {
       for (const def of meaning.definitions) {
         const synonyms = Array.from(new Set([...meaning.synonyms, ...def.synonyms]));
@@ -241,6 +249,10 @@ export async function parseAndStoreTerm(
           synonyms,
           antonyms,
           order: order++,
+          sourceProvider: 'merriam-webster',
+          sourceEntryId: def.sourceEntryId,
+          sourceEntryUuid: def.sourceEntryUuid,
+          sourceSenseKey: def.sourceSenseKey,
         });
         await definition.save();
         definitionDocs.push(definition);

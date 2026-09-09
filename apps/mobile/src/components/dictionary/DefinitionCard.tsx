@@ -1,9 +1,6 @@
-// Ports apps/web's DefinitionCard.tsx — same three "Add to bucket" states
-// (default / adding / added) via PrimaryButton's variant/loading props. Header row (part of
-// speech + Add-to-bucket button) sits above the definition text, which then runs the card's
-// full width — the button no longer competes with the definition for horizontal space.
-// Pressing "Added" removes the term from the bucket (removeFromBucket is term-scoped
-// server-side, not per-definition — see apps/api's vocab.service.ts).
+// Each meaning can be saved to several buckets through the shared picker.
+import { useState } from 'react';
+import { BucketPickerSheet } from '../buckets/BucketPickerSheet';
 import { StyleSheet, View } from 'react-native';
 import { Text } from '../AppText';
 import { Check, Plus } from 'lucide-react-native';
@@ -11,7 +8,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
 import { PrimaryButton } from '../PrimaryButton';
-import { addDefinitionToBucket, removeBucketEntry } from '../../features/vocab/vocabSlice';
+import { fetchTermDetail } from '../../features/vocab/vocabSlice';
 import type { DefinitionWithStatus } from '../../features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../store/store';
 import { useTheme } from '../../theme/ThemeContext';
@@ -27,19 +24,9 @@ export function DefinitionCard({ termId, miniAppId, index, entry }: DefinitionCa
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const dispatch = useDispatch<AppDispatch>();
-  const { addingDefinitionIds, removingTermIds } = useSelector((state: RootState) => state.vocab);
+  const profileId = useSelector((s: RootState) => s.auth.activeProfile?._id);
   const { definition, inBucket } = entry;
-  const isAdding = addingDefinitionIds.includes(definition._id);
-  const isRemoving = removingTermIds.includes(termId);
-  const isBusy = isAdding || isRemoving;
-
-  const handlePress = () => {
-    if (inBucket) {
-      dispatch(removeBucketEntry({ termId, miniAppId }));
-    } else {
-      dispatch(addDefinitionToBucket({ termId, definitionId: definition._id, miniAppId }));
-    }
-  };
+  const [picking, setPicking] = useState(false);
 
   return (
     <GlassCard intensity="soft">
@@ -49,11 +36,10 @@ export function DefinitionCard({ termId, miniAppId, index, entry }: DefinitionCa
         </Text>
 
         <PrimaryButton
-          title={inBucket ? (isRemoving ? 'Removing...' : 'Added') : isAdding ? 'Adding...' : 'Add to bucket'}
-          icon={inBucket ? <Check size={14} color={colors.success.dark} /> : !isAdding ? <Plus size={14} color="#fff" /> : undefined}
+          title={inBucket ? 'Saved · manage' : 'Add to buckets'}
+          icon={inBucket ? <Check size={14} color={colors.success.dark} /> : <Plus size={14} color="#fff" />}
           variant={inBucket ? 'success' : 'primary'}
-          loading={isBusy}
-          onPress={handlePress}
+          onPress={() => setPicking(true)}
           style={styles.button}
         />
       </View>
@@ -74,6 +60,7 @@ export function DefinitionCard({ termId, miniAppId, index, entry }: DefinitionCa
           ) : null}
         </View>
       ) : null}
+      {picking && <BucketPickerSheet key={profileId} miniAppId={miniAppId} definitionId={definition._id} onClose={() => setPicking(false)} onSaved={() => { void dispatch(fetchTermDetail(termId)); }} />}
     </GlassCard>
   );
 }

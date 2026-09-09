@@ -1,12 +1,3 @@
-import React from 'react'
-
-const colors = {
-    main: '#B58CFF',
-    shadow: '#7045B8',
-    highlight: '#DCC8FF',
-}
-
-
 const Scribbler = () => {
     return (
         <div className="w-full h-screen bg-amber-600 flex justify-center items-center">

@@ -1,0 +1,33 @@
+name: Dictionary bucket checks
+on:
+  pull_request:
+    paths:
+      - 'apps/api/**'
+      - 'apps/mobile/**'
+      - 'apps/web/**'
+      - 'packages/shared/**'
+      - 'tests/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/bucket-regressions.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.17.0'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @my-backpack/api exec tsc --noEmit --ignoreDeprecations 6.0
+      - run: pnpm --filter @my-backpack/mobile exec tsc --noEmit --ignoreDeprecations 6.0
+      - run: pnpm --filter @my-backpack/web build
+      - run: node --test tests/*.test.cjs
+      - run: pnpm --filter @my-backpack/api test:bucket-unit
+      - run: pnpm --filter @my-backpack/api test:buckets

@@ -1,6 +1,7 @@
 // Business logic for the vocabulary mini-app: word search, bucket management, and A-Z dictionary browsing.
 // Coordinates the dictionaryApi, questionGenerator, and adaptiveLearning services.
 import { Types } from 'mongoose';
+import { ensureFavorites, addBucketDefinitions } from './bucket.service';
 import { searchWord, parseAndStoreTerm } from '../../services/dictionaryApi.service';
 import { generateQuestionsForDefinition } from '../../services/questionGeneration/index';
 import { AppError } from '../../utils/AppError';
@@ -40,7 +41,7 @@ export async function searchVocab(
   // re-exposing every repeat search to a flaky third-party API for no benefit (parseAndStoreTerm
   // was already treating it as idempotent, just after paying for the external round-trip).
   const normalisedWord = word.toLowerCase().trim();
-  const existingTerm = await Term.findOne({ word: normalisedWord });
+  const existingTerm = await Term.findOne({ word: normalisedWord, miniAppId });
 
   let term: ITermDocument;
   let definitions: IDefinitionDocument[];
@@ -55,7 +56,7 @@ export async function searchVocab(
     ({ term, definitions, isNew } = await parseAndStoreTerm(entries, miniAppId));
   }
 
-  const bucket = await TermBucket.findOne({ profileId, miniAppId });
+  const bucket = await ensureFavorites(profileId, miniAppId);
   let isInBucket = false;
 
   if (bucket) {
@@ -84,52 +85,12 @@ export async function addToBucket(
     throw new AppError('Definition does not belong to this term', 400);
   }
 
-  // Get or create the bucket for this profile+miniApp
-  let bucket = await TermBucket.findOne({ profileId, miniAppId });
-  if (!bucket) {
-    bucket = new TermBucket({ profileId, miniAppId });
-    await bucket.save();
-  }
-
-  // Prevent duplicate entries per definition
-  const existing = await BucketEntry.findOne({ bucketId: bucket._id, termId, definitionId });
-  if (existing) throw new AppError('This definition is already in your bucket', 409);
-
-  const entry = new BucketEntry({
-    bucketId: bucket._id,
-    termId,
-    definitionId,
-    profileId,
-    partOfSpeech: definition.partOfSpeech,
-    addedAt: new Date(),
-    status: 'learning',
-  });
-  await entry.save();
-
-  // Bootstrap a per-definition LearningRecord if one doesn't exist yet
+  if (term.miniAppId.toString() !== miniAppId) throw new AppError('This word belongs to another dictionary', 400);
+  const bucket = await ensureFavorites(profileId, miniAppId);
+  await addBucketDefinitions(profileId, bucket._id.toString(), [definitionId]);
+  const entry = await BucketEntry.findOne({ bucketId: bucket._id, termId, definitionId });
+  if (!entry) throw new AppError('Could not save definition', 500);
   const existingRecord = await LearningRecord.findOne({ profileId, termId, definitionId });
-  if (!existingRecord) {
-    const record = new LearningRecord({
-      profileId,
-      termId,
-      definitionId,
-      miniAppId,
-      confidenceScore: 0,
-      status: 'unseen',
-      totalAnswers: 0,
-      correctAnswers: 0,
-      reviewCount: 0,
-    });
-    await record.save();
-  }
-
-  // Generate the full question set (auto + AI) for this definition — fire-and-forget
-  const existingQuestions = await Question.countDocuments({ termId, definitionId, isActive: true });
-  if (existingQuestions === 0) {
-    generateQuestionsForDefinition(termId, definitionId).catch((err: unknown) =>
-      console.error('Question generation failed for term/definition:', termId, definitionId, err)
-    );
-  }
 
   return {
     entryId: entry._id.toString(),
@@ -152,13 +113,13 @@ export async function removeFromBucket(
   termId: string,
   miniAppId: string
 ): Promise<void> {
-  const bucket = await TermBucket.findOne({ profileId, miniAppId });
+  const bucket = await ensureFavorites(profileId, miniAppId);
   if (!bucket) throw new Error('Bucket not found');
 
   const entry = await BucketEntry.findOne({ bucketId: bucket._id, termId });
   if (!entry) throw new Error('Term not found in bucket');
 
-  await entry.deleteOne();
+  await BucketEntry.deleteMany({ bucketId: bucket._id, termId });
 }
 
 // Returns full term detail with per-definition bucket and learning status.
@@ -170,11 +131,11 @@ export async function getTermDetail(
   const term = await Term.findById(termId);
   if (!term) throw new Error('Term not found');
 
-  const [allDefinitions, allQuestions, learningRecords, bucket] = await Promise.all([
+  const [allDefinitions, allQuestions, learningRecords, buckets] = await Promise.all([
     Definition.find({ termId }).sort({ order: 1 }),
     Question.find({ termId, isActive: true }),
     LearningRecord.find({ profileId, termId }),
-    TermBucket.findOne({ profileId, miniAppId: term.miniAppId }),
+    TermBucket.find({ profileId, miniAppId: term.miniAppId }),
   ]);
 
   const definitions = allDefinitions.slice(0, contentPrefs.maxDefinitions);
@@ -184,8 +145,8 @@ export async function getTermDetail(
 
   // Build a set of definitionIds that are already in the bucket
   const addedDefinitionIds = new Set<string>();
-  if (bucket) {
-    const bucketEntries = await BucketEntry.find({ bucketId: bucket._id, termId });
+  if (buckets.length) {
+    const bucketEntries = await BucketEntry.find({ bucketId: { $in: buckets.map((b) => b._id) }, termId });
     bucketEntries.forEach((e) => addedDefinitionIds.add(e.definitionId.toString()));
   }
 
@@ -346,10 +307,11 @@ export async function getTrending(
     {
       $group: {
         _id: '$termId',
-        bucketCount: { $sum: 1 },
+        profiles: { $addToSet: '$profileId' },
         term: { $first: '$termDoc' },
       },
     },
+    { $addFields: { bucketCount: { $size: '$profiles' } } },
     { $sort: { bucketCount: -1 } },
     { $limit: limit },
     {
@@ -403,7 +365,7 @@ export async function getRecent(
   miniAppId: string,
   limit: number
 ): Promise<BucketTermEntry[]> {
-  const bucket = await TermBucket.findOne({ profileId, miniAppId });
+  const bucket = await ensureFavorites(profileId, miniAppId);
   if (!bucket) return [];
 
   const rawEntries = await BucketEntry.find({ bucketId: bucket._id })
@@ -470,7 +432,7 @@ export async function getBucket(
   page: number,
   limit: number
 ): Promise<PaginatedBucketResponse> {
-  const bucket = await TermBucket.findOne({ profileId, miniAppId });
+  const bucket = await ensureFavorites(profileId, miniAppId);
   if (!bucket) {
     return {
       terms: [],

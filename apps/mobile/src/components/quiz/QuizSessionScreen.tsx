@@ -147,7 +147,8 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
   const [itemCompletion, setItemCompletion] = useState<ItemCompletionResult | null>(null);
   // Only the miniApp source needs a pre-check — a roadmap quiz item's questions are curated
   // for that node, so there's nothing to fail-open around; seeded straight to `true`.
-  const [hasContent, setHasContent] = useState<boolean | null>(session.source === 'miniApp' ? null : true);
+  // Session creation validates the actual bucket selection before saving anything.
+  const hasContent: boolean = true;
 
   // The active pattern's imperative submit trigger + whether it currently has a submittable
   // answer — see questionPatternTypes.ts and QuestionRenderer's pass-through.
@@ -194,32 +195,10 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
     if (session.source === 'roadmapItem') {
       dispatch(startQuizItemSession({ nodeId: session.nodeId, itemId: session.itemId }));
     } else {
-      const settings = playMode ? toSessionSettingsOverride(playMode.settings) : undefined;
+      const settings = playMode ? toSessionSettingsOverride({ ...playMode.settings, playModeId: playMode.id }) : undefined;
       dispatch(startMiniAppQuizSession({ miniAppId: session.miniAppId, settings }));
     }
   };
-
-  // Mini-app pre-check: don't let the learner start an empty session. Fails open on error —
-  // mirrors apps/web's QuizPage.tsx (let the start attempt fail on its own rather than
-  // blocking the button on a flaky has-content call).
-  useEffect(() => {
-    if (session.source !== 'miniApp') return;
-    let cancelled = false;
-    api
-      .get<ApiResponse<{ hasContent: boolean }>>('/quiz/has-content', {
-        params: { miniAppId: session.miniAppId },
-      })
-      .then((res) => {
-        if (!cancelled) setHasContent(res.data.data.hasContent);
-      })
-      .catch(() => {
-        if (!cancelled) setHasContent(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.source === 'miniApp' ? session.miniAppId : null]);
 
   // Auto-start once we know there's content to quiz on — neither source exposes a start-time
   // settings screen (mobile doesn't port web's QuizStartScreen customize flow), so both go
@@ -625,28 +604,6 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
       </View>
 
       <View style={styles.body}>
-        {session.source === 'miniApp' && hasContent === null && (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.primary.DEFAULT} />
-          </View>
-        )}
-
-        {session.source === 'miniApp' && hasContent === false && (
-          <View style={styles.emptyState}>
-            <BookOpen size={40} color={colors.primary.light} />
-            <Text style={styles.emptyTitle}>No questions to quiz yet</Text>
-            <Text style={styles.emptyBody}>
-              {
-                // Generic copy — this screen now also backs a course's Game Quizzes pool, not
-                // just Dictionary's bucket-based quiz, and the two have very different "how do
-                // I get content here" stories (add words to a bucket vs. a teacher adding
-                // questions in Content Studio).
-                'Check back once more questions have been added.'
-              }
-            </Text>
-          </View>
-        )}
-
         {hasContent === true && (quiz.status === 'idle' || quiz.status === 'starting') && (
           <View style={styles.center}>
             <ActivityIndicator color={colors.primary.DEFAULT} />
@@ -659,6 +616,7 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
             <Pressable onPress={startQuiz} style={styles.retryButton}>
               <Text style={styles.retryButtonText}>Try again</Text>
             </Pressable>
+            {session.source === 'miniApp' && <Pressable style={styles.retryButton} onPress={() => router.replace({ pathname: '/quiz/modes/dictionary/[miniAppId]', params: { miniAppId: session.miniAppId, name: session.title } })}><Text style={styles.retryButtonText}>Choose quiz settings · buckets</Text></Pressable>}
           </View>
         )}
 

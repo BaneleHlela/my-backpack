@@ -12,7 +12,10 @@
     "reset-book-course": "ts-node src/scripts/resetBookCourse.ts",
     "seed-conservation-topic": "ts-node src/scripts/seedConservationTopic.ts",
     "migrate:course-roadmap-restructure": "ts-node src/seed/migrations/2026-07-course-roadmap-restructure.ts",
-    "migrate:quiz-modes-pool": "ts-node src/seed/migrations/2026-08-quiz-modes-pool.ts"
+    "migrate:quiz-modes-pool": "ts-node src/seed/migrations/2026-08-quiz-modes-pool.ts",
+    "migrate:multiple-buckets": "ts-node --ignore-diagnostics 5107 src/seed/migrations/2026-09-multiple-buckets.ts",
+    "test:buckets": "ts-node --transpile-only --ignore-diagnostics 5107 src/tests/buckets.integration.test.ts",
+    "test:bucket-unit": "ts-node --transpile-only --ignore-diagnostics 5107 src/tests/buckets.unit.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
@@ -52,6 +55,7 @@
     "@types/passport-google-oauth20": "^2.0.17",
     "@types/passport-local": "^1.0.38",
     "@types/pdf-parse": "^1.1.5",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "mongodb-memory-server-core": "10.2.0"
   }
 }

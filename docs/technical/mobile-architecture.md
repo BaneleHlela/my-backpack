@@ -1792,3 +1792,23 @@ flagging what hasn't been run end-to-end yet.
 ---
 
 *Last updated: 2026-08-13.*
+
+
+## Dictionary buckets — September 2026
+
+The single-bucket screen and local-only quiz source settings described in earlier sections are
+superseded by [Dictionary buckets](dictionary-buckets.md). `BucketWorkspace` handles own/public
+lists and detail views; `BucketPickerSheet` saves one meaning into multiple buckets with inline
+creation. `BucketWordsSheet` reviews cached/individually looked-up dictionary meanings for AI
+headwords or pasted lists. All sheets use the themed `BucketControls` primitives and `AppText`.
+
+Each dynamic quiz mode's settings include `QuizBucketChoices`, defaults/custom selection,
+learning/mastered/all filtering and creation. The source preference persists by profile, Quiz ID
+and play mode on the API. `bucketIds` and `playModeId` travel through the existing play parameter
+and session settings mapper. Server session creation is the authoritative empty/source guard;
+the broad legacy has-content precheck no longer blocks these starts. Error screens route back
+to mode settings, whose bucket controls lead to creation or adding words.
+
+Bucket resources key reads by active profile, URL and query, ignore stale responses, and refresh
+when a bucket screen regains focus. List/detail components remount across profiles. Device testing
+of keyboard avoidance, share links and modal interactions is still required before release.

@@ -11,9 +11,21 @@ import { generateNonAiQuestions, GeneratedQuestion } from './nonAiGenerator';
 import { generateAiQuestions } from './aiGenerator';
 import { validateQuestion } from './questionValidator';
 
-export async function generateQuestionsForDefinition(
+// Coalesce concurrent membership/copy/quiz retries for the same meaning on this API instance.
+const inFlight = new Map<string, Promise<void>>();
+export function generateQuestionsForDefinition(termId: string, definitionId: string, options: { allowAi?: boolean } = {}): Promise<void> {
+  const key = `${termId}:${definitionId}`;
+  const pending = inFlight.get(key);
+  if (pending) return pending;
+  const task = generateDefinitionQuestions(termId, definitionId, options).finally(() => { inFlight.delete(key); });
+  inFlight.set(key, task);
+  return task;
+}
+
+async function generateDefinitionQuestions(
   termId: string,
-  definitionId: string
+  definitionId: string,
+  options: { allowAi?: boolean } = {}
 ): Promise<void> {
   // Skip if questions already exist for this term+definition
   const existingCount = await Question.countDocuments({ termId, definitionId, isActive: true });
@@ -42,7 +54,7 @@ export async function generateQuestionsForDefinition(
     const nonAiResults = generateNonAiQuestions(term, definition, distractorDefs, distractorTerms);
 
     const needsSentence = nonAiResults.some((q) => q.needsAiSentence);
-    const aiEnabled = process.env.AI_QUESTION_GENERATION_ENABLED === 'true';
+    const aiEnabled = options.allowAi !== false && process.env.AI_QUESTION_GENERATION_ENABLED === 'true';
 
     let aiQuestions: GeneratedQuestion[] = [];
     if (aiEnabled) {

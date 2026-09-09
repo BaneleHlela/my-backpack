@@ -23,7 +23,6 @@
 import LearningRecord, { ILearningRecordDocument, LearningStatus } from '../models/learning/learningRecord.model';
 import AdaptiveProfile, { IMiniAppStats } from '../models/learning/adaptiveProfile.model';
 import BucketEntry from '../models/apps/language/vocabulary/bucketEntry.model';
-import TermBucket from '../models/apps/language/vocabulary/termBucket.model';
 import { IAnswerRecordDocument } from '../models/learning/answerRecord.model';
 
 const PLATFORM_AVG_QUESTIONS_TO_MASTER = 5;
@@ -62,14 +61,16 @@ export async function updateLearningRecord(
   termId: string,
   miniAppId: string,
   answerRecord: IAnswerRecordDocument,
-  masteryThreshold: number
+  masteryThreshold: number,
+  definitionId?: string
 ): Promise<ILearningRecordDocument> {
-  let record = await LearningRecord.findOne({ profileId, termId });
+  let record = await LearningRecord.findOne({ profileId, termId, definitionId: definitionId ?? { $exists: false } });
 
   if (!record) {
     record = new LearningRecord({
       profileId,
       termId,
+      definitionId,
       miniAppId,
       confidenceScore: 0.0,
       status: 'unseen' as LearningStatus,
@@ -113,14 +114,9 @@ export async function updateLearningRecord(
     }
     scheduleNextReview(record); // transitions status to 'reviewing'
 
-    // Sync BucketEntry to 'mastered' on first crossing
-    const bucket = await TermBucket.findOne({ profileId, miniAppId });
-    if (bucket) {
-      await BucketEntry.findOneAndUpdate(
-        { bucketId: bucket._id, termId },
-        { status: 'mastered' }
-      );
-    }
+    await BucketEntry.updateMany(
+      { profileId, termId, definitionId: definitionId ?? { $exists: false }, status: { $ne: 'paused' } }, { status: 'mastered' }
+    );
   } else if (prevStatus === 'reviewing') {
     if (answerRecord.isCorrect) {
       // Successful review — push the next review further out
@@ -130,13 +126,9 @@ export async function updateLearningRecord(
       record.confidenceScore = Math.max(0, record.confidenceScore - 0.10);
       record.status = 'learning';
 
-      const bucket = await TermBucket.findOne({ profileId, miniAppId });
-      if (bucket) {
-        await BucketEntry.findOneAndUpdate(
-          { bucketId: bucket._id, termId },
-          { status: 'learning' }
-        );
-      }
+      await BucketEntry.updateMany(
+        { profileId, termId, definitionId: definitionId ?? { $exists: false }, status: { $ne: 'paused' } }, { status: 'learning' }
+      );
     }
   }
 

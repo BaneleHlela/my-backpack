@@ -3,6 +3,7 @@
 // Profile routes require a full JWT (requireProfile) so the ageGroup is available.
 // Routes that return term content or questions also run attachContentPrefs.
 import { Router, IRouter } from 'express';
+import bucketRoutes from './bucket.routes';
 import { requireProfile } from '../auth/auth.middleware';
 import { attachContentPrefs } from '../../middleware/ageGroup.middleware';
 import {
@@ -18,6 +19,7 @@ import {
 } from './vocab.controller';
 
 const router: IRouter = Router();
+router.use('/buckets', bucketRoutes);
 
 // GET /api/vocab/dictionary/alphabet?miniAppId=xxx — public
 router.get('/dictionary/alphabet', getAlphabetHandler);

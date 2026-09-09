@@ -8,7 +8,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { QuizModeSelectScreen } from '../../../../src/components/quiz/QuizModeSelectScreen';
 
 export default function QuizModesForDictionaryScreen() {
-  const { miniAppId, name } = useLocalSearchParams<{ miniAppId: string; name?: string }>();
+  const { miniAppId, name, bucketId } = useLocalSearchParams<{ miniAppId: string; name?: string; bucketId?: string }>();
 
-  return <QuizModeSelectScreen target={{ miniAppId, title: name }} backLabel={name ?? 'Dictionary'} />;
+  return <QuizModeSelectScreen target={{ miniAppId, title: name, bucketId }} backLabel={name ?? 'Dictionary'} />;
 }

@@ -16,6 +16,8 @@ export type QuizMode = 'dynamic' | 'fixed' | 'pool';
 export type FeedbackMode = 'immediate' | 'end';
 
 export interface QuizSettings {
+  bucketIds?: string[] | null;
+  playModeId?: string;
   questionCount: number;
   timeLimit?: number;
   questionTypes: string[];

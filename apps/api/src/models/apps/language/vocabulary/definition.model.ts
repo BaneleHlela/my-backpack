@@ -15,6 +15,10 @@ export interface IDefinitionDocument extends Document {
   synonyms: string[];
   antonyms: string[];
   order: number;
+  sourceProvider?: string;
+  sourceEntryId?: string;
+  sourceEntryUuid?: string;
+  sourceSenseKey?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,6 +31,10 @@ const definitionSchema = new Schema<IDefinitionDocument>(
     examples: { type: [String], default: [] },
     synonyms: { type: [String], default: [] },
     antonyms: { type: [String], default: [] },
+    sourceProvider: { type: String },
+    sourceEntryId: { type: String },
+    sourceEntryUuid: { type: String },
+    sourceSenseKey: { type: String },
     order: { type: Number, default: 0 },
   },
   { timestamps: true }

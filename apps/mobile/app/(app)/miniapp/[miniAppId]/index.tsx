@@ -60,17 +60,17 @@ export default function DictionaryHomeScreen() {
           <View style={styles.topBarActions}>
             <Pressable
               onPress={() => router.push({ pathname: '/quiz/modes/dictionary/[miniAppId]', params: { miniAppId, name } })}
-              style={styles.bucketButton}
+              style={[styles.bucketButton, { backgroundColor: '#A78BFA' }]}
             >
-              <Sparkles size={14} color={colors.primary.DEFAULT} />
+              <Sparkles size={18} color="#172033" />
               <Text style={styles.bucketButtonText}>Take Quiz</Text>
             </Pressable>
             <Pressable
               onPress={() => router.push({ pathname: '/(app)/miniapp/[miniAppId]/bucket', params: { miniAppId, name } })}
-              style={styles.bucketButton}
+              style={[styles.bucketButton, { backgroundColor: '#A3E635' }]}
             >
-              <Bookmark size={14} color={colors.primary.DEFAULT} />
-              <Text style={styles.bucketButtonText}>My Bucket</Text>
+              <Bookmark size={18} color="#172033" />
+              <Text style={styles.bucketButtonText}>My Buckets</Text>
             </Pressable>
           </View>
 
@@ -146,8 +146,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
     borderRadius: 12,
     backgroundColor: colors.surface.glass,
     borderWidth: 1,
@@ -156,7 +156,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   bucketButtonText: {
     fontSize: typography.small,
     fontWeight: '600',
-    color: colors.primary.DEFAULT,
+    color: '#172033',
   },
   title: {
     fontFamily: fonts.display.bold,

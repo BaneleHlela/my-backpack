@@ -51,15 +51,15 @@ export default function DictionaryPage({ miniApp, subjectSlug }: DictionaryPageP
           <button
             type="button"
             onClick={() => navigate(`${miniAppBasePath}/bucket`)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/40 backdrop-blur border border-white/50 text-sm font-medium text-violet-600 hover:bg-white/60 transition-colors flex-shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-lime-400 text-sm font-bold text-slate-900 hover:bg-lime-300 transition-colors flex-shrink-0"
           >
             <Bookmark className="w-4 h-4" />
-            My Bucket
+            My Buckets
           </button>
           <button
             type="button"
             onClick={() => navigate(`${miniAppBasePath}/quiz`)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/40 backdrop-blur border border-white/50 text-sm font-medium text-violet-600 hover:bg-white/60 transition-colors flex-shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-400 text-sm font-bold text-slate-900 hover:bg-violet-300 transition-colors flex-shrink-0"
           >
             <Sparkles className="w-4 h-4" />
             Take Quiz

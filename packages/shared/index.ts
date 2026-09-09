@@ -14,3 +14,4 @@ export * from './constants/assets';
 export * from './constants/theme';
 export * from './constants/quizPlayModes';
 export * from './utils/resolveHelpers';
+export * from './types/bucket';

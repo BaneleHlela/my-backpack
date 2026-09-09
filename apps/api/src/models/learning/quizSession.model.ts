@@ -19,6 +19,8 @@ export type BucketFilter = 'all' | 'learning' | 'mastered';
 export type { FeedbackMode };
 
 export interface ISessionSettings {
+  bucketIds?: string[] | null;
+  playModeId?: string;
   questionCount: number;
   timeLimit?: number;
   questionTypes: string[];
@@ -59,6 +61,8 @@ export interface IQuizSessionDocument extends Document {
 
 const sessionSettingsSchema = new Schema<ISessionSettings>(
   {
+    bucketIds: { type: [String], default: undefined },
+    playModeId: { type: String },
     questionCount: { type: Number, required: true },
     timeLimit: { type: Number },
     questionTypes: { type: [String], default: [] },

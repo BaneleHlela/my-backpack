@@ -1,14 +1,13 @@
 // Vocabulary Quiz mini-app screen. Owns the session lifecycle: start screen →
 // active question loop (answer → feedback → advance) → results.
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Loader2, BookOpen, SkipForward } from 'lucide-react';
+import { Loader2, SkipForward } from 'lucide-react';
 import { resolveHelpers } from '@my-backpack/shared';
 import type { IMiniApp } from '@my-backpack/shared';
 import type { AppDispatch, RootState } from '../../app/store';
-import axiosInstance from '../../lib/axios';
 import { subjectSlugToLangCode } from '../../lib/lang';
 import {
   startSession,
@@ -33,32 +32,16 @@ interface QuizPageProps {
 
 export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [params] = useSearchParams();
+  const manageBuckets = () => navigate(location.pathname.endsWith('/quiz') ? location.pathname.slice(0, -5) + '/bucket' : `/subject/${subjectSlug}`);
   const dispatch = useDispatch<AppDispatch>();
   const quiz = useSelector((state: RootState) => state.quiz);
   const { activeProfile } = useSelector((state: RootState) => state.auth);
   const ageGroup = activeProfile?.ageGroup ?? 'adult';
   const lang = subjectSlugToLangCode(subjectSlug);
 
-  const [bucketHasTerms, setBucketHasTerms] = useState<boolean | null>(null);
   const questionStartedAt = useRef<number>(Date.now());
-
-  // Pre-check: don't let the learner start an empty session. Resolved server-side via the
-  // mini-app's default Quiz (which may pull its content pool from a sibling mini-app, e.g.
-  // the Dictionary, so this can't be answered by checking this mini-app's own bucket directly).
-  useEffect(() => {
-    let cancelled = false;
-    axiosInstance
-      .get('/quiz/has-content', { params: { miniAppId: miniApp._id } })
-      .then((res) => {
-        if (!cancelled) setBucketHasTerms(res.data.data.hasContent as boolean);
-      })
-      .catch(() => {
-        if (!cancelled) setBucketHasTerms(true); // fail open — let the start screen attempt it
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [miniApp._id]);
 
   // Reset the slice when leaving the mini-app, and abandon any still-active session.
   useEffect(() => {
@@ -168,30 +151,9 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
       title={<h1 className="text-2xl font-bold text-gray-800 mb-4">{miniApp.name}</h1>}
     >
       <AnimatePresence mode="wait">
-        {quiz.status === 'idle' && bucketHasTerms === null && (
-          <motion.div key="loading" className="flex justify-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin text-violet-400" />
-          </motion.div>
-        )}
-
-        {quiz.status === 'idle' && bucketHasTerms === false && (
-          <motion.div
-            key="empty"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-white/40 backdrop-blur rounded-3xl border border-white/50 p-8 text-center"
-          >
-            <BookOpen className="w-10 h-10 text-violet-400 mx-auto" />
-            <p className="font-semibold text-gray-700 mt-3">No words to quiz yet</p>
-            <p className="text-sm text-gray-500 mt-1">
-              Add a few words to your bucket from the Dictionary, then come back to test yourself.
-            </p>
-          </motion.div>
-        )}
-
-        {(quiz.status === 'idle' || quiz.status === 'starting') && bucketHasTerms === true && (
+        {(quiz.status === 'idle' || quiz.status === 'starting') && (
           <motion.div key="start" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <QuizStartScreen isStarting={quiz.status === 'starting'} onStart={handleStart} />
+            <QuizStartScreen key={`${activeProfile?._id}:${miniApp._id}`} miniAppId={miniApp._id} initialBucketId={params.get('bucketId') ?? undefined} onManageBuckets={manageBuckets} isStarting={quiz.status === 'starting'} onStart={handleStart} />
           </motion.div>
         )}
 
@@ -208,7 +170,7 @@ export default function QuizPage({ miniApp, subjectSlug }: QuizPageProps) {
               onClick={() => dispatch(resetQuiz())}
               className="mt-4 px-5 py-2 rounded-xl bg-white/50 border border-white/50 text-sm font-medium text-gray-700 hover:bg-white/70 transition-colors"
             >
-              Try again
+              Choose settings · buckets
             </button>
           </motion.div>
         )}

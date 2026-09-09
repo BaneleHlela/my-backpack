@@ -1,3 +1,8 @@
+import { generateQuestionsForDefinition } from './questionGeneration';
+import { ensureFavorites } from '../modules/vocab/bucket.service';
+import { idList, playMode } from '../modules/vocab/bucket.validation';
+import QuizBucketPreference from '../models/learning/quizBucketPreference.model';
+import { AppError } from '../utils/AppError';
 // Manages the full quiz session lifecycle: creation, answer capture, completion, abandonment.
 //
 // Question selection priority (selectQuestions):
@@ -126,6 +131,8 @@ export function evaluateDnDAnswer(
 }
 
 export interface CreateSessionSettingsOverride {
+  bucketIds?: string[] | null;
+  playModeId?: string;
   questionCount?: number;
   timeLimit?: number;
   questionTypes?: string[];
@@ -171,84 +178,63 @@ function bucketRefKey(termId: string, definitionId: string): string {
 // Selects an ordered list of question ObjectIds for the session based on the profile's bucket
 // across all of the quiz's source mini-apps (sourceMiniAppIds), keyed by term+definition so
 // multi-definition words resolve to the specific definition the profile actually bucketed.
-async function selectQuestions(
+export async function selectQuestions(
   profileId: string,
   sourceMiniAppIds: string[],
   settings: ISessionSettings
 ): Promise<Types.ObjectId[]> {
-  const buckets = await TermBucket.find({ profileId, miniAppId: { $in: sourceMiniAppIds } });
-  if (buckets.length === 0) return [];
-  const bucketIds = buckets.map((b) => b._id);
-
-  const statusFilter: EntryStatus[] =
-    settings.bucketFilter === 'all'
-      ? ['learning', 'mastered', 'paused']
-      : settings.bucketFilter === 'mastered'
-      ? ['mastered']
-      : ['learning'];
-
-  const entries = await BucketEntry.find({
-    bucketId: { $in: bucketIds },
-    status: { $in: statusFilter },
+  for (const miniAppId of sourceMiniAppIds) await ensureFavorites(profileId, miniAppId);
+  const custom = settings.bucketIds !== undefined && settings.bucketIds !== null;
+  const requested = custom ? idList(settings.bucketIds) : null;
+  const buckets = await TermBucket.find({ profileId, miniAppId: { $in: sourceMiniAppIds },
+    ...(requested ? { _id: { $in: requested } } : { includeInQuiz: { $ne: false } }) });
+  if (requested && requested.length !== buckets.length) throw new AppError('A selected bucket is no longer available. Choose your buckets again.', 400);
+  settings.bucketIds = buckets.map((b) => b._id.toString());
+  if (!buckets.length) throw new AppError('Choose at least one bucket for this quiz.', 400);
+  const entries = await BucketEntry.find({ bucketId: { $in: buckets.map((b) => b._id) }, status: { $ne: 'paused' } }).sort({ addedAt: 1 });
+  if (!entries.length) throw new AppError('Add words to your selected buckets, or resume paused words, before starting.', 400);
+  const refs = new Map(entries.map((e) => [bucketRefKey(e.termId.toString(), e.definitionId.toString()), e]));
+  const records = await LearningRecord.find({ profileId, definitionId: { $in: entries.map((e) => e.definitionId) } });
+  const recordMap = new Map(records.map((r) => [bucketRefKey(r.termId.toString(), r.definitionId?.toString() ?? ''), r]));
+  const eligible = [...refs.entries()].filter(([key]) => {
+    const r = recordMap.get(key);
+    const mastered = r?.status === 'mastered' || r?.status === 'reviewing';
+    return settings.bucketFilter === 'all' || (settings.bucketFilter === 'mastered' ? mastered : !mastered);
   });
-  if (entries.length === 0) return [];
-
-  const refs = entries.map((e) => ({
-    termId: e.termId.toString(),
-    definitionId: e.definitionId.toString(),
-  }));
-  const refMap = new Map(refs.map((r) => [bucketRefKey(r.termId, r.definitionId), r]));
-
-  const termIds = refs.map((r) => r.termId);
-  const records = await LearningRecord.find({
-    profileId,
-    termId: { $in: termIds },
-  });
-  const recordMap = new Map(
-    records.map((r) => [bucketRefKey(r.termId.toString(), r.definitionId?.toString() ?? ''), r])
-  );
-
-  // Priority 1: due for review
-  const dueForReview = records
-    .filter((r) => r.status === 'reviewing' && r.nextReviewAt && r.nextReviewAt <= new Date())
-    .map((r) => bucketRefKey(r.termId.toString(), r.definitionId?.toString() ?? ''));
-
-  // Priority 2: actively learning, lowest confidence first
-  const learning = records
-    .filter((r) => r.status === 'learning')
-    .sort((a, b) => a.confidenceScore - b.confidenceScore)
-    .map((r) => bucketRefKey(r.termId.toString(), r.definitionId?.toString() ?? ''));
-
-  // Priority 3: unseen (in bucket order)
-  const unseen = refs
-    .map((r) => bucketRefKey(r.termId, r.definitionId))
-    .filter((key) => !recordMap.has(key) || recordMap.get(key)?.status === 'unseen');
-
-  const prioritised = Array.from(new Set([...dueForReview, ...learning, ...unseen]));
-  const selected = prioritised.slice(0, settings.questionCount);
-
-  const questionIds: Types.ObjectId[] = [];
-  const typeFilter: QuestionType[] | undefined =
-    settings.questionTypes.length > 0 ? (settings.questionTypes as QuestionType[]) : undefined;
-
-  for (const key of selected) {
-    const ref = refMap.get(key);
-    if (!ref) continue;
-    const qs = await Question.find({
-      termId: ref.termId,
-      definitionId: ref.definitionId,
-      miniAppId: { $in: sourceMiniAppIds },
-      isActive: true,
-      ...(typeFilter ? { type: { $in: typeFilter } } : {}),
-    });
-    if (qs.length > 0) {
-      // Pick a random question for variety
-      const q = qs[Math.floor(Math.random() * qs.length)];
-      questionIds.push(q._id as Types.ObjectId);
+  if (!eligible.length) throw new AppError('No words match this learning filter. Change the filter or add words.', 400);
+  const priority = (key: string) => {
+    const r = recordMap.get(key);
+    if (r?.nextReviewAt && r.nextReviewAt <= new Date()) return -2;
+    if (r?.status === 'learning') return r.confidenceScore;
+    return r?.status === 'unseen' || !r ? 2 : 3;
+  };
+  eligible.sort(([a], [b]) => priority(a) - priority(b));
+  const questionQuery = { isActive: true, miniAppId: { $in: sourceMiniAppIds },
+    definitionId: { $in: eligible.map(([, e]) => e.definitionId) },
+    ...(settings.questionTypes.length ? { type: { $in: settings.questionTypes as QuestionType[] } } : {}) };
+  let questions = await Question.find(questionQuery);
+  // Recover unfinished background preparation after an API restart. Bounded, local templates only.
+  if (!questions.length) {
+    for (const [, entry] of eligible.slice(0, 20)) {
+      await generateQuestionsForDefinition(entry.termId.toString(), entry.definitionId.toString(), { allowAi: false });
     }
+    questions = await Question.find(questionQuery);
   }
-
-  return questionIds;
+  const byRef = new Map<string, IQuestionDocument[]>();
+  for (const q of questions) {
+    if (!q.termId || !q.definitionId) continue;
+    const key = bucketRefKey(q.termId.toString(), q.definitionId.toString());
+    byRef.set(key, [...(byRef.get(key) ?? []), q]);
+  }
+  const ids: Types.ObjectId[] = [];
+  // Fill from eligible definitions with usable questions; missing questions don't consume a slot.
+  for (const [key] of eligible) {
+    const pool = byRef.get(key);
+    if (pool?.length) ids.push(pool[Math.floor(Math.random() * pool.length)]._id);
+    if (ids.length >= settings.questionCount) break;
+  }
+  if (!ids.length) throw new AppError('No questions are ready for these words and question types yet. Retry shortly or change the settings.', 400);
+  return ids;
 }
 
 // Selects a random slice of every active Question scoped to a mode:'pool' quiz's miniAppId
@@ -264,7 +250,7 @@ async function selectPoolQuestions(
   settings: ISessionSettings
 ): Promise<Types.ObjectId[]> {
   const typeFilter: Record<string, unknown> =
-    settings.questionTypes.length > 0 ? { type: { $in: settings.questionTypes } } : {};
+    settings.questionTypes.length > 0 ? { type: { $in: settings.questionTypes as QuestionType[] } } : {};
   const questions = await Question.find({ miniAppId, isActive: true, ...typeFilter }).select('_id');
   const shuffled = shuffle(questions.map((q) => q._id as Types.ObjectId));
   return shuffled.slice(0, settings.questionCount);
@@ -285,6 +271,8 @@ export async function createQuizSession(
   if (!quiz || !quiz.isActive) throw new Error('Quiz not found');
 
   const settings: ISessionSettings = {
+    playModeId: playMode(overrideSettings?.playModeId),
+    bucketIds: overrideSettings?.bucketIds,
     questionCount: overrideSettings?.questionCount ?? quiz.settings.questionCount,
     timeLimit: overrideSettings?.timeLimit ?? quiz.settings.timeLimit,
     questionTypes: overrideSettings?.questionTypes ?? quiz.settings.questionTypes,
@@ -293,6 +281,13 @@ export async function createQuizSession(
     shuffleQuestions: overrideSettings?.shuffleQuestions ?? quiz.settings.shuffleQuestions,
   };
 
+  if (!Number.isInteger(settings.questionCount) || settings.questionCount < 1 || settings.questionCount > 500) throw new AppError('Choose 1–500 questions', 400);
+  if (!['all', 'learning', 'mastered'].includes(settings.bucketFilter)) throw new AppError('Invalid learning filter', 400);
+  if (!Array.isArray(settings.questionTypes) || settings.questionTypes.some((t) => typeof t !== 'string')) throw new AppError('Invalid question types', 400);
+  if (quiz.mode === 'dynamic' && overrideSettings?.bucketIds === undefined) {
+    const preference = await QuizBucketPreference.findOne({ profileId, quizId, playModeId: settings.playModeId });
+    settings.bucketIds = preference?.bucketIds?.map(String) ?? null;
+  }
   let questionIds: Types.ObjectId[];
   if (quiz.mode === 'fixed') {
     const questions = await Question.find({ _id: { $in: quiz.questionIds }, isActive: true });
@@ -314,6 +309,8 @@ export async function createQuizSession(
   if (settings.shuffleQuestions) {
     questionIds = shuffle(questionIds);
   }
+
+  if (!questionIds.length) throw new AppError('This quiz has no questions available yet.', 400);
 
   const session = new QuizSession({
     profileId,
@@ -340,6 +337,9 @@ export async function captureAnswer(
 ): Promise<CaptureAnswerResult> {
   const session = await QuizSession.findOne({ _id: sessionId, profileId, status: 'active' });
   if (!session) throw new Error('Active session not found');
+  if (!session.questionIds.some((id) => id.toString() === data.questionId)) {
+    throw new AppError('This question is not part of the current quiz.', 400);
+  }
 
   const question = await Question.findById(data.questionId);
   if (!question) throw new Error('Question not found');
@@ -352,6 +352,7 @@ export async function captureAnswer(
   const existingRecord = await LearningRecord.findOne({
     profileId,
     termId: question.termId,
+    definitionId: question.definitionId ?? { $exists: false },
   });
   const confidenceBefore = existingRecord?.confidenceScore ?? 0;
 
@@ -422,7 +423,8 @@ export async function captureAnswer(
       question.termId.toString(),
       question.miniAppId.toString(),
       answerRecord,
-      masteryThreshold
+      masteryThreshold,
+      question.definitionId?.toString()
     );
     confidenceAfter = updatedRecord.confidenceScore;
     answerRecord.confidenceAfter = confidenceAfter;

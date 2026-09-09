@@ -24,6 +24,8 @@
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../AppText';
 import { useRouter } from 'expo-router';
+import { useSelector } from 'react-redux';
+import type { RootState } from '../../store/store';
 import { History } from 'lucide-react-native';
 import { spacing, typography } from '@my-backpack/shared';
 import { ScreenBackground } from '../ScreenBackground';
@@ -35,13 +37,14 @@ import { QuizModeGrid } from './QuizModeGrid';
 import { encodePlayModeParam, type QuizPlayModeId, type QuizPlayModeSettings } from './quizPlayModes';
 
 interface QuizModeSelectScreenProps {
-  target: { miniAppId: string; title?: string };
+  target: { miniAppId: string; title?: string; bucketId?: string };
   backLabel: string;
 }
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
 export function QuizModeSelectScreen({ target, backLabel }: QuizModeSelectScreenProps) {
+  const profileId = useSelector((s: RootState) => s.auth.activeProfile?._id);
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
@@ -74,7 +77,7 @@ export function QuizModeSelectScreen({ target, backLabel }: QuizModeSelectScreen
           </Pressable>
         </View>
 
-        <QuizModeGrid settingsAdjustable onStart={startSession} />
+        <QuizModeGrid key={`${profileId}:${target.miniAppId}`} settingsAdjustable miniAppId={target.miniAppId} initialBucketId={target.bucketId} onStart={startSession} />
       </ScrollView>
     </ScreenBackground>
   );

@@ -19,6 +19,8 @@ import { QUIZ_PLAY_MODES, type QuizPlayModeId, type QuizPlayModeSettings } from 
 
 interface QuizModeGridProps {
   settingsAdjustable: boolean;
+  miniAppId?: string;
+  initialBucketId?: string;
   onStart: (modeId: QuizPlayModeId, settings: QuizPlayModeSettings) => void;
 }
 
@@ -30,7 +32,7 @@ function buildInitialSettings(): Record<QuizPlayModeId, QuizPlayModeSettings> {
   return initial;
 }
 
-export function QuizModeGrid({ settingsAdjustable, onStart }: QuizModeGridProps) {
+export function QuizModeGrid({ settingsAdjustable, onStart, miniAppId, initialBucketId }: QuizModeGridProps) {
   const [settingsByMode, setSettingsByMode] = useState<Record<QuizPlayModeId, QuizPlayModeSettings>>(
     buildInitialSettings
   );
@@ -45,7 +47,7 @@ export function QuizModeGrid({ settingsAdjustable, onStart }: QuizModeGridProps)
             mode={mode}
             settings={settingsByMode[mode.id]}
             settingsAdjustable={settingsAdjustable}
-            onPress={() => onStart(mode.id, settingsByMode[mode.id])}
+            onPress={() => onStart(mode.id, { ...settingsByMode[mode.id], playModeId: mode.id, ...(initialBucketId ? { bucketIds: [initialBucketId] } : {}) })}
             onSettingsPress={() => setEditingModeId(mode.id)}
           />
         </View>
@@ -54,7 +56,8 @@ export function QuizModeGrid({ settingsAdjustable, onStart }: QuizModeGridProps)
       {editingMode && (
         <QuizSettingsModal
           mode={editingMode}
-          settings={settingsByMode[editingMode.id]}
+          miniAppId={miniAppId}
+          settings={{ ...settingsByMode[editingMode.id], ...(initialBucketId ? { bucketIds: [initialBucketId] } : {}) }}
           onClose={() => setEditingModeId(null)}
           onConfirm={(next) => {
             setSettingsByMode((prev) => ({ ...prev, [editingMode.id]: next }));

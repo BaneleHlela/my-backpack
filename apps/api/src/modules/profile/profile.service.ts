@@ -1,5 +1,7 @@
-﻿// Business logic for profile management: CRUD, setup, PIN operations
-import { Types } from 'mongoose';
+import { ensureProfileFavorites } from '../vocab/bucket.service'; // Business logic for profile management: CRUD, setup, PIN operations
+import mongoose, { Types } from 'mongoose';
+import TermBucket from '../../models/apps/language/vocabulary/termBucket.model';
+import QuizBucketPreference from '../../models/learning/quizBucketPreference.model';
 import Account from '../../models/core/account.model';
 import Profile, { IProfileDocument } from '../../models/core/profile.model';
 import BucketEntry from '../../models/apps/language/vocabulary/bucketEntry.model';
@@ -15,7 +17,10 @@ import {
 
 const MAX_PROFILES = 6;
 
-function toProfileSummary(profile: IProfileDocument, isGuest: boolean): ProfileSummary {
+function toProfileSummary(
+  profile: IProfileDocument,
+  isGuest: boolean
+): ProfileSummary {
   return {
     id: profile._id.toString(),
     displayName: profile.displayName,
@@ -28,13 +33,17 @@ function toProfileSummary(profile: IProfileDocument, isGuest: boolean): ProfileS
   };
 }
 
-export async function getProfileById(profileId: string): Promise<IProfileDocument> {
+export async function getProfileById(
+  profileId: string
+): Promise<IProfileDocument> {
   const profile = await Profile.findById(profileId).select('-pin');
   if (!profile) throw new Error('Profile not found');
   return profile;
 }
 
-export async function getProfilesByAccountId(accountId: string): Promise<ProfileSummary[]> {
+export async function getProfilesByAccountId(
+  accountId: string
+): Promise<ProfileSummary[]> {
   const account = await Account.findById(accountId);
   if (!account) throw new Error('Account not found');
   const profiles = await Profile.find({ _id: { $in: account.profiles } });
@@ -60,6 +69,7 @@ export async function createProfile(
     isOwner: false,
   });
   await profile.save();
+  await ensureProfileFavorites(profile._id.toString());
 
   account.profiles.push(profile._id);
   await account.save();
@@ -74,9 +84,12 @@ export async function updateProfile(
   const updates: Record<string, unknown> = {};
   if (data.displayName !== undefined) updates['displayName'] = data.displayName;
   if (data.avatarUrl !== undefined) updates['avatarUrl'] = data.avatarUrl;
-  if (data.dateOfBirth !== undefined) updates['dateOfBirth'] = new Date(data.dateOfBirth);
-  if (data.preferences?.language !== undefined) updates['preferences.language'] = data.preferences.language;
-  if (data.preferences?.theme !== undefined) updates['preferences.theme'] = data.preferences.theme;
+  if (data.dateOfBirth !== undefined)
+    updates['dateOfBirth'] = new Date(data.dateOfBirth);
+  if (data.preferences?.language !== undefined)
+    updates['preferences.language'] = data.preferences.language;
+  if (data.preferences?.theme !== undefined)
+    updates['preferences.theme'] = data.preferences.theme;
 
   const profile = await Profile.findByIdAndUpdate(
     profileId,
@@ -92,7 +105,8 @@ export async function completeProfileSetup(
   data: ProfileSetupDto
 ): Promise<IProfileDocument> {
   if (!data.dateOfBirth) throw new Error('dateOfBirth is required');
-  if (!data.education?.currentLevel) throw new Error('education.currentLevel is required');
+  if (!data.education?.currentLevel)
+    throw new Error('education.currentLevel is required');
 
   const setFields: Record<string, unknown> = {
     dateOfBirth: new Date(data.dateOfBirth),
@@ -119,13 +133,25 @@ export async function completeProfileSetup(
   return profile;
 }
 
-export async function deleteProfile(profileId: string, accountId: string): Promise<void> {
+export async function deleteProfile(
+  profileId: string,
+  accountId: string
+): Promise<void> {
   const profile = await Profile.findOne({ _id: profileId, accountId });
   if (!profile) throw new Error('Profile not found');
   if (profile.isOwner) throw new Error('Cannot delete the owner profile');
 
-  await profile.deleteOne();
-  await Account.findByIdAndUpdate(accountId, { $pull: { profiles: profile._id } });
+  await mongoose.connection.transaction(async (session) => {
+    await TermBucket.deleteMany({ profileId }, { session });
+    await BucketEntry.deleteMany({ profileId }, { session });
+    await QuizBucketPreference.deleteMany({ profileId }, { session });
+    await profile.deleteOne({ session });
+    await Account.findByIdAndUpdate(
+      accountId,
+      { $pull: { profiles: profile._id } },
+      { session }
+    );
+  });
 }
 
 export async function setPin(profileId: string, pin: string): Promise<void> {
@@ -168,7 +194,9 @@ export interface ProfileStats {
   recentSessions: RecentSession[];
 }
 
-export async function getProfileStats(profileId: string): Promise<ProfileStats> {
+export async function getProfileStats(
+  profileId: string
+): Promise<ProfileStats> {
   const [
     totalTermsInBucket,
     totalLearning,
@@ -177,7 +205,9 @@ export async function getProfileStats(profileId: string): Promise<ProfileStats> 
     adaptiveProfile,
     recentSessionDocs,
   ] = await Promise.all([
-    BucketEntry.countDocuments({ profileId }),
+    BucketEntry.distinct('definitionId', { profileId }).then(
+      (ids) => ids.length
+    ),
     LearningRecord.countDocuments({ profileId, status: 'learning' }),
     LearningRecord.countDocuments({ profileId, status: 'mastered' }),
     LearningRecord.countDocuments({ profileId, status: 'reviewing' }),
@@ -185,7 +215,9 @@ export async function getProfileStats(profileId: string): Promise<ProfileStats> 
     QuizSession.find({ profileId, status: 'completed' })
       .sort({ completedAt: -1 })
       .limit(5)
-      .populate<{ miniAppId: { _id: Types.ObjectId; name: string } }>('miniAppId', 'name'),
+      .populate<{
+        miniAppId: { _id: Types.ObjectId; name: string };
+      }>('miniAppId', 'name'),
   ]);
 
   const globalStats = adaptiveProfile?.globalStats;

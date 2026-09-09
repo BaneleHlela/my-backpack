@@ -8,6 +8,25 @@ at their own speed and are alerted when they are test-ready.
 
 ---
 
+## Dictionary buckets (September 2026)
+
+Dictionary buckets are now plural. Each profile/dictionary has a permanent Favorites header;
+legacy headers migrate in place, retaining memberships and history. New buckets have names,
+colors, private/public visibility and quiz defaults. Learning remains per profile + term +
+definition, shared across bucket memberships. Public collections can be copied into independent
+private buckets without copying the author's progress. Mobile/web support bucket management,
+membership picking, quiz source settings, bounded AI word suggestions and reviewed word-list imports.
+
+Read [docs/technical/dictionary-buckets.md](docs/technical/dictionary-buckets.md) before changing
+this feature. It documents routes, source-selection semantics, migration/deployment order,
+provider configuration and verification limits. Run the explicit migration before enabling
+multiple bucket writes; changing Mongoose indexes alone does not remove the old compound unique
+index. Quiz creation rejects empty/unavailable selections before persisting sessions. Fixed and
+course pool quizzes keep their existing question sources. Earlier single-bucket descriptions
+below are historical where they conflict with this section.
+
+---
+
 ## Tech Stack
 
 - **Monorepo**: pnpm workspaces
