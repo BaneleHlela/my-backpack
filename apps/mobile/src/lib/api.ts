@@ -15,7 +15,7 @@ let store: AppStore | undefined;
 export const injectStore = (appStore: AppStore) => {
   store = appStore;
 };
-
+console.log(process.env.EXPO_PUBLIC_API_URL);
 const api = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL,
   headers: { 'X-Client-Type': 'mobile' },

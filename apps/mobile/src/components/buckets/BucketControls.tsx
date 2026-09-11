@@ -14,12 +14,13 @@ import { X } from 'lucide-react-native';
 import { Text } from '../AppText';
 import { useTheme } from '../../theme/ThemeContext';
 import { fonts } from '../../theme/fonts';
+import { spacing } from '@my-backpack/shared';
 
 export function useBucketStyles() {
   const { colors } = useTheme();
   return StyleSheet.create({
     page: { flex: 1, backgroundColor: colors.background },
-    content: { padding: 20, gap: 16, paddingBottom: 40 },
+    content: { padding: spacing.md, gap: 16, paddingBottom: 40 },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
