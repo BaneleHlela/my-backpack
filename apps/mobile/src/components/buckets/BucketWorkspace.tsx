@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +11,12 @@ import {
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
+import { ChevronDown, Settings } from 'lucide-react-native';
+import Animated, {
+  ReduceMotion,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSelector } from 'react-redux';
 import {
   BUCKET_COLORS,
@@ -45,6 +51,80 @@ export function BucketWorkspace(props: Props) {
       key={`${profileId}:${props.miniAppId}`}
       miniAppId={props.miniAppId}
     />
+  );
+}
+
+function CollapsibleBucketCard({
+  title,
+  summary,
+  accessibilityLabel,
+  icon = 'chevron',
+  accentColor,
+  children,
+}: {
+  title: ReactNode;
+  summary: string;
+  accessibilityLabel: string;
+  icon?: 'chevron' | 'settings';
+  accentColor?: string;
+  children: ReactNode;
+}) {
+  const s = useBucketStyles();
+  const { colors } = useTheme();
+  const [expanded, setExpanded] = useState(false);
+  const rotation = icon === 'chevron' ? 180 : 90;
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        rotate: withTiming(`${expanded ? rotation : 0}deg`, {
+          duration: 200,
+          reduceMotion: ReduceMotion.System,
+        }),
+      },
+    ],
+  }));
+
+  return (
+    <View
+      style={[
+        s.card,
+        accentColor ? { borderTopColor: accentColor, borderTopWidth: 6 } : null,
+      ]}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${accessibilityLabel}. ${summary}`}
+        accessibilityState={{ expanded }}
+        onPress={() => setExpanded((value) => !value)}
+        style={({ pressed }) => [s.between, { opacity: pressed ? 0.7 : 1 }]}
+      >
+        <View style={{ flex: 1, gap: 4 }}>
+          {title}
+          <Text style={s.muted}>{summary}</Text>
+        </View>
+        <View
+          importantForAccessibility="no-hide-descendants"
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            borderWidth: 1,
+            borderColor: colors.text.faint,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Animated.View style={iconStyle}>
+            {icon === 'settings' ? (
+              <Settings size={22} color={colors.text.primary} />
+            ) : (
+              <ChevronDown size={22} color={colors.text.primary} />
+            )}
+          </Animated.View>
+        </View>
+      </Pressable>
+      {expanded && <View style={{ gap: 10 }}>{children}</View>}
+    </View>
   );
 }
 
@@ -261,6 +341,22 @@ function BucketDetail({
     }, [r.reload])
   );
   const b = r.data?.bucket;
+  const sortOptions = [
+    ['recent', 'Recent'],
+    ['alphabetical', 'A–Z'],
+    ...(b?.isOwner
+      ? [
+          ['confidence', 'Confidence'],
+          ['accuracy', 'Accuracy'],
+          ['lastPracticed', 'Last practised'],
+          ['dueForReview', 'Due for review'],
+        ]
+      : []),
+  ];
+  const sortLabel =
+    sortOptions.find(([value]) => value === sort)?.[1] ?? 'Recent';
+  const statusLabel =
+    status === 'all' ? 'All words' : status[0].toUpperCase() + status.slice(1);
   const back = () =>
     router.replace({
       pathname: '/(app)/miniapp/[miniAppId]/bucket',
@@ -311,16 +407,17 @@ function BucketDetail({
       )}
       {b && (
         <>
-          <View
-            style={[s.card, { borderTopColor: b.color, borderTopWidth: 6 }]}
+          <CollapsibleBucketCard
+            title={
+              <Text style={s.title}>
+                {b.isFavorites ? '★ ' : ''}
+                {b.name}
+              </Text>
+            }
+            summary={`${b.entryCount} saved meanings · ${b.visibility}`}
+            accessibilityLabel={`${b.name} bucket details and settings`}
+            accentColor={b.color}
           >
-            <Text style={s.title}>
-              {b.isFavorites ? '★ ' : ''}
-              {b.name}
-            </Text>
-            <Text style={s.muted}>
-              {b.entryCount} saved meanings · {b.visibility}
-            </Text>
             {!!b.description && <Text style={s.text}>{b.description}</Text>}
             {b.isOwner ? (
               <>
@@ -414,48 +511,48 @@ function BucketDetail({
                 Share bucket
               </BucketAction>
             )}
-          </View>
-          {b.isOwner && (
+          </CollapsibleBucketCard>
+          <CollapsibleBucketCard
+            title={<Text style={s.heading}>Filter & sort</Text>}
+            summary={b.isOwner ? `${statusLabel} · ${sortLabel}` : sortLabel}
+            accessibilityLabel="Word filters and sorting"
+            icon="settings"
+          >
+            {b.isOwner && (
+              <>
+                <Text style={s.text}>Filter by status</Text>
+                <View style={s.row}>
+                  {['all', 'learning', 'mastered', 'paused'].map((v) => (
+                    <BucketAction
+                      key={v}
+                      tone={status === v ? 'violet' : 'neutral'}
+                      onPress={() => {
+                        setStatus(v);
+                        setPage(1);
+                      }}
+                    >
+                      {v[0].toUpperCase() + v.slice(1)}
+                    </BucketAction>
+                  ))}
+                </View>
+              </>
+            )}
+            <Text style={s.text}>Sort words</Text>
             <View style={s.row}>
-              {['all', 'learning', 'mastered', 'paused'].map((v) => (
+              {sortOptions.map(([value, label]) => (
                 <BucketAction
-                  key={v}
-                  tone={status === v ? 'violet' : 'neutral'}
+                  key={value}
+                  tone={sort === value ? 'violet' : 'neutral'}
                   onPress={() => {
-                    setStatus(v);
+                    setSort(value);
                     setPage(1);
                   }}
                 >
-                  {v[0].toUpperCase() + v.slice(1)}
+                  {label}
                 </BucketAction>
               ))}
             </View>
-          )}
-          <View style={s.row}>
-            {[
-              ['recent', 'Recent'],
-              ['alphabetical', 'A–Z'],
-              ...(b.isOwner
-                ? [
-                    ['confidence', 'Confidence'],
-                    ['accuracy', 'Accuracy'],
-                    ['lastPracticed', 'Last practised'],
-                    ['dueForReview', 'Due for review'],
-                  ]
-                : []),
-            ].map(([value, label]) => (
-              <BucketAction
-                key={value}
-                tone={sort === value ? 'violet' : 'neutral'}
-                onPress={() => {
-                  setSort(value);
-                  setPage(1);
-                }}
-              >
-                {label}
-              </BucketAction>
-            ))}
-          </View>
+          </CollapsibleBucketCard>
           <TextInput
             style={s.input}
             accessibilityLabel="Find a word in this bucket"
