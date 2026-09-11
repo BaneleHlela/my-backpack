@@ -1,6 +1,7 @@
 // Defaults to a dry run. Pause bucket writes and take a backup before --apply.
 import 'dotenv/config';
 import mongoose from 'mongoose';
+import { connectDB } from '../../config/db';
 import TermBucket from '../../models/apps/language/vocabulary/termBucket.model';
 import QuizBucketPreference from '../../models/learning/quizBucketPreference.model';
 import BucketEntry from '../../models/apps/language/vocabulary/bucketEntry.model';
@@ -76,9 +77,8 @@ export async function migrateMultipleBuckets(apply = false) {
   });
 }
 async function main() {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await mongoose.connect(uri, { autoIndex: false });
+  // Share the API's SRV DNS setup without creating collections or indexes during a dry run.
+  await connectDB({ autoIndex: false, autoCreate: false });
   await migrateMultipleBuckets(process.argv.includes('--apply'));
 }
 if (require.main === module) {

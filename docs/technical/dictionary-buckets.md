@@ -125,6 +125,8 @@ as part of ordinary API startup.** The operational migration is separate from th
 2. Use this branch's installed API dependencies and the target `MONGODB_URI` in a controlled
    environment. Run the dry run:
    `pnpm --filter @my-backpack/api migrate:multiple-buckets`.
+   The migration uses the same connection/DNS setup as the API, with automatic index and
+   collection creation disabled so connection initialization cannot write during the dry run.
 3. Review its reported legacy bucket and entry counts. Apply with
    `pnpm --filter @my-backpack/api migrate:multiple-buckets --apply`.
 4. The script converts legacy headers, creates the Favorites partial unique index, backfills
