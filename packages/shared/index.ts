@@ -15,3 +15,4 @@ export * from './constants/theme';
 export * from './constants/quizPlayModes';
 export * from './utils/resolveHelpers';
 export * from './types/bucket';
+export * from './utils/sessionRefresh';

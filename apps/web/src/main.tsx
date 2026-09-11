@@ -1,11 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import { Provider, useDispatch } from 'react-redux';
+import { Provider, useDispatch, useSelector } from 'react-redux';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 import { store } from './app/store';
-import type { AppDispatch } from './app/store';
-import { injectStore } from './lib/axios';
+import type { AppDispatch, RootState } from './app/store';
+import { injectStore, noteSessionActivity } from './lib/axios';
 import { checkAuth, fetchActiveProfile } from './features/auth/authSlice';
 
 import AuthLayout from './layouts/AuthLayout';
@@ -45,16 +45,50 @@ injectStore(store);
 
 function AppRoutes() {
   const dispatch = useDispatch<AppDispatch>();
+  const { bootstrapError, isCheckingAuth } = useSelector((state: RootState) => state.auth);
+  const initialize = useCallback(async () => {
+    const result = await dispatch(checkAuth());
+    if (checkAuth.fulfilled.match(result) && result.payload) {
+      void dispatch(fetchActiveProfile());
+    }
+  }, [dispatch]);
 
   useEffect(() => {
-    const init = async () => {
-      const result = await dispatch(checkAuth());
-      if (checkAuth.fulfilled.match(result) && result.payload.data.accessToken) {
-        dispatch(fetchActiveProfile());
-      }
+    void initialize();
+  }, [initialize]);
+
+  useEffect(() => {
+    const resume = () => {
+      if (document.visibilityState !== 'visible' || isCheckingAuth) return;
+      if (bootstrapError) void initialize();
+      else noteSessionActivity();
     };
-    void init();
-  }, [dispatch]);
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('focus', resume);
+    window.addEventListener('online', resume);
+    document.addEventListener('pointerdown', noteSessionActivity, { passive: true });
+    document.addEventListener('keydown', noteSessionActivity);
+    document.addEventListener('scroll', noteSessionActivity, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('focus', resume);
+      window.removeEventListener('online', resume);
+      document.removeEventListener('pointerdown', noteSessionActivity);
+      document.removeEventListener('keydown', noteSessionActivity);
+      document.removeEventListener('scroll', noteSessionActivity, true);
+    };
+  }, [bootstrapError, initialize, isCheckingAuth]);
+
+  if (bootstrapError) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <p role="alert">{bootstrapError}</p>
+        <button className="rounded-xl bg-violet-600 px-6 py-3 text-white" onClick={() => void initialize()}>
+          Try again
+        </button>
+      </main>
+    );
+  }
 
   return (
     <BrowserRouter>

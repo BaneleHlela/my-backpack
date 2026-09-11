@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AppState, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -20,10 +21,13 @@ import {
 } from '@expo-google-fonts/nunito-sans';
 import { store } from '../src/store/store';
 import type { AppDispatch, RootState } from '../src/store/store';
-import { injectStore } from '../src/lib/api';
+import { injectStore, noteSessionActivity } from '../src/lib/api';
 import { bootstrapAuth } from '../src/features/auth/authSlice';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
 import { LaunchScreen } from '../src/components/LaunchScreen';
+import { ScreenBackground } from '../src/components/ScreenBackground';
+import { PrimaryButton } from '../src/components/PrimaryButton';
+import { Text } from '../src/components/AppText';
 
 injectStore(store);
 
@@ -32,7 +36,8 @@ void SplashScreen.preventAutoHideAsync();
 function AuthBootstrap() {
   const dispatch = useDispatch<AppDispatch>();
   const isCheckingAuth = useSelector((state: RootState) => state.auth.isCheckingAuth);
-  const { theme, isReady: themeReady } = useTheme();
+  const bootstrapError = useSelector((state: RootState) => state.auth.bootstrapError);
+  const { theme, colors, isReady: themeReady } = useTheme();
   // 'light' status bar content (white icons/text) reads correctly against this app's dark
   // wallpaper/background; flips to 'dark' automatically for a learner who's toggled to light
   // mode (ProfileSwitcherModal's toggle row, see ThemeContext.tsx).
@@ -61,6 +66,15 @@ function AuthBootstrap() {
     void dispatch(bootstrapAuth());
   }, [dispatch]);
 
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' || isCheckingAuth) return;
+      if (bootstrapError) void dispatch(bootstrapAuth());
+      else noteSessionActivity();
+    });
+    return () => subscription.remove();
+  }, [dispatch, bootstrapError, isCheckingAuth]);
+
   // Hands off from the static, spinner-less native splash image to
   // <LaunchScreen/> as soon as fonts have resolved (loaded or errored) —
   // bootstrapAuth's network round-trip can take a moment and the native splash
@@ -79,6 +93,18 @@ function AuthBootstrap() {
         <StatusBar style={statusBarStyle} />
         <LaunchScreen />
       </>
+    );
+  }
+
+  if (bootstrapError) {
+    return (
+      <ScreenBackground style={{ justifyContent: 'center', paddingHorizontal: 24 }}>
+        <StatusBar style={statusBarStyle} />
+        <View style={{ gap: 20 }}>
+          <Text accessibilityRole="alert" style={{ color: colors.text.primary, textAlign: 'center' }}>{bootstrapError}</Text>
+          <PrimaryButton title="Try again" onPress={() => void dispatch(bootstrapAuth())} />
+        </View>
+      </ScreenBackground>
     );
   }
 
@@ -118,7 +144,7 @@ function AuthBootstrap() {
 // fullScreenModal) for where those insets actually get applied as padding.
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1 }} onTouchStart={noteSessionActivity}>
       <SafeAreaProvider>
         <Provider store={store}>
           <ThemeProvider>

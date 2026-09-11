@@ -18,7 +18,7 @@ import {
 } from './auth.service';
 import { sendSuccess } from '../../utils/response';
 import { AppError, catchAsync } from '../../utils/AppError';
-import { signPartialToken } from '../../utils/jwt';
+import { signPartialToken, signRefreshToken, REFRESH_TOKEN_TTL_SECONDS } from '../../utils/jwt';
 import { IAccountDocument } from '../../models/core/account.model';
 import { AgeGroup } from '../../models/core/profile.model';
 
@@ -34,7 +34,7 @@ function setRefreshCookie(res: Response, token: string): void {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: REFRESH_TOKEN_TTL_SECONDS * 1000,
   });
 }
 
@@ -137,16 +137,22 @@ export async function logout(_req: Request, res: Response): Promise<void> {
 }
 
 export const refresh = catchAsync(async (req: Request, res: Response): Promise<void> => {
-  const bodyToken = (req.body as { refreshToken?: string } | undefined)?.refreshToken;
-  const token = bodyToken ?? (req.cookies[REFRESH_COOKIE] as string | undefined);
-  if (!token) throw new AppError('No refresh token', 401);
-
-  try {
-    const result = await refreshAccessToken(token);
-    sendSuccess(res, { accessToken: result.accessToken });
-  } catch {
-    throw new AppError('Invalid or expired refresh token', 401);
+  const { refreshToken: bodyToken, accessToken: accessTokenHint } =
+    (req.body ?? {}) as { refreshToken?: string; accessToken?: string };
+  const token = bodyToken ?? (req.cookies?.[REFRESH_COOKIE] as string | undefined);
+  if (typeof token !== 'string' || !token) throw new AppError('No refresh token', 401);
+  if (accessTokenHint !== undefined && typeof accessTokenHint !== 'string') {
+    throw new AppError('Invalid access token', 400);
   }
+
+  // Service/database failures must remain 5xx, so clients don't discard a valid
+  // login during an outage. Only invalid/expired credentials produce a 401.
+  const result = await refreshAccessToken(token, accessTokenHint);
+  setRefreshCookie(res, result.refreshToken);
+  sendSuccess(res, {
+    accessToken: result.accessToken,
+    ...(isMobileClient(req) && { refreshToken: result.refreshToken }),
+  });
 });
 
 export const sendVerificationHandler = catchAsync(async (req: Request, res: Response): Promise<void> => {
@@ -229,6 +235,7 @@ export async function handleOAuthCallback(
 ): Promise<void> {
   const profiles = await getProfilesForAccount(account._id.toString());
   const partialToken = signPartialToken({ accountId: account._id.toString() });
+  setRefreshCookie(res, signRefreshToken({ accountId: account._id.toString() }));
   const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173';
   // Redirect with token as query param; client exchanges it for full session
   res.redirect(

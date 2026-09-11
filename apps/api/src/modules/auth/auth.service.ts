@@ -1,6 +1,8 @@
 import { ensureProfileFavorites } from '../vocab/bucket.service';
 ﻿// Business logic for auth: register, login, profile selection, token refresh, OAuth upsert
 import crypto from 'crypto';
+import { JsonWebTokenError } from 'jsonwebtoken';
+import { AppError } from '../../utils/AppError';
 import Account, { IAccountDocument } from '../../models/core/account.model';
 import Profile, { IProfileDocument, AgeGroup } from '../../models/core/profile.model';
 import {
@@ -13,6 +15,8 @@ import {
   signFullToken,
   signRefreshToken,
   verifyRefreshToken,
+  verifyRefreshAccessHint,
+  type RefreshTokenPayload,
 } from '../../utils/jwt';
 
 export interface ProfileSummary {
@@ -172,28 +176,46 @@ export async function selectProfile(
 }
 
 export async function refreshAccessToken(
-  refreshToken: string
-): Promise<{ accessToken: string }> {
-  const payload = verifyRefreshToken(refreshToken);
+  refreshToken: string,
+  accessTokenHint?: string
+): Promise<{ accessToken: string; refreshToken: string }> {
+  let payload: RefreshTokenPayload;
+  let selectedProfileId: string | undefined;
+  try {
+    payload = verifyRefreshToken(refreshToken);
+    if (accessTokenHint) {
+      const hint = verifyRefreshAccessHint(accessTokenHint);
+      if (hint.accountId !== payload.accountId) throw new AppError('Invalid session', 401);
+      if ('profileId' in hint) selectedProfileId = hint.profileId;
+    }
+  } catch (error) {
+    if (error instanceof JsonWebTokenError) {
+      throw new AppError('Invalid or expired refresh token', 401);
+    }
+    throw error;
+  }
 
   const account = await Account.findById(payload.accountId);
-  if (!account) throw new Error('Account not found');
+  if (!account) throw new AppError('Account not found', 401);
 
-  // Re-issue preserving the active profile if one is set
-  if (account.activeProfile) {
-    const profile = await Profile.findById(account.activeProfile);
+  // A device already in use keeps its own profile even if another device switched.
+  // On cold start, retain the existing account.activeProfile fallback.
+  const profileId = selectedProfileId ?? account.activeProfile?.toString();
+  const renewedRefreshToken = signRefreshToken({ accountId: account._id.toString() });
+  if (profileId && account.profiles.some((id) => id.toString() === profileId)) {
+    const profile = await Profile.findById(profileId);
     if (profile) {
       const accessToken = signFullToken({
         accountId: account._id.toString(),
         profileId: profile._id.toString(),
         ageGroup: profile.ageGroup,
       });
-      return { accessToken };
+      return { accessToken, refreshToken: renewedRefreshToken };
     }
   }
 
   const accessToken = signPartialToken({ accountId: account._id.toString() });
-  return { accessToken };
+  return { accessToken, refreshToken: renewedRefreshToken };
 }
 
 export async function upsertOAuthAccount(

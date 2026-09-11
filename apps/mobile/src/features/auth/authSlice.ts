@@ -26,7 +26,8 @@ import type {
   ProfileSetupDto,
 } from '@my-backpack/shared';
 import type { AxiosError } from 'axios';
-import api from '../../lib/api';
+import axios from 'axios';
+import api, { refreshSession, finishPendingRefresh } from '../../lib/api';
 import { getRefreshToken, saveRefreshToken, deleteRefreshToken } from '../../lib/secureStore';
 
 interface AuthState {
@@ -42,6 +43,9 @@ interface AuthState {
   successMessage: string | null;
   isCheckingAuth: boolean;
   isAuthenticated: boolean;
+  sessionVersion: number;
+  isSigningOut: boolean;
+  bootstrapError: string | null;
 }
 
 const initialState: AuthState = {
@@ -57,6 +61,9 @@ const initialState: AuthState = {
   successMessage: null,
   isCheckingAuth: true,
   isAuthenticated: false,
+  sessionVersion: 0,
+  isSigningOut: false,
+  bootstrapError: null,
 };
 
 function extractErrorMessage(error: unknown, fallback: string): string {
@@ -65,6 +72,10 @@ function extractErrorMessage(error: unknown, fallback: string): string {
 }
 
 function resetState(state: AuthState) {
+  state.sessionVersion += 1;
+  state.isSigningOut = false;
+  state.bootstrapError = null;
+  state.isCheckingAuth = false;
   state.account = null;
   state.profiles = [];
   state.activeProfile = null;
@@ -82,48 +93,24 @@ function resetState(state: AuthState) {
 
 // Replaces web's cookie-based checkAuth — native has no persistent cookie
 // jar, so the refresh token is read back out of SecureStore explicitly.
-export const bootstrapAuth = createAsyncThunk('auth/bootstrapAuth', async (_, { dispatch }) => {
-  const refreshToken = await getRefreshToken();
-  if (!refreshToken) {
-    return { authenticated: false as const };
+export const bootstrapAuth = createAsyncThunk(
+  'auth/bootstrapAuth',
+  async (_, { dispatch, rejectWithValue }) => {
+    try {
+      const refreshToken = await getRefreshToken();
+      if (!refreshToken) return false;
+      dispatch(setRefreshToken(refreshToken));
+      // Saves the renewed token and commits both tokens before profile requests.
+      await refreshSession();
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) return false;
+      if (axios.isCancel(error)) return false;
+      return rejectWithValue('Unable to reconnect. Check your connection and try again.');
+    }
+    await Promise.all([dispatch(fetchActiveProfile()), dispatch(fetchProfiles())]);
+    return true;
   }
-
-  let accessToken: string;
-  try {
-    const { data } = await api.post<ApiResponse<{ accessToken: string }>>('/auth/refresh', { refreshToken });
-    accessToken = data.data.accessToken;
-  } catch {
-    await deleteRefreshToken();
-    return { authenticated: false as const };
-  }
-
-  // Commit the access token to the store *before* dispatching anything else — api.ts's
-  // request interceptor reads Authorization from store.getState().auth.accessToken
-  // synchronously, not from this thunk's local `accessToken` variable, so fetchActiveProfile
-  // below would otherwise go out unauthenticated (401), which the response interceptor's own
-  // failed refresh-retry (refreshToken isn't in the store yet either, for the same reason)
-  // would then resolve by dispatching logout() — wiping activeProfile right as
-  // bootstrapAuth.fulfilled was about to restore the tokens. This was a real bug, not
-  // hypothetical: fixed here.
-  dispatch(setAccessToken(accessToken));
-
-  // Both awaited (not fire-and-forget) so isCheckingAuth doesn't flip false — unblocking
-  // ProtectedRoute — until activeProfile/profiles are actually populated. Previously
-  // fetchActiveProfile was dispatched fire-and-forget from _layout.tsx's AuthBootstrap right
-  // after bootstrapAuth resolved, leaving a render frame where isCheckingAuth was already
-  // false but isLoadingProfile hadn't flipped true yet and activeProfile was still null —
-  // anything gating on activeProfile in that frame (e.g. index.tsx's last-route resume) read
-  // a false "no profile" signal and acted on it immediately. fetchProfiles (the full
-  // account-wide list "other profiles to switch to" needs — see ProfileSwitcherModal) was
-  // previously never fetched at all on a bootstrap resume, only ever populated by the login
-  // screen's response, which a resumed session skips entirely. A failure in either is
-  // non-fatal: the access token is still valid, ProtectedRoute/ResumeRedirect and
-  // ProfileSwitcherModal just fall back to their existing "no profile yet"/"no other
-  // profiles" handling.
-  await Promise.all([dispatch(fetchActiveProfile()), dispatch(fetchProfiles())]);
-
-  return { authenticated: true as const, accessToken, refreshToken };
-});
+);
 
 // GET /profiles — the account's full profile list (ProfileSummary[]), same shape login's
 // response already carries. Only ever previously populated by login.fulfilled, which a
@@ -253,6 +240,7 @@ export const claimAccount = createAsyncThunk(
 
 export const logoutAsync = createAsyncThunk('auth/logoutAsync', async () => {
   try {
+    await finishPendingRefresh();
     await api.post('/auth/logout');
   } catch {
     // Clear local state regardless of API response
@@ -283,6 +271,14 @@ const authSlice = createSlice({
       state.accessToken = action.payload;
       state.isAuthenticated = action.payload !== null;
     },
+    setRefreshToken(state, action: PayloadAction<string>) {
+      state.refreshToken = action.payload;
+    },
+    setSessionTokens(state, action: PayloadAction<{ accessToken: string; refreshToken: string }>) {
+      state.accessToken = action.payload.accessToken;
+      state.refreshToken = action.payload.refreshToken;
+      state.isAuthenticated = true;
+    },
     setIsLoading(state, action: PayloadAction<boolean>) {
       state.isLoading = action.payload;
     },
@@ -300,17 +296,14 @@ const authSlice = createSlice({
       // bootstrapAuth
       .addCase(bootstrapAuth.pending, (state) => {
         state.isCheckingAuth = true;
+        state.bootstrapError = null;
       })
-      .addCase(bootstrapAuth.fulfilled, (state, action) => {
+      .addCase(bootstrapAuth.fulfilled, (state) => {
         state.isCheckingAuth = false;
-        if (action.payload.authenticated) {
-          state.accessToken = action.payload.accessToken;
-          state.refreshToken = action.payload.refreshToken;
-          state.isAuthenticated = true;
-        }
       })
-      .addCase(bootstrapAuth.rejected, (state) => {
+      .addCase(bootstrapAuth.rejected, (state, action) => {
         state.isCheckingAuth = false;
+        state.bootstrapError = action.payload as string;
       })
       // fetchActiveProfile
       .addCase(fetchActiveProfile.pending, (state) => {
@@ -342,6 +335,7 @@ const authSlice = createSlice({
       })
       // login
       .addCase(login.pending, (state) => {
+        resetState(state);
         state.isLoading = true;
         state.error = null;
       })
@@ -390,12 +384,14 @@ const authSlice = createSlice({
       })
       // continueAsGuest
       .addCase(continueAsGuest.pending, (state) => {
+        resetState(state);
         state.isLoading = true;
         state.error = null;
       })
       .addCase(continueAsGuest.fulfilled, (state, action) => {
         state.isLoading = false;
         state.accessToken = action.payload.accessToken;
+        state.refreshToken = action.payload.refreshToken ?? null;
         state.isAuthenticated = true;
         state.partialToken = null;
       })
@@ -420,6 +416,12 @@ const authSlice = createSlice({
         state.error = action.payload as string;
       })
       // logoutAsync
+      .addCase(logoutAsync.pending, (state) => {
+        // Invalidate pending refreshes immediately, but finish clearing the server
+        // cookie before exposing the login screen to a new sign-in.
+        state.sessionVersion += 1;
+        state.isSigningOut = true;
+      })
       .addCase(logoutAsync.fulfilled, resetState)
       .addCase(logoutAsync.rejected, resetState);
   },
@@ -431,6 +433,8 @@ export const {
   setActiveProfile,
   setPartialToken,
   setAccessToken,
+  setRefreshToken,
+  setSessionTokens,
   setIsLoading,
   setError,
   clearError,

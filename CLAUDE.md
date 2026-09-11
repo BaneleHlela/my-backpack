@@ -131,7 +131,7 @@ guest entry point yet — a deliberately separate, later pass.
    HTTP-only cookie
 2. Select profile → full JWT (accountId + profileId + ageGroup)
 3. All protected routes require full JWT
-4. Access token: 15 minutes | Refresh token: 7 days
+4. Access token: 15 minutes | Refresh token: rolling 7 days of inactivity (renewed by foreground use; see mobile-architecture.md)
 5. Guest (mobile only): `POST /api/auth/guest` → full JWT directly, no partial-token step
 
 ### Middleware

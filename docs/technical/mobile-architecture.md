@@ -126,7 +126,7 @@ refresh token back out of SecureStore explicitly on launch:
 app cold start
   → bootstrapAuth() thunk
       → getRefreshToken() from SecureStore
-      → if present: POST /auth/refresh { refreshToken } → store accessToken
+      → if present: POST /auth/refresh { refreshToken } → save renewed refresh + access tokens
                      → fetchActiveProfile()
       → if absent: leave state unauthenticated → guard redirects to login
 ```
@@ -139,7 +139,7 @@ app cold start
 |---|---|---|---|
 | Partial token | 5 min | Redux (memory only) | Short-lived, cheap to re-derive, never needs to survive a restart |
 | Full access token | 15 min (1d in dev) | Redux (memory only) | Same reasoning as web |
-| Refresh token | 7 days | `expo-secure-store` (iOS Keychain / Android Keystore) | Must survive app restarts; native has no persistent cookie jar, so this is the standard Expo/RN substitute for the web app's httpOnly cookie |
+| Refresh token | 7 days since the last successful renewal | `expo-secure-store` (iOS Keychain / Android Keystore) | Must survive app restarts; native has no persistent cookie jar, so this is the standard Expo/RN substitute for the web app's httpOnly cookie |
 
 Only the refresh token touches disk. This requires a small, additive backend
 change — see "Backend change: mobile refresh token" below — since the API
@@ -161,15 +161,15 @@ header so web's cookie-only behaviour is completely unchanged:
 - `login`: response includes `refreshToken` in the body only when the
   request carried `X-Client-Type: mobile`.
 - `refresh`: accepts `{ refreshToken }` in the request body, preferring it
-  over the cookie when both are absent/present — the cookie path is
-  untouched for web.
+  over the cookie, and returns a newly signed seven-day token in the mobile
+  response. Web receives the same renewal through its httpOnly cookie.
 - `apps/mobile/src/lib/api.ts`'s axios instance sets `X-Client-Type: mobile`
   as a default header on every request.
 
 No DB migration or server-side token store was needed — refresh tokens are
 stateless signed JWTs (`signRefreshToken` / `verifyRefreshToken` in
-`apps/api/src/utils/jwt.ts`); the change is purely about which channel
-carries the same token to the client.
+`apps/api/src/utils/jwt.ts`); old tokens remain valid until their own expiry. There is no absolute
+login-age limit: active users renew their seven-day inactivity window.
 
 ---
 
@@ -184,9 +184,27 @@ interceptor pattern:
   auth state (partial or full token, whichever is current).
 - Response interceptor: on a 401 not already retried, calls
   `POST /auth/refresh` with `{ refreshToken }` (read from Redux, itself
-  hydrated from SecureStore at launch), stores the new `accessToken`,
-  retries the original request once. On refresh failure, dispatches
-  `logout()`.
+  hydrated from SecureStore at launch), persists the renewed refresh token,
+  stores both new tokens, and retries the original request once. Concurrent
+  requests share a refresh. Only a refresh **401** clears the login; network,
+  timeout, rate-limit and server errors retain it for retry.
+- Successful login and guest signup both put the refresh token in Redux and
+  SecureStore. A late refresh cannot restore a session after sign-out.
+- Foreground app use renews at most once a minute: reopening the app, touches,
+  and authenticated API requests. Web uses visibility/focus, input and scrolling.
+  There is no background keep-alive timer. The inactivity boundary is measured
+  from the last successful renewal (up to one minute before the last activity).
+- Cold-start connection failures show **Try again** instead of dropping the
+  saved login. Offline activity cannot renew a server-validated token.
+- A signed access-token hint preserves the current device's selected profile
+  during refresh. Its signature and account must match; expiry is ignored only
+  for this hint, never for authorizing API requests. Cold starts retain the
+  existing account.activeProfile fallback.
+
+Deploy the API and update the mobile/web clients to enable the complete rolling
+session flow. No database migration is needed. Already expired refresh tokens
+cannot be restored and require login. The access-token lifetime remains 15 minutes
+in production (one day in development).
 
 ---
 

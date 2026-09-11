@@ -46,6 +46,12 @@ export interface LoginResponse {
   refreshToken?: string; // present only when X-Client-Type: mobile was sent
 }
 
+// POST /api/auth/refresh — each success starts a fresh seven-day inactivity window.
+export interface RefreshResponse {
+  accessToken: string;
+  refreshToken?: string; // native stores this; web receives an httpOnly cookie
+}
+
 // POST /api/auth/select-profile
 export interface SelectProfileRequest {
   profileId: string;

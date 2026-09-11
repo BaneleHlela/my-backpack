@@ -16,6 +16,8 @@ export interface RefreshTokenPayload {
   accountId: string;
 }
 
+export const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+
 function accessSecret(): string {
   const secret = process.env.ACCESS_TOKEN_SECRET;
   if (!secret) throw new Error('ACCESS_TOKEN_SECRET is not defined');
@@ -37,7 +39,13 @@ export function signFullToken(payload: FullTokenPayload): string {
 }
 
 export function signRefreshToken(payload: RefreshTokenPayload): string {
-  return jwt.sign(payload, refreshSecret(), { expiresIn: '7d' });
+  return jwt.sign(payload, refreshSecret(), { expiresIn: REFRESH_TOKEN_TTL_SECONDS });
+}
+
+// Only for preserving a profile during refresh. A valid, unexpired refresh token
+// for the same account is still required; this cannot authorize an API request.
+export function verifyRefreshAccessHint(token: string): PartialTokenPayload | FullTokenPayload {
+  return jwt.verify(token, accessSecret(), { ignoreExpiration: true }) as PartialTokenPayload | FullTokenPayload;
 }
 
 export function verifyAccessToken(token: string): PartialTokenPayload | FullTokenPayload {

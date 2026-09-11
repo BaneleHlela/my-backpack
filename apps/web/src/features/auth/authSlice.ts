@@ -12,7 +12,7 @@ import type {
 } from '@my-backpack/shared';
 import type { AxiosError } from 'axios';
 import axios from 'axios';
-import api from '../../lib/axios';
+import api, { refreshSession, finishPendingRefresh } from '../../lib/axios';
 
 interface AuthState {
   account: IAccount | null;
@@ -26,6 +26,9 @@ interface AuthState {
   successMessage: string | null;
   isCheckingAuth: boolean;
   isAuthenticated: boolean;
+  sessionVersion: number;
+  isSigningOut: boolean;
+  bootstrapError: string | null;
 }
 
 const initialState: AuthState = {
@@ -40,12 +43,10 @@ const initialState: AuthState = {
   successMessage: null,
   isCheckingAuth: true,
   isAuthenticated: false,
+  sessionVersion: 0,
+  isSigningOut: false,
+  bootstrapError: null,
 };
-
-interface RefreshResponse {
-  accessToken?: string;
-  partialToken?: string;
-}
 
 function extractErrorMessage(error: unknown, fallback: string): string {
   const axiosError = error as AxiosError<{ message?: string }>;
@@ -53,6 +54,10 @@ function extractErrorMessage(error: unknown, fallback: string): string {
 }
 
 function resetState(state: AuthState) {
+  state.sessionVersion += 1;
+  state.isSigningOut = false;
+  state.bootstrapError = null;
+  state.isCheckingAuth = false;
   state.account = null;
   state.profiles = [];
   state.activeProfile = null;
@@ -67,13 +72,15 @@ function resetState(state: AuthState) {
 
 // --- Async thunks ---
 
-export const checkAuth = createAsyncThunk<ApiResponse<RefreshResponse>>('auth/checkAuth', async () => {
-  const { data } = await axios.post<ApiResponse<RefreshResponse>>(
-    `${import.meta.env.VITE_API_URL}/auth/refresh`,
-    {},
-    { withCredentials: true }
-  );
-  return data;
+export const checkAuth = createAsyncThunk('auth/checkAuth', async (_, { rejectWithValue }) => {
+  try {
+    await refreshSession();
+    return true;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 401) return false;
+    if (axios.isCancel(error)) return false;
+    return rejectWithValue('Unable to reconnect. Check your connection and try again.');
+  }
 });
 
 export const fetchActiveProfile = createAsyncThunk(
@@ -150,6 +157,7 @@ export const selectProfile = createAsyncThunk(
 
 export const logoutAsync = createAsyncThunk('auth/logoutAsync', async () => {
   try {
+    await finishPendingRefresh();
     await api.post('/auth/logout');
   } catch {
     // Clear local state regardless of API response
@@ -243,18 +251,14 @@ const authSlice = createSlice({
       // checkAuth
       .addCase(checkAuth.pending, (state) => {
         state.isCheckingAuth = true;
+        state.bootstrapError = null;
       })
-      .addCase(checkAuth.fulfilled, (state, action) => {
+      .addCase(checkAuth.fulfilled, (state) => {
         state.isCheckingAuth = false;
-        if (action.payload.data.accessToken) {
-          state.accessToken = action.payload.data.accessToken;
-          state.isAuthenticated = true;
-        } else if (action.payload.data.partialToken) {
-          state.partialToken = action.payload.data.partialToken;
-        }
       })
-      .addCase(checkAuth.rejected, (state) => {
+      .addCase(checkAuth.rejected, (state, action) => {
         state.isCheckingAuth = false;
+        state.bootstrapError = action.payload as string;
       })
       // fetchActiveProfile
       .addCase(fetchActiveProfile.pending, (state) => {
@@ -282,6 +286,7 @@ const authSlice = createSlice({
       })
       // login
       .addCase(login.pending, (state) => {
+        resetState(state);
         state.isLoading = true;
         state.error = null;
       })
@@ -328,6 +333,12 @@ const authSlice = createSlice({
         state.error = action.payload as string;
       })
       // logoutAsync
+      .addCase(logoutAsync.pending, (state) => {
+        // Invalidate pending refreshes immediately, but finish clearing the server
+        // cookie before exposing the login screen to a new sign-in.
+        state.sessionVersion += 1;
+        state.isSigningOut = true;
+      })
       .addCase(logoutAsync.fulfilled, resetState)
       .addCase(logoutAsync.rejected, resetState)
       // forgotPassword

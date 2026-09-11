@@ -8,13 +8,19 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 const REFRESH_TOKEN_KEY = 'refreshToken';
+// Preserve write order if logout/login happens while a renewal is being saved.
+let tokenWrite: Promise<void> = Promise.resolve();
+function writeToken(write: () => Promise<void>): Promise<void> {
+  tokenWrite = tokenWrite.catch(() => {}).then(write);
+  return tokenWrite;
+}
 const LAST_ROUTE_KEY_PREFIX = 'lastRoute_';
 const GUEST_NUDGE_KEY_PREFIX = 'guestNudgeShown_';
 const THEME_PREFERENCE_KEY = 'themePreference';
 
 export async function saveRefreshToken(token: string): Promise<void> {
   if (Platform.OS === 'web') return;
-  await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, token);
+  await writeToken(() => SecureStore.setItemAsync(REFRESH_TOKEN_KEY, token));
 }
 
 export async function getRefreshToken(): Promise<string | null> {
@@ -24,7 +30,7 @@ export async function getRefreshToken(): Promise<string | null> {
 
 export async function deleteRefreshToken(): Promise<void> {
   if (Platform.OS === 'web') return;
-  await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+  await writeToken(() => SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY));
 }
 
 // Remembers the last route a given profile was on within the (app) group
