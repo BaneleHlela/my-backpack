@@ -185,6 +185,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     paddingVertical: spacing.lg,
   },
   footer: {
+    backgroundColor: colors.background,
     paddingBottom: spacing.lg,
   },
   });
