@@ -112,7 +112,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     fontFamily: fonts.display.bold,
     fontSize: typography.headingLg,
     color: colors.glassText.primary,
-    textTransform: 'capitalize',
   },
   phonetic: {
     fontSize: typography.body,

@@ -89,6 +89,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: spacing.md,
       paddingTop: spacing.md,
       gap: spacing.xs,
+      backgroundColor: colors.background,
     },
     heading: {
       fontFamily: fonts.display.bold, // replaces the old Chewy display heading — see fonts.ts

@@ -1364,8 +1364,20 @@ side.
   above — an earlier version of this task's brief assumed no stats header existed anywhere in
   mobile yet and asked for one to be built fresh; that assumption was stale by the time this
   landed, so `Menubar` is reused as-is, unmodified).
-- `src/components/quiz/QuizModeCard.tsx` — one grid card, built on `GlassCard`. Shows a settings
-  pill when the mode has an adjustable setting.
+- `src/components/quiz/QuizModeCard.tsx` — a rounded, tinted card with a stable accent per mode,
+  a circular icon badge, and a separate settings pill when the mode has an adjustable setting.
+  The start and settings buttons are siblings so each action can be focused independently.
+- `src/components/quiz/QuizCardBackground.tsx` — decorative SVG mode/clipboard watermark and
+  sparkles, shared by mode cards and course quiz rows. Reuses `theme/accentPalette.ts`, tinting
+  the current theme background so `colors.text` stays readable in both themes. Artwork is
+  clipped by the card and excluded from touch handling and accessibility. No new image assets
+  or dependencies are needed. `QuizModeGrid` stretches two columns to fill the available width
+  and wraps to one when the container cannot fit two 140px cards plus the gap. Mode descriptions
+  wrap in full; cards in each row stretch to the same height.
+  September 2026 verification: mobile `tsc --noEmit` passed, as did isolated React Native Web
+  layout checks at 280/320/390/768px in both themes, mode callbacks, settings-button separation,
+  fixed-setting gating and course-row routing (settings dialog/router stubbed in the preview).
+  Native Android/iOS appearance and screen-reader behaviour still need device verification.
 - `src/components/quiz/QuizSettingsModal.tsx` — centered dialog (adapts `LessonModal`/
   `ResourcesModal`'s `Modal` + backdrop-`Pressable` interaction pattern to `animationType:
   'fade'` and a centered layout instead of their bottom-sheet `'slide'`). Local component state

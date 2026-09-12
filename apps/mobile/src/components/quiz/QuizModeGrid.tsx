@@ -1,8 +1,8 @@
-// The 7-card mode grid + its settings modal wiring, extracted out of QuizModeSelectScreen so
+// The mode grid + its settings modal wiring, extracted out of QuizModeSelectScreen so
 // the same grid/behavior can be embedded elsewhere (QuizPickerModal's "Game Quizzes" tab) without
 // duplicating the FlatList/settings-state logic. Plain flexWrap layout, not FlatList — this can
 // be embedded inside another component's ScrollView (QuizPickerModal), and nesting a
-// VirtualizedList inside a ScrollView of the same orientation is an RN anti-pattern; 7 items is
+// VirtualizedList inside a ScrollView of the same orientation is an RN anti-pattern; 8 items is
 // small enough that virtualization buys nothing here anyway.
 //
 // UI/local-state only — see quizPlayModes.ts's module comment. `onStart` is called either from a
@@ -77,6 +77,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   cardWrapper: {
-    width: '47%',
+    flexBasis: '45%',
+    flexGrow: 1,
+    minWidth: 140,
   },
 });

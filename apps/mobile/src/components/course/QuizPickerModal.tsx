@@ -33,12 +33,12 @@ import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../AppText';
 import { useRouter } from 'expo-router';
-import { ClipboardCheck, Gamepad2, History, Lock, X } from 'lucide-react-native';
+import { ArrowUpRight, ClipboardCheck, Gamepad2, History, Lock, X } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IQuizItemSummary, NodeItemWithProgress, RoadmapWithProgress } from '@my-backpack/shared';
 import { QuizModeGrid } from '../quiz/QuizModeGrid';
+import { QuizCardBackground } from '../quiz/QuizCardBackground';
 import { encodeAssignedPlayMode, encodePlayModeParam, type QuizPlayModeId, type QuizPlayModeSettings } from '../quiz/quizPlayModes';
-import { PaddedButton } from '../PaddedButton';
 import { getAccent } from '../../theme/accentPalette';
 import { useTheme } from '../../theme/ThemeContext';
 import { fonts } from '../../theme/fonts';
@@ -153,33 +153,35 @@ export default function QuizPickerModal({
                       {group.quizzes.map((item) => {
                         const accent = getAccent(colors, colorIndex++);
                         return (
-                          <PaddedButton
+                          <Pressable
                             key={item.itemId}
-                            color={accent.light}
-                            borderRadius={radii.md}
-                            padding={0}
-                            borderWidth={0}
                             onPress={() => goToQuiz(item.itemId, group.nodeId, item.quiz.assignedPlayMode)}
-                            contentStyle={styles.row}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${item.quiz.title}, ${item.quiz.questionCount} questions${item.isUnlocked ? '' : ', locked'}`}
+                            style={({ pressed }) => [styles.quizCard, pressed && styles.quizCardPressed]}
                           >
-                            <View style={[styles.rowIcon, { backgroundColor: accent.DEFAULT }]}>
-                              <ClipboardCheck size={18} color="#fff" />
+                            <QuizCardBackground accentColor={accent.DEFAULT} Icon={ClipboardCheck} compact />
+                            <View style={styles.row}>
+                              <View style={styles.rowIcon}>
+                                <ClipboardCheck size={22} color={colors.text.primary} strokeWidth={1.8} />
+                              </View>
+                              <View style={styles.rowTextWrap}>
+                                <Text style={styles.rowTitle} numberOfLines={2}>
+                                  {item.quiz.title}
+                                </Text>
+                                <Text style={styles.rowSubtitle}>
+                                  {item.quiz.questionCount} questions
+                                </Text>
+                              </View>
+                              <View style={styles.rowAction}>
+                                {item.isUnlocked ? (
+                                  <ArrowUpRight size={18} color={colors.text.primary} />
+                                ) : (
+                                  <Lock size={16} color={colors.text.primary} />
+                                )}
+                              </View>
                             </View>
-                            {/* Always the theme's primary text tone (near-black in light mode,
-                                near-white in dark mode) — never the per-accent `accent.dark` —
-                                so a row's text stays legible no matter which accent it landed
-                                on (some accents' `.light` fill is itself a deep 900-level color
-                                in dark mode, not a pale pastel). */}
-                            <View style={styles.rowTextWrap}>
-                              <Text style={[styles.rowTitle, { color: colors.text.primary }]} numberOfLines={1}>
-                                {item.quiz.title}
-                              </Text>
-                              <Text style={[styles.rowSubtitle, { color: colors.text.primary }]}>
-                                {item.quiz.questionCount} questions
-                              </Text>
-                            </View>
-                            {!item.isUnlocked && <Lock size={16} color={colors.text.primary} />}
-                          </PaddedButton>
+                          </Pressable>
                         );
                       })}
                     </View>
@@ -277,32 +279,49 @@ function createStyles(colors: ThemeColors) {
       textTransform: 'uppercase',
       letterSpacing: 0.5,
     },
-    // Passed as PaddedButton's contentStyle — the colored fill (cycled per-item, see the accent
-    // lookup at the call site) now lives on the PaddedButton itself (padding: 0, no border, per
-    // the "topic quizzes modal" spec), this is just the row's internal layout.
+    quizCard: {
+      borderRadius: radii.lg,
+      backgroundColor: colors.background,
+      overflow: 'hidden',
+    },
+    quizCardPressed: {
+      opacity: 0.72,
+    },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.sm,
-      padding: spacing.sm,
+      gap: spacing.md,
+      padding: spacing.md,
+      minHeight: 96,
     },
     rowIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: radii.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.background,
+    },
+    rowAction: {
       width: 32,
       height: 32,
       borderRadius: radii.full,
       alignItems: 'center',
       justifyContent: 'center',
+      backgroundColor: colors.background,
     },
     rowTextWrap: {
       flex: 1,
+      gap: spacing.xs,
     },
     rowTitle: {
       fontFamily: fonts.display.medium,
       fontSize: typography.body,
+      color: colors.text.primary,
     },
     rowSubtitle: {
-      fontFamily: fonts.display.regular,
       fontSize: typography.small,
+      color: colors.text.secondary,
     },
     emptyText: {
       textAlign: 'center',

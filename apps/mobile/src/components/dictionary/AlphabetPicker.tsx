@@ -63,6 +63,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: spacing.xs,
+      backgroundColor: colors.background,
+      paddingBottom: 5
     },
     letter: {
       width: 32,
