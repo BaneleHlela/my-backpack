@@ -155,7 +155,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   },
   bucketButtonText: {
     fontSize: typography.small,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#172033',
   },
   title: {
@@ -184,6 +184,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   },
   footer: {
     paddingBottom: spacing.lg,
+    backgroundColor: colors.background,
   },
   });
 }
