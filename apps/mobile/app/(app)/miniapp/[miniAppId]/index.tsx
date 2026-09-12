@@ -131,6 +131,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   },
   row: {
     gap: spacing.xs,
+    backgroundColor: colors.background,
+    zIndex: 10
   },
   header: {
     marginBottom: spacing.sm,
@@ -155,7 +157,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   },
   bucketButtonText: {
     fontSize: typography.small,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#172033',
   },
   title: {

@@ -184,7 +184,7 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: spacing.sm,
+    rowGap: spacing.md,
   },
   courseList: {
     gap: spacing.sm,

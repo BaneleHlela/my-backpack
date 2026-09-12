@@ -22,7 +22,7 @@ interface PaddedButtonProps {
   color: string;
   borderColor?: string; // defaults to `color` — only visible once borderWidth > 0
 
-  borderRadius?: number;
+  borderRadius?: number | string;
   padding?: number; // gap between the outer border and the inner face; 0 (default) removes it
   borderWidth?: number; // 0 (default) removes the border entirely
   borderStyle?: ViewStyle['borderStyle']; // 'solid' (default) | 'dashed' | 'dotted'
@@ -52,7 +52,7 @@ export function PaddedButton({
   style,
   contentStyle,
 }: PaddedButtonProps) {
-  const innerRadius = Math.max(borderRadius - padding, 0);
+  const innerRadius = Math.max(borderRadius as number - padding, 0);
   const definiteSize = height !== undefined || aspectRatio !== undefined;
   const isInteractive = !disabled && !!onPress;
 
