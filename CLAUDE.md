@@ -2337,6 +2337,12 @@ my-backpack/
       unverified" convention. See
       [docs/technical/mobile-architecture.md](docs/technical/mobile-architecture.md)'s "Light/
       dark theme system" section for full detail.
+- [x] Quiz card restyle (September 2026) — mode tiles and course quiz rows now use rounded,
+      varied accent surfaces with large faint SVG icons and sparkles (`QuizCardBackground`).
+      Uses the existing accent palette with theme-background tinting for readable text in
+      light and dark mode. Mode start/settings buttons are separate accessible controls;
+      fixed settings remain non-interactive. See the Quiz Modes section in
+      `docs/technical/mobile-architecture.md` for the layout and decoration contract.
 - [ ] OAuth on native (Google/Facebook via deep-link/AuthSession) — deferred, email/password only
 - [ ] Forgot-password / reset-password / verify-email screens — backend flow exists and works, mobile screens just not built yet
 - [ ] Profile management screens
