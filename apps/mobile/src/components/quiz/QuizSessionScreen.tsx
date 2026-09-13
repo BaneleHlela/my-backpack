@@ -72,6 +72,7 @@ import {
   resetQuiz,
 } from '../../features/quiz/quizSlice';
 import { QuestionRenderer } from './QuestionRenderer';
+import { stopAudio } from '../../lib/audio';
 import { QuestionScrollArea } from './QuestionScrollArea';
 import { QuizActionButton } from './QuizActionButton';
 import { QuizProgress } from './QuizProgress';
@@ -235,6 +236,11 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
     // A fresh question always starts unsubmittable until its pattern reports otherwise.
     setPatternReady(false);
   }, [quiz.sessionId, quiz.currentQuestion?._id]);
+
+  useEffect(() => {
+    stopAudio();
+    return () => stopAudio();
+  }, [quiz.sessionId, quiz.currentQuestion?._id, quiz.status]);
 
   useEffect(() => {
     if (quiz.status === 'completed' && !quiz.results && quiz.sessionId) {

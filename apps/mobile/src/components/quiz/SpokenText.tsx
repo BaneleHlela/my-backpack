@@ -1,44 +1,31 @@
-// Interim live TTS (expo-speech) — ports apps/web's SpokenText.tsx behavior, not its
-// library (react-text-to-speech wraps the browser Web Speech API; expo-speech is the RN
-// equivalent). See docs/technical/mobile-architecture.md's "Live TTS (Prompt 3)" section —
-// never used where a prerecorded audioUrl already exists; playback is manual (icon button),
-// never autoplay. One accepted regression from web: no live word-by-word highlighting —
-// expo-speech's documented API has no word-boundary callback to drive it.
-import { Pressable, StyleSheet, View } from 'react-native';
+// Text and its recording/TTS control use the same lifecycle and visible status.
+import { StyleSheet, View } from 'react-native';
 import { Text } from '../AppText';
 import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
-import { Volume2 } from 'lucide-react-native';
-import { radii, spacing, typography } from '@my-backpack/shared';
-import { useSpeak } from '../../lib/useSpeak';
+import { spacing, typography } from '@my-backpack/shared';
+import { AudioButton } from '../AudioButton';
 import { useTheme } from '../../theme/ThemeContext';
 
 interface SpokenTextProps {
   text: string;
   lang: string;
+  audioUrl?: string;
   textStyle?: StyleProp<TextStyle>;
   containerStyle?: StyleProp<ViewStyle>;
 }
 
-export function SpokenText({ text, lang, textStyle, containerStyle }: SpokenTextProps) {
+export function SpokenText({ text, lang, audioUrl, textStyle, containerStyle }: SpokenTextProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-  const { speak, stop, isSpeaking } = useSpeak(lang);
 
-  if (!text?.trim()) {
+  if (!text?.trim() && !audioUrl?.trim()) {
     return <Text style={textStyle}>{text}</Text>;
   }
 
   return (
     <View style={[styles.row, containerStyle]}>
       <Text style={[styles.text, textStyle]}>{text}</Text>
-      <Pressable
-        onPress={() => (isSpeaking ? stop() : speak(text))}
-        hitSlop={8}
-        aria-label={isSpeaking ? 'Stop reading' : 'Read aloud'}
-        style={[styles.button, isSpeaking && styles.buttonActive]}
-      >
-        <Volume2 size={18} color={isSpeaking ? colors.primary.DEFAULT : colors.text.secondary} />
-      </Pressable>
+      <AudioButton compact url={audioUrl} text={text} language={lang} label="Read aloud" />
     </View>
   );
 }
@@ -54,19 +41,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       flex: 1,
       fontSize: typography.body,
       color: colors.text.primary,
-    },
-    button: {
-      width: 44,
-      height: 44,
-      borderRadius: radii.sm,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: colors.text.faint,
-      marginTop: 2,
-    },
-    buttonActive: {
-      borderColor: colors.primary.DEFAULT,
     },
   });
 }

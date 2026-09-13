@@ -27,12 +27,14 @@ import { Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-n
 import { Text } from '../../AppText';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import { Lightbulb, Volume2 } from 'lucide-react-native';
+import { Lightbulb } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
-import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
-import { useSpeak } from '../../../lib/useSpeak';
+import { usePlayback } from '../../../lib/useAudioPlayback';
+import { audioSourceKey, prepareAudio, type PlaybackStatus } from '../../../lib/audio';
+import { replayAudioSource } from '../../../lib/questionAudio';
+import { AudioButton, AudioIndicator } from '../../AudioButton';
 import { useTheme } from '../../../theme/ThemeContext';
 import { useQuestionScrollRef } from '../QuestionScrollArea';
 import { fonts } from '../../../theme/fonts';
@@ -45,11 +47,6 @@ interface DndSinglePatternProps extends QuestionPatternReadyProps {
   lang: string;
   disabled?: boolean;
   onAnswer: (rawResponse: string) => void;
-}
-
-function playAsset(path?: string) {
-  const url = resolveAssetUrl(path);
-  if (url) playAudioUrl(url);
 }
 
 // Fisher-Yates — unbiased in-place shuffle, returns a new array.
@@ -75,6 +72,7 @@ interface DraggableTileHandle {
 }
 
 interface DraggableTileProps {
+  audioStatus?: PlaybackStatus;
   item: IDraggable;
   size?: number;
   showLabel: boolean;
@@ -94,6 +92,7 @@ const DraggableTile = forwardRef(function DraggableTile(
     highlight,
     disabled,
     isChild,
+    audioStatus = 'idle',
     onTapAudio,
     onDragAudio,
     onDropAttempt,
@@ -170,6 +169,11 @@ const DraggableTile = forwardRef(function DraggableTile(
         ]}
       >
         <View style={[styles.tileFace, { backgroundColor: tileColor }]}>
+        {audioStatus !== 'idle' ? (
+          <View pointerEvents="none" style={{ position: 'absolute', top: 3, right: 3, zIndex: 1 }}>
+            <AudioIndicator status={audioStatus} color={tileColor === '#E8B92F' ? '#493510' : '#fff'} size={14} />
+          </View>
+        ) : null}
           {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.tileImage} resizeMode="contain" /> : null}
           {(showLabel || !imageUrl) && item.label ? <Text adjustsFontSizeToFit numberOfLines={2} style={[styles.tileLabel, tileColor === '#E8B92F' && { color: '#493510' }]}>{item.label}</Text> : null}
         </View>
@@ -188,7 +192,14 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   const isChild = ageGroup === 'child';
   const { width: windowWidth } = useWindowDimensions();
   const tileSize = clampTileSize(windowWidth);
-  const { speak } = useSpeak(lang);
+  const playback = usePlayback();
+  const playAsset = (url?: string) => { if (url) playback.play({ url }); };
+  const itemAudioStatus = (item: IDraggable): PlaybackStatus => playback.sourceKey ===
+    audioSourceKey({ url: item.audioUrl, text: item.label, language: lang }) ? playback.status : 'idle';
+  useEffect(() => {
+    content.draggables?.slice(0, 4).forEach((item) => prepareAudio({ url: item.audioUrl }));
+    return playback.stop;
+  }, [content, playback.stop]);
 
   const dropZone = content.dropZones?.[0];
 
@@ -272,15 +283,6 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   const correctId = dropZone.requiredDraggableIds[0];
 
   const hintAvailable = helpers.hintsAllowed > 0 && hintsRemaining > 0 && hintButtonReady;
-  // Live TTS fills the gap when there's dialogue text but no recording — unlike web, this
-  // doesn't override a prerecorded dialogueAudioUrl when one exists (see replayPrompt below);
-  // mobile has no word-highlighting benefit to justify web's override of recorded audio.
-  const audioAvailable =
-    Boolean(content.avatar?.dialogueAudioUrl) ||
-    Boolean(content.avatar?.dialogue) ||
-    Boolean(content.promptAudioUrl) ||
-    Boolean(placedItem?.audioUrl);
-
   const measureDropZone = () => {
     dropZoneRef.current?.measureInWindow((x, y, width, height) => {
       dropZoneRectRef.current = { x, y, width, height };
@@ -290,8 +292,7 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   // Ordinary fallback rule: prerecorded item.audioUrl wins when set (phonetically load-bearing,
   // e.g. isiZulu vowel/consonant recordings) — live TTS of item.label fills the gap when it isn't.
   const playItemAudio = (item: IDraggable) => {
-    if (item.audioUrl) playAsset(item.audioUrl);
-    else if (item.label) speak(item.label);
+    playback.play({ url: item.audioUrl, text: item.label, language: lang });
   };
 
   const handleDropAttempt = (item: IDraggable, absoluteX: number, absoluteY: number) => {
@@ -336,17 +337,10 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
     setTimeout(() => setHintActive(false), 2500);
   };
 
-  const replayPrompt = () => {
-    if (content.avatar?.dialogueAudioUrl) {
-      playAsset(content.avatar.dialogueAudioUrl);
-    } else if (content.avatar?.dialogue) {
-      speak(content.avatar.dialogue);
-    } else if (placedItem?.audioUrl) {
-      playAsset(placedItem.audioUrl);
-    }
-  };
 
-  const promptText = content.avatar?.dialogue ?? content.prompt;
+  const promptAudio = replayAudioSource(content, lang);
+  const promptText = content.avatar?.dialogue || (content.prompt?.startsWith('audio:')
+    ? 'Listen to the question.' : content.prompt) || (promptAudio.url ? 'Listen to the question.' : undefined);
 
   const body = (
     <View style={styles.container}>
@@ -358,21 +352,13 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
             </View>
 
             <View style={styles.promptButtons}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Replay question"
-                onPress={replayPrompt}
-                disabled={!audioAvailable}
-                style={({ pressed }) => [styles.iconButton, styles.replayButton, !audioAvailable && styles.iconButtonDisabled, pressed && { transform: [{ scale: 0.94 }], opacity: 0.8 }]}
-              >
-                <Volume2 size={20} color={appearance.accent} />
-              </Pressable>
+              <AudioButton compact {...promptAudio} label="Replay question" style={styles.iconButton} />
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Show hint"
                 onPress={useHint}
                 disabled={!hintAvailable}
-                style={({ pressed }) => [styles.iconButton, styles.hintButton, !hintAvailable && styles.iconButtonDisabled, pressed && { transform: [{ scale: 0.94 }], opacity: 0.8 }]}
+                style={({ pressed }) => [styles.iconButton, !hintAvailable && styles.iconButtonDisabled, pressed && { transform: [{ scale: 0.94 }], opacity: 0.8 }]}
               >
                 <Lightbulb size={20} color={appearance.accent} />
               </Pressable>
@@ -390,6 +376,7 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
             <DraggableTile
               key={`${genKey}-placed-${placedItem.id}`}
               item={placedItem}
+              audioStatus={itemAudioStatus(placedItem)}
               size={tileSize}
               showLabel={helpers.showItemLabels}
               disabled
@@ -405,6 +392,7 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
 
       </View>
 
+      {playback.error ? <Text accessibilityRole="alert" style={{ color: colors.error.DEFAULT }}>{playback.error}</Text> : null}
       <View style={styles.poolRow}>
         {poolItems.map((item) => (
           <DraggableTile
@@ -414,6 +402,7 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
               else tileRefs.current.delete(item.id);
             }}
             item={item}
+            audioStatus={itemAudioStatus(item)}
             size={tileSize}
             showLabel={!isChild && helpers.showItemLabels}
             highlight={hintActive && item.id === correctId}
@@ -485,8 +474,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors'], dark: boole
     iconButtonDisabled: {
       opacity: 0.45,
     },
-    replayButton: {},
-    hintButton: {},
     poolRow: {
       paddingTop: 12,
       paddingBottom: 24,

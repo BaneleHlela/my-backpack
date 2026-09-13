@@ -1,5 +1,8 @@
 # Mobile Architecture
 
+Current audio playback, controls and listening-question behavior are documented in
+[Mobile audio playback](mobile-audio.md). That guide supersedes the older audio implementation notes below.
+
 `apps/mobile` is a React Native + Expo app sharing types, API contracts, and
 design tokens with `apps/web` via `packages/shared`. This document describes
 the mobile-specific structure, wiring, and decisions that don't apply to the

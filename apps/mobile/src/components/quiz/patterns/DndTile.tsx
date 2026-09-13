@@ -18,15 +18,11 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { radii } from '@my-backpack/shared';
 import type { IDraggable } from '@my-backpack/shared';
-import { playAudioUrl } from '../../../lib/audio';
+import type { PlaybackStatus } from '../../../lib/audio';
+import { AudioIndicator } from '../../AudioButton';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useTheme } from '../../../theme/ThemeContext';
 import { useQuestionScrollRef } from '../QuestionScrollArea';
-
-export function playAsset(path?: string): void {
-  const url = resolveAssetUrl(path);
-  if (url) playAudioUrl(url);
-}
 
 // Fisher-Yates — unbiased in-place shuffle, returns a new array. Mirrors DndSinglePattern's.
 export function shuffle<T>(items: T[]): T[] {
@@ -61,6 +57,7 @@ export interface DndTileHandle {
 }
 
 export interface DndTileProps {
+  audioStatus?: PlaybackStatus;
   item: IDraggable;
   size?: number;
   showLabel: boolean;
@@ -82,6 +79,7 @@ export const DndTile = forwardRef(function DndTile(
     disabled,
     isChild,
     draggable,
+    audioStatus = 'idle',
     onTap,
     onDragStart,
     onDropAttempt,
@@ -159,6 +157,11 @@ export const DndTile = forwardRef(function DndTile(
         ]}
       >
         <View style={[styles.tileFace, { backgroundColor: tileColor }]}>
+        {audioStatus !== 'idle' ? (
+          <View pointerEvents="none" style={{ position: 'absolute', top: 3, right: 3, zIndex: 1 }}>
+            <AudioIndicator status={audioStatus} color={tileColor === '#E8B92F' ? '#493510' : '#fff'} size={14} />
+          </View>
+        ) : null}
           {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.tileImage} resizeMode="contain" /> : null}
           {(showLabel || !imageUrl) && item.label ? <Text adjustsFontSizeToFit numberOfLines={2} style={[styles.tileLabel, tileColor === '#E8B92F' && { color: '#493510' }]}>{item.label}</Text> : null}
         </View>

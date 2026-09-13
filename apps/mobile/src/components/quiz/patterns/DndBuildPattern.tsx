@@ -26,11 +26,14 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import type { Ref } from 'react';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Text } from '../../AppText';
-import { Lightbulb, Volume2 } from 'lucide-react-native';
+import { Lightbulb } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
-import { useSpeak } from '../../../lib/useSpeak';
-import { DndTile, DndTileHandle, Rect, clampTileSize, playAsset, pointInRect, shuffle } from './DndTile';
+import { usePlayback } from '../../../lib/useAudioPlayback';
+import { audioSourceKey, prepareAudio, type PlaybackStatus } from '../../../lib/audio';
+import { replayAudioSource } from '../../../lib/questionAudio';
+import { AudioButton } from '../../AudioButton';
+import { DndTile, DndTileHandle, Rect, clampTileSize, pointInRect, shuffle } from './DndTile';
 import { useTheme } from '../../../theme/ThemeContext';
 import { fonts } from '../../../theme/fonts';
 import type { QuestionPatternHandle, QuestionPatternReadyProps } from './questionPatternTypes';
@@ -54,7 +57,14 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
   const isChild = ageGroup === 'child';
   const { width: windowWidth } = useWindowDimensions();
   const tileSize = clampTileSize(windowWidth);
-  const { speak } = useSpeak(lang);
+  const playback = usePlayback();
+  const playAsset = (url?: string) => { if (url) playback.play({ url }); };
+  const itemAudioStatus = (item: IDraggable): PlaybackStatus => playback.sourceKey ===
+    audioSourceKey({ url: item.audioUrl, text: item.label, language: lang }) ? playback.status : 'idle';
+  useEffect(() => {
+    content.draggables?.slice(0, 4).forEach((item) => prepareAudio({ url: item.audioUrl }));
+    return playback.stop;
+  }, [content, playback.stop]);
 
   const dropZones = content.dropZones ?? [];
 
@@ -110,8 +120,6 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
   const hintCorrectId = firstUnfilledZone?.requiredDraggableIds[0];
 
   const hintAvailable = helpers.hintsAllowed > 0 && hintsRemaining > 0 && hintButtonReady && !allFilled;
-  // Live TTS fills the gap when there's dialogue text but no recording (see replayPrompt below).
-  const audioAvailable = Boolean(content.avatar?.dialogueAudioUrl) || Boolean(content.avatar?.dialogue);
 
   const submit = () => {
     if (disabled || submittedRef.current || !allFilled) return;
@@ -187,19 +195,16 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
     setTimeout(() => setHintActive(false), 2500);
   };
 
-  const replayPrompt = () => {
-    if (content.avatar?.dialogueAudioUrl) playAsset(content.avatar.dialogueAudioUrl);
-    else if (content.avatar?.dialogue) speak(content.avatar.dialogue);
-  };
 
   // Ordinary fallback rule: prerecorded item.audioUrl wins when set — live TTS of item.label
   // fills the gap when it isn't.
   const playItemAudio = (item: IDraggable) => {
-    if (item.audioUrl) playAsset(item.audioUrl);
-    else if (item.label) speak(item.label);
+    playback.play({ url: item.audioUrl, text: item.label, language: lang });
   };
 
-  const promptText = content.avatar?.dialogue ?? content.prompt;
+  const promptAudio = replayAudioSource(content, lang);
+  const promptText = content.avatar?.dialogue || (content.prompt?.startsWith('audio:')
+    ? 'Listen to the question.' : content.prompt) || (promptAudio.url ? 'Listen to the question.' : undefined);
 
   const body = (
     <View style={styles.container}>
@@ -212,15 +217,7 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
             </View>
 
             <View style={styles.promptButtons}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Replay question"
-                onPress={replayPrompt}
-                disabled={!audioAvailable}
-                style={({ pressed }) => [styles.iconButton, !audioAvailable && styles.iconButtonDisabled, pressed && { transform: [{ scale: 0.94 }], opacity: 0.8 }]}
-              >
-                <Volume2 size={20} color={appearance.accent} />
-              </Pressable>
+              <AudioButton compact {...promptAudio} label="Replay question" style={styles.iconButton} />
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Show hint"
@@ -258,6 +255,7 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
                   <DndTile
                     key={`${genKey}-placed-${placedItem.id}`}
                     item={placedItem}
+                    audioStatus={itemAudioStatus(placedItem)}
                     size={tileSize}
                     showLabel={!isChild && helpers.showItemLabels}
                     draggable={false}
@@ -274,6 +272,7 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
 
       </View>
 
+      {playback.error ? <Text accessibilityRole="alert" style={{ color: colors.error.DEFAULT }}>{playback.error}</Text> : null}
       <View style={styles.poolRow}>
         {poolItems.map((item) => (
           <DndTile
@@ -283,6 +282,7 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
               else tileRefs.current.delete(item.id);
             }}
             item={item}
+            audioStatus={itemAudioStatus(item)}
             size={tileSize}
             showLabel={!isChild && helpers.showItemLabels}
             highlight={hintActive && item.id === hintCorrectId}
