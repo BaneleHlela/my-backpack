@@ -1,3 +1,4 @@
+import { dndAppearance } from './dndAppearance';
 // dnd_build — build a word letter-by-letter (or syllable-by-syllable) by dragging tiles from
 // content.draggables into one blank per content.dropZones entry (dropZones[i] is blank i;
 // content.blanks[] carries the same position/correctDraggableId pairing but isn't needed for
@@ -47,11 +48,12 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
   { content, helpers, ageGroup, lang, disabled, onAnswer, onReadyChange }: DndBuildPatternProps,
   ref: Ref<QuestionPatternHandle>
 ) {
-  const { colors } = useTheme();
-  const styles = createStyles(colors);
+  const { colors, theme } = useTheme();
+  const styles = createStyles(colors, theme === 'dark');
+  const appearance = dndAppearance(theme === 'dark');
   const isChild = ageGroup === 'child';
   const { width: windowWidth } = useWindowDimensions();
-  const tileSize = isChild ? clampTileSize(windowWidth) : undefined;
+  const tileSize = clampTileSize(windowWidth);
   const { speak } = useSpeak(lang);
 
   const dropZones = content.dropZones ?? [];
@@ -215,18 +217,18 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
                 accessibilityLabel="Replay question"
                 onPress={replayPrompt}
                 disabled={!audioAvailable}
-                style={[styles.iconButton, !audioAvailable && styles.iconButtonDisabled]}
+                style={({ pressed }) => [styles.iconButton, !audioAvailable && styles.iconButtonDisabled, pressed && { transform: [{ scale: 0.94 }], opacity: 0.8 }]}
               >
-                <Volume2 size={isChild ? 22 : 16} color={colors.warning.dark} />
+                <Volume2 size={20} color={appearance.accent} />
               </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Show hint"
                 onPress={useHint}
                 disabled={!hintAvailable}
-                style={[styles.iconButton, !hintAvailable && styles.iconButtonDisabled]}
+                style={({ pressed }) => [styles.iconButton, !hintAvailable && styles.iconButtonDisabled, pressed && { transform: [{ scale: 0.94 }], opacity: 0.8 }]}
               >
-                <Lightbulb size={isChild ? 22 : 16} color={colors.warning.dark} />
+                <Lightbulb size={20} color={appearance.accent} />
               </Pressable>
             </View>
           </View>
@@ -249,7 +251,7 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
                   styles.blank,
                   isChild && styles.blankChild,
                   wrongZoneId === zone.id && styles.blankWrong,
-                  tileSize ? { width: tileSize, height: tileSize } : null,
+                  { width: tileSize + 4, height: tileSize + 4 },
                 ]}
               >
                 {placedItem ? (
@@ -303,13 +305,16 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
   return body;
 });
 
-function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+function createStyles(colors: ReturnType<typeof useTheme>['colors'], dark: boolean) {
+  const appearance = dndAppearance(dark);
   return StyleSheet.create({
     questionPanel: {
-      backgroundColor: colors.surface.glassStrong,
-      borderRadius: 28,
-      padding: spacing.md,
-      gap: spacing.lg,
+      backgroundColor: appearance.panel,
+      borderRadius: 26,
+      borderWidth: 1,
+      borderColor: appearance.border,
+      padding: 24,
+      gap: 24,
     },
     container: {
       flexGrow: 1,
@@ -321,48 +326,36 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       alignItems: 'flex-start',
       gap: spacing.sm,
     },
-    promptBubble: {
-      alignSelf: 'stretch',
-      backgroundColor: colors.surface.glassStrong,
-      borderRadius: radii.lg,
-      borderWidth: 0,
-      padding: spacing.sm,
-    },
-    promptBubbleChild: {
-      padding: spacing.md,
-      borderWidth: 0,
-    },
+    promptBubble: { alignSelf: 'stretch', paddingVertical: 4 },
+    promptBubbleChild: {},
     promptText: {
-      fontSize: typography.body,
-      color: colors.text.primary,
-      lineHeight: 26,
-    },
-    promptTextChild: {
-      fontFamily: fonts.display.bold,
-      fontSize: typography.headingLg,
-      lineHeight: 36,
+      fontFamily: fonts.display.medium,
+      fontSize: 23,
+      lineHeight: 31,
       textAlign: 'center',
+      color: appearance.text,
     },
+    promptTextChild: {},
     promptButtons: {
       flexDirection: 'row',
       alignSelf: 'center',
-      gap: spacing.xs,
+      gap: 12,
     },
     iconButton: {
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       borderRadius: radii.md,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.warning.light,
+      backgroundColor: appearance.control,
     },
     iconButtonDisabled: {
-      opacity: 0.4,
+      opacity: 0.45,
     },
     blanksRow: {
       paddingVertical: spacing.lg,
       borderRadius: radii.lg,
-      backgroundColor: colors.surface.glassStrong,
+      backgroundColor: appearance.panel,
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'center',
@@ -373,16 +366,12 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       height: 64,
       borderRadius: radii.md,
       borderWidth: 2,
-      borderStyle: 'dashed',
-      borderColor: colors.surface.border,
+      borderStyle: 'dotted',
+      borderColor: appearance.accent,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    blankChild: {
-      borderRadius: radii.lg,
-      borderWidth: 3,
-      borderColor: colors.primary.light,
-    },
+    blankChild: {},
     blankWrong: {
       borderColor: colors.error.DEFAULT,
       borderStyle: 'solid',
@@ -390,10 +379,14 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     blankLabel: {
       fontSize: typography.headingLg,
       fontWeight: '700',
-      color: colors.text.faint,
+      color: appearance.accent,
     },
     poolRow: {
-      paddingVertical: spacing.lg,
+      paddingTop: 12,
+      paddingBottom: 24,
+      alignSelf: 'center',
+      maxWidth: 310,
+      width: '100%',
       zIndex: 2,
       flexDirection: 'row',
       flexWrap: 'wrap',

@@ -1,3 +1,4 @@
+import { dndAppearance } from './dndAppearance';
 // dnd_count — drag a specific quantity of items into one zone until the learner believes the
 // count is right, then submits. content.draggables carries one entry per item TYPE (e.g.
 // "apple") with a `quantity` (how many individual copies exist in the pool) — this pattern
@@ -71,11 +72,12 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
   { content, helpers, ageGroup, lang, disabled, onAnswer, onReadyChange }: DndCountPatternProps,
   ref: Ref<QuestionPatternHandle>
 ) {
-  const { colors } = useTheme();
-  const styles = createStyles(colors);
+  const { colors, theme } = useTheme();
+  const styles = createStyles(colors, theme === 'dark');
+  const appearance = dndAppearance(theme === 'dark');
   const isChild = ageGroup === 'child';
   const { width: windowWidth } = useWindowDimensions();
-  const tileSize = isChild ? clampTileSize(windowWidth) : undefined;
+  const tileSize = clampTileSize(windowWidth);
   const { speak } = useSpeak(lang);
 
   const dropZone = content.dropZones?.[0];
@@ -215,18 +217,18 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
                 accessibilityLabel="Replay question"
                 onPress={replayPrompt}
                 disabled={!audioAvailable}
-                style={[styles.iconButton, !audioAvailable && styles.iconButtonDisabled]}
+                style={({ pressed }) => [styles.iconButton, !audioAvailable && styles.iconButtonDisabled, pressed && { transform: [{ scale: 0.94 }], opacity: 0.8 }]}
               >
-                <Volume2 size={isChild ? 22 : 16} color={colors.warning.dark} />
+                <Volume2 size={20} color={appearance.accent} />
               </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Show hint"
                 onPress={useHint}
                 disabled={!hintAvailable}
-                style={[styles.iconButton, !hintAvailable && styles.iconButtonDisabled]}
+                style={({ pressed }) => [styles.iconButton, !hintAvailable && styles.iconButtonDisabled, pressed && { transform: [{ scale: 0.94 }], opacity: 0.8 }]}
               >
-                <Lightbulb size={isChild ? 22 : 16} color={colors.warning.dark} />
+                <Lightbulb size={20} color={appearance.accent} />
               </Pressable>
             </View>
           </View>
@@ -291,13 +293,16 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
   return body;
 });
 
-function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+function createStyles(colors: ReturnType<typeof useTheme>['colors'], dark: boolean) {
+  const appearance = dndAppearance(dark);
   return StyleSheet.create({
     questionPanel: {
-      backgroundColor: colors.surface.glassStrong,
-      borderRadius: 28,
-      padding: spacing.md,
-      gap: spacing.lg,
+      backgroundColor: appearance.panel,
+      borderRadius: 26,
+      borderWidth: 1,
+      borderColor: appearance.border,
+      padding: 24,
+      gap: 24,
     },
     container: {
       flexGrow: 1,
@@ -309,46 +314,38 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       alignItems: 'flex-start',
       gap: spacing.sm,
     },
-    promptBubble: {
-      alignSelf: 'stretch',
-      backgroundColor: colors.surface.glassStrong,
-      borderRadius: radii.lg,
-      borderWidth: 0,
-      padding: spacing.sm,
-    },
-    promptBubbleChild: {
-      padding: spacing.md,
-      borderWidth: 0,
-    },
+    promptBubble: { alignSelf: 'stretch', paddingVertical: 4 },
+    promptBubbleChild: {},
     promptText: {
-      fontSize: typography.body,
-      color: colors.text.primary,
-      lineHeight: 26,
-    },
-    promptTextChild: {
-      fontFamily: fonts.display.bold,
-      fontSize: typography.headingLg,
-      lineHeight: 36,
+      fontFamily: fonts.display.medium,
+      fontSize: 23,
+      lineHeight: 31,
       textAlign: 'center',
+      color: appearance.text,
     },
+    promptTextChild: {},
     promptButtons: {
       flexDirection: 'row',
       alignSelf: 'center',
-      gap: spacing.xs,
+      gap: 12,
     },
     iconButton: {
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       borderRadius: radii.md,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.warning.light,
+      backgroundColor: appearance.control,
     },
     iconButtonDisabled: {
-      opacity: 0.4,
+      opacity: 0.45,
     },
     poolRow: {
-      paddingVertical: spacing.lg,
+      paddingTop: 12,
+      paddingBottom: 24,
+      alignSelf: 'center',
+      maxWidth: 310,
+      width: '100%',
       zIndex: 2,
       flexDirection: 'row',
       flexWrap: 'wrap',
@@ -359,20 +356,17 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       minHeight: 140,
       borderRadius: radii.lg,
       borderWidth: 2,
-      borderStyle: 'dashed',
-      borderColor: colors.surface.border,
+      borderStyle: 'dotted',
+      borderColor: appearance.accent,
       alignItems: 'center',
       justifyContent: 'center',
       overflow: 'hidden',
       padding: spacing.sm,
     },
-    dropZoneChild: {
-      borderWidth: 3,
-      borderColor: colors.primary.light,
-    },
+    dropZoneChild: {},
     dropZoneLabel: {
       fontSize: typography.small,
-      color: colors.text.muted,
+      color: appearance.muted,
     },
     zoneItems: {
       flexDirection: 'row',

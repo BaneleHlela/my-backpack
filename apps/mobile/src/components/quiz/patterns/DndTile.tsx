@@ -1,3 +1,5 @@
+import { fonts } from '../../../theme/fonts';
+import { dndTileColor } from './dndAppearance';
 // Shared draggable-tile primitive + small utilities for the DnD patterns beyond dnd_single —
 // dnd_build (multi-blank) and dnd_count (multi-item-per-zone) both need a tile that can be
 // dragged out of a pool and, once placed, TAPPED TO REMOVE itself back to the pool — the
@@ -10,7 +12,7 @@
 // gesture recipe extracted for reuse by the two new patterns, not a replacement.
 import { forwardRef, useImperativeHandle } from 'react';
 import type { Ref } from 'react';
-import { Image, StyleSheet } from 'react-native';
+import { Image, View, StyleSheet } from 'react-native';
 import { Text } from '../../AppText';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -40,7 +42,7 @@ export function shuffle<T>(items: T[]): T[] {
 // — same fixed clamp(56px, 18vw, 76px) DndSinglePattern uses (escalation comes from flex-wrap
 // laying more same-sized tiles across more rows, not from shrinking further per item).
 export function clampTileSize(windowWidth: number): number {
-  return Math.min(76, Math.max(56, windowWidth * 0.18));
+  return Math.min(86, Math.max(72, windowWidth * 0.22));
 }
 
 export interface Rect {
@@ -142,8 +144,7 @@ export const DndTile = forwardRef(function DndTile(
   }));
 
   const imageUrl = item.label?.trim() ? undefined : resolveAssetUrl(item.imageUrl);
-  const palette = ['#7959CF', '#30834C', '#B76A12', '#356CB5'];
-  const tileColor = palette[Array.from(item.label || item.id).reduce((sum, c) => sum + c.charCodeAt(0), 0) % palette.length];
+  const tileColor = dndTileColor(item.label || item.id);
 
   return (
     <GestureDetector gesture={composedGesture}>
@@ -151,14 +152,16 @@ export const DndTile = forwardRef(function DndTile(
         style={[
           styles.tile,
           isChild && styles.tileChild,
-          { backgroundColor: tileColor, borderColor: tileColor },
+          { borderColor: tileColor },
           size ? { width: size, height: size } : null,
           highlight && styles.tileHighlight,
           animatedStyle,
         ]}
       >
-        {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.tileImage} resizeMode="contain" /> : null}
-        {(showLabel || !imageUrl) && item.label ? <Text adjustsFontSizeToFit numberOfLines={2} style={styles.tileLabel}>{item.label}</Text> : null}
+        <View style={[styles.tileFace, { backgroundColor: tileColor }]}>
+          {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.tileImage} resizeMode="contain" /> : null}
+          {(showLabel || !imageUrl) && item.label ? <Text adjustsFontSizeToFit numberOfLines={2} style={[styles.tileLabel, tileColor === '#E8B92F' && { color: '#493510' }]}>{item.label}</Text> : null}
+        </View>
       </Animated.View>
     </GestureDetector>
   );
@@ -167,25 +170,22 @@ export const DndTile = forwardRef(function DndTile(
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
     tile: {
-      borderBottomWidth: 5,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.15,
-      shadowRadius: 0,
-      width: 64,
-      height: 64,
-      borderRadius: radii.md,
+      width: 78,
+      height: 82,
+      padding: 5,
+      borderRadius: 22,
+      borderWidth: 1.5,
+      borderStyle: 'dotted',
+      backgroundColor: 'transparent',
+    },
+    tileChild: {},
+    tileFace: {
+      flex: 1,
+      width: '100%',
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surface.glassStrong,
-      borderWidth: 1,
-      borderColor: colors.surface.border,
-    },
-    tileChild: {
-      borderRadius: radii.lg,
-      borderWidth: 3,
-      borderColor: colors.primary.light,
-      backgroundColor: '#fff',
+      padding: 4,
     },
     tileHighlight: {
       borderColor: colors.warning.DEFAULT,
@@ -198,9 +198,10 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     tileLabel: {
       paddingHorizontal: 6,
       textAlign: 'center',
-      fontSize: 32,
-      fontWeight: '700',
+      fontSize: 30,
+      fontFamily: fonts.display.semibold,
       color: '#fff',
+      includeFontPadding: false,
     },
   });
 }
