@@ -14,7 +14,7 @@ import { Image, StyleSheet } from 'react-native';
 import { Text } from '../../AppText';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import { radii, typography } from '@my-backpack/shared';
+import { radii } from '@my-backpack/shared';
 import type { IDraggable } from '@my-backpack/shared';
 import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
@@ -90,6 +90,7 @@ export const DndTile = forwardRef(function DndTile(
   const styles = createStyles(colors);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const active = useSharedValue(false);
   const scrollRef = useQuestionScrollRef();
 
   useImperativeHandle(ref, () => ({
@@ -104,6 +105,8 @@ export const DndTile = forwardRef(function DndTile(
   // compiling and bundling fine (only surfaces once the gesture actually fires — see
   // DndSinglePattern.tsx / docs/technical/mobile-architecture.md for where this was first found).
   const tapGesture = Gesture.Tap()
+    .onBegin(() => { active.value = true; })
+    .onFinalize(() => { active.value = false; })
     .maxDistance(8)
     .onEnd((_e, success) => {
       if (success) runOnJS(onTap)(item);
@@ -113,6 +116,7 @@ export const DndTile = forwardRef(function DndTile(
     .minDistance(8)
     .enabled(draggable && !disabled)
     .onStart(() => {
+      active.value = true;
       if (onDragStart) runOnJS(onDragStart)(item);
     })
     .onUpdate((e) => {
@@ -123,6 +127,7 @@ export const DndTile = forwardRef(function DndTile(
       if (onDropAttempt) runOnJS(onDropAttempt)(item, e.absoluteX, e.absoluteY);
     })
     .onFinalize(() => {
+      active.value = false;
       translateX.value = withSpring(0);
       translateY.value = withSpring(0);
     });
@@ -132,10 +137,13 @@ export const DndTile = forwardRef(function DndTile(
   const composedGesture = draggable ? Gesture.Race(tapGesture, panGesture) : tapGesture;
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
+    zIndex: active.value ? 20 : 0,
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: active.value ? 1.08 : 1 }],
   }));
 
-  const imageUrl = resolveAssetUrl(item.imageUrl);
+  const imageUrl = item.label?.trim() ? undefined : resolveAssetUrl(item.imageUrl);
+  const palette = ['#7959CF', '#30834C', '#B76A12', '#356CB5'];
+  const tileColor = palette[Array.from(item.label || item.id).reduce((sum, c) => sum + c.charCodeAt(0), 0) % palette.length];
 
   return (
     <GestureDetector gesture={composedGesture}>
@@ -143,13 +151,14 @@ export const DndTile = forwardRef(function DndTile(
         style={[
           styles.tile,
           isChild && styles.tileChild,
+          { backgroundColor: tileColor, borderColor: tileColor },
           size ? { width: size, height: size } : null,
           highlight && styles.tileHighlight,
           animatedStyle,
         ]}
       >
         {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.tileImage} resizeMode="contain" /> : null}
-        {showLabel ? <Text style={styles.tileLabel}>{item.label}</Text> : null}
+        {(showLabel || !imageUrl) && item.label ? <Text adjustsFontSizeToFit numberOfLines={2} style={styles.tileLabel}>{item.label}</Text> : null}
       </Animated.View>
     </GestureDetector>
   );
@@ -158,6 +167,11 @@ export const DndTile = forwardRef(function DndTile(
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
     tile: {
+      borderBottomWidth: 5,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.15,
+      shadowRadius: 0,
       width: 64,
       height: 64,
       borderRadius: radii.md,
@@ -182,9 +196,11 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       height: '70%',
     },
     tileLabel: {
-      fontSize: typography.body,
+      paddingHorizontal: 6,
+      textAlign: 'center',
+      fontSize: 32,
       fontWeight: '700',
-      color: colors.glassText.primary,
+      color: '#fff',
     },
   });
 }

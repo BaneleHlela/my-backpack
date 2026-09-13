@@ -28,12 +28,11 @@
 // docs/technical/mobile-architecture.md's "Live TTS (Prompt 3)" section.
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import { Image, ImageBackground, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Text } from '../../AppText';
 import { Lightbulb, Volume2 } from 'lucide-react-native';
-import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
-import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useSpeak } from '../../../lib/useSpeak';
 import { DndTile, DndTileHandle, Rect, clampTileSize, playAsset, pointInRect, shuffle } from './DndTile';
 import { useTheme } from '../../../theme/ThemeContext';
@@ -198,43 +197,68 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
     else if (item.label) speak(item.label);
   };
 
-  const dragAreaBackground = resolveAssetUrl(content.dragAreaImageUrl);
-  const dropZoneBackground = resolveAssetUrl(dropZone.imageUrl) ?? ASSETS.DROP_ZONES.CLASSROOM_BOARD;
-  const promptAvatarUrl = content.avatar
-    ? ASSETS.AVATARS.image(content.avatar.avatarId, content.avatar.emotion)
-    : undefined;
   const promptText = content.avatar?.dialogue ?? content.prompt;
 
   const body = (
     <View style={styles.container}>
-      {promptText ? (
-        <View style={styles.promptRow}>
-          {content.avatar?.dialogue && promptAvatarUrl ? (
-            <Image source={{ uri: promptAvatarUrl }} style={styles.promptAvatar} resizeMode="contain" />
-          ) : null}
+      <View style={styles.questionPanel}>
+        {promptText ? (
+          <View style={styles.promptRow}>
 
-          <View style={[styles.promptBubble, isChild && styles.promptBubbleChild]}>
-            <Text style={[styles.promptText, isChild && styles.promptTextChild]}>{promptText}</Text>
-          </View>
+            <View style={[styles.promptBubble, isChild && styles.promptBubbleChild]}>
+              <Text style={[styles.promptText, isChild && styles.promptTextChild]}>{promptText}</Text>
+            </View>
 
-          <View style={styles.promptButtons}>
-            <Pressable
-              onPress={replayPrompt}
-              disabled={!audioAvailable}
-              style={[styles.iconButton, !audioAvailable && styles.iconButtonDisabled]}
-            >
-              <Volume2 size={isChild ? 22 : 16} color={colors.warning.dark} />
-            </Pressable>
-            <Pressable
-              onPress={useHint}
-              disabled={!hintAvailable}
-              style={[styles.iconButton, !hintAvailable && styles.iconButtonDisabled]}
-            >
-              <Lightbulb size={isChild ? 22 : 16} color={colors.warning.dark} />
-            </Pressable>
+            <View style={styles.promptButtons}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Replay question"
+                onPress={replayPrompt}
+                disabled={!audioAvailable}
+                style={[styles.iconButton, !audioAvailable && styles.iconButtonDisabled]}
+              >
+                <Volume2 size={isChild ? 22 : 16} color={colors.warning.dark} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Show hint"
+                onPress={useHint}
+                disabled={!hintAvailable}
+                style={[styles.iconButton, !hintAvailable && styles.iconButtonDisabled]}
+              >
+                <Lightbulb size={isChild ? 22 : 16} color={colors.warning.dark} />
+              </Pressable>
+            </View>
           </View>
+        ) : null}
+
+        <View
+          ref={zoneRef}
+          collapsable={false}
+          onLayout={measureZone}
+          style={[styles.dropZone, isChild && styles.dropZoneChild]}
+        >
+          {zoneInstances.length > 0 ? (
+            <View style={styles.zoneItems}>
+              {zoneInstances.map((item) => (
+                <DndTile
+                  key={`${genKey}-placed-${item.id}`}
+                  item={item}
+                  size={tileSize}
+                  showLabel={false}
+                  draggable={false}
+                  isChild={isChild}
+                  onTap={() => handleRemove(item.id)}
+                />
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.dropZoneLabel}>{dropZone.label ?? 'Drop here'}</Text>
+          )}
         </View>
-      ) : null}
+
+        <Text style={styles.countLabel}>{zoneInstances.length} placed</Text>
+      </View>
 
       <View style={styles.poolRow}>
         {poolInstances.map((item) => (
@@ -261,87 +285,44 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
         ))}
       </View>
 
-      <View
-        ref={zoneRef}
-        collapsable={false}
-        onLayout={measureZone}
-        style={[styles.dropZone, isChild && styles.dropZoneChild]}
-      >
-        <ImageBackground
-          source={{ uri: dropZoneBackground }}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-        />
-        {zoneInstances.length > 0 ? (
-          <View style={styles.zoneItems}>
-            {zoneInstances.map((item) => (
-              <DndTile
-                key={`${genKey}-placed-${item.id}`}
-                item={item}
-                size={tileSize}
-                showLabel={false}
-                draggable={false}
-                isChild={isChild}
-                onTap={() => handleRemove(item.id)}
-              />
-            ))}
-          </View>
-        ) : (
-          <Text style={styles.dropZoneLabel}>{dropZone.label ?? 'Drop here'}</Text>
-        )}
-      </View>
-
-      <Text style={styles.countLabel}>{zoneInstances.length} placed</Text>
     </View>
   );
 
-  if (!dragAreaBackground) return body;
-
-  return (
-    <ImageBackground
-      source={{ uri: dragAreaBackground }}
-      style={styles.dragAreaBackground}
-      resizeMode="cover"
-    >
-      {body}
-    </ImageBackground>
-  );
+  return body;
 });
 
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
-    dragAreaBackground: {
-      flexGrow: 1,
+    questionPanel: {
+      backgroundColor: colors.surface.glassStrong,
+      borderRadius: 28,
+      padding: spacing.md,
+      gap: spacing.lg,
     },
     container: {
       flexGrow: 1,
-      gap: spacing.md,
+      gap: spacing.lg,
       padding: spacing.md,
     },
     promptRow: {
-      flexDirection: 'row',
+      flexDirection: 'column',
       alignItems: 'flex-start',
       gap: spacing.sm,
     },
-    promptAvatar: {
-      width: 32,
-      height: 32,
-    },
     promptBubble: {
-      flex: 1,
-      backgroundColor: '#fff',
+      alignSelf: 'stretch',
+      backgroundColor: colors.surface.glassStrong,
       borderRadius: radii.lg,
-      borderWidth: 2,
-      borderColor: colors.primary.light,
+      borderWidth: 0,
       padding: spacing.sm,
     },
     promptBubbleChild: {
       padding: spacing.md,
-      borderWidth: 3,
+      borderWidth: 0,
     },
     promptText: {
       fontSize: typography.body,
-      color: colors.glassText.primary,
+      color: colors.text.primary,
       lineHeight: 26,
     },
     promptTextChild: {
@@ -351,6 +332,8 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       textAlign: 'center',
     },
     promptButtons: {
+      flexDirection: 'row',
+      alignSelf: 'center',
       gap: spacing.xs,
     },
     iconButton: {
@@ -365,13 +348,14 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       opacity: 0.4,
     },
     poolRow: {
+      paddingVertical: spacing.lg,
+      zIndex: 2,
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'center',
       gap: spacing.sm,
     },
     dropZone: {
-      flexGrow: 1,
       minHeight: 140,
       borderRadius: radii.lg,
       borderWidth: 2,
