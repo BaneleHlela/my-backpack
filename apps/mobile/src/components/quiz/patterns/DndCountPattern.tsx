@@ -1,3 +1,4 @@
+import { dndAppearance } from './dndAppearance';
 // dnd_count — drag a specific quantity of items into one zone until the learner believes the
 // count is right, then submits. content.draggables carries one entry per item TYPE (e.g.
 // "apple") with a `quantity` (how many individual copies exist in the pool) — this pattern
@@ -28,12 +29,11 @@
 // docs/technical/mobile-architecture.md's "Live TTS (Prompt 3)" section.
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import { Image, ImageBackground, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Text } from '../../AppText';
 import { Lightbulb } from 'lucide-react-native';
-import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
-import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { usePlayback } from '../../../lib/useAudioPlayback';
 import { audioSourceKey, prepareAudio, type PlaybackStatus } from '../../../lib/audio';
 import { replayAudioSource } from '../../../lib/questionAudio';
@@ -75,11 +75,12 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
   { content, helpers, ageGroup, lang, disabled, onAnswer, onReadyChange }: DndCountPatternProps,
   ref: Ref<QuestionPatternHandle>
 ) {
-  const { colors } = useTheme();
-  const styles = createStyles(colors);
+  const { colors, theme } = useTheme();
+  const styles = createStyles(colors, theme === 'dark');
+  const appearance = dndAppearance(theme === 'dark');
   const isChild = ageGroup === 'child';
   const { width: windowWidth } = useWindowDimensions();
-  const tileSize = isChild ? clampTileSize(windowWidth) : undefined;
+  const tileSize = clampTileSize(windowWidth);
   const playback = usePlayback();
   const itemAudioStatus = (item: IDraggable): PlaybackStatus => playback.sourceKey ===
     audioSourceKey({ url: item.audioUrl, text: item.label, language: lang }) ? playback.status : 'idle';
@@ -200,39 +201,63 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
     playback.play({ url: item.audioUrl, text: item.label, language: lang });
   };
 
-  const dragAreaBackground = resolveAssetUrl(content.dragAreaImageUrl);
-  const dropZoneBackground = resolveAssetUrl(dropZone.imageUrl) ?? ASSETS.DROP_ZONES.CLASSROOM_BOARD;
-  const promptAvatarUrl = content.avatar
-    ? ASSETS.AVATARS.image(content.avatar.avatarId, content.avatar.emotion)
-    : undefined;
   const promptAudio = replayAudioSource(content, lang);
   const promptText = content.avatar?.dialogue || (content.prompt?.startsWith('audio:')
     ? 'Listen to the question.' : content.prompt) || (promptAudio.url ? 'Listen to the question.' : undefined);
 
   const body = (
     <View style={styles.container}>
-      {promptText ? (
-        <View style={styles.promptRow}>
-          {content.avatar?.dialogue && promptAvatarUrl ? (
-            <Image source={{ uri: promptAvatarUrl }} style={styles.promptAvatar} resizeMode="contain" />
-          ) : null}
+      <View style={styles.questionPanel}>
+        {promptText ? (
+          <View style={styles.promptRow}>
 
-          <View style={[styles.promptBubble, isChild && styles.promptBubbleChild]}>
-            <Text style={[styles.promptText, isChild && styles.promptTextChild]}>{promptText}</Text>
-          </View>
+            <View style={[styles.promptBubble, isChild && styles.promptBubbleChild]}>
+              <Text style={[styles.promptText, isChild && styles.promptTextChild]}>{promptText}</Text>
+            </View>
 
-          <View style={styles.promptButtons}>
-            <AudioButton compact {...promptAudio} label="Replay question" />
-            <Pressable
-              onPress={useHint}
-              disabled={!hintAvailable}
-              style={[styles.iconButton, !hintAvailable && styles.iconButtonDisabled]}
-            >
-              <Lightbulb size={isChild ? 22 : 16} color={colors.warning.dark} />
-            </Pressable>
+            <View style={styles.promptButtons}>
+              <AudioButton compact {...promptAudio} label="Replay question" style={styles.iconButton} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Show hint"
+                onPress={useHint}
+                disabled={!hintAvailable}
+                style={({ pressed }) => [styles.iconButton, !hintAvailable && styles.iconButtonDisabled, pressed && { transform: [{ scale: 0.94 }], opacity: 0.8 }]}
+              >
+                <Lightbulb size={20} color={appearance.accent} />
+              </Pressable>
+            </View>
           </View>
+        ) : null}
+
+        <View
+          ref={zoneRef}
+          collapsable={false}
+          onLayout={measureZone}
+          style={[styles.dropZone, isChild && styles.dropZoneChild]}
+        >
+          {zoneInstances.length > 0 ? (
+            <View style={styles.zoneItems}>
+              {zoneInstances.map((item) => (
+                <DndTile
+                  key={`${genKey}-placed-${item.id}`}
+                  item={item}
+                  audioStatus={itemAudioStatus(item)}
+                  size={tileSize}
+                  showLabel={false}
+                  draggable={false}
+                  isChild={isChild}
+                  onTap={() => handleRemove(item.id)}
+                />
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.dropZoneLabel}>{dropZone.label ?? 'Drop here'}</Text>
+          )}
         </View>
-      ) : null}
+
+        <Text style={styles.countLabel}>{zoneInstances.length} placed</Text>
+      </View>
 
       {playback.error ? <Text accessibilityRole="alert" style={{ color: colors.error.DEFAULT }}>{playback.error}</Text> : null}
       <View style={styles.poolRow}>
@@ -261,135 +286,86 @@ export const DndCountPattern = forwardRef(function DndCountPattern(
         ))}
       </View>
 
-      <View
-        ref={zoneRef}
-        collapsable={false}
-        onLayout={measureZone}
-        style={[styles.dropZone, isChild && styles.dropZoneChild]}
-      >
-        <ImageBackground
-          source={{ uri: dropZoneBackground }}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-        />
-        {zoneInstances.length > 0 ? (
-          <View style={styles.zoneItems}>
-            {zoneInstances.map((item) => (
-              <DndTile
-                key={`${genKey}-placed-${item.id}`}
-                item={item}
-                audioStatus={itemAudioStatus(item)}
-                size={tileSize}
-                showLabel={false}
-                draggable={false}
-                isChild={isChild}
-                onTap={() => handleRemove(item.id)}
-              />
-            ))}
-          </View>
-        ) : (
-          <Text style={styles.dropZoneLabel}>{dropZone.label ?? 'Drop here'}</Text>
-        )}
-      </View>
-
-      <Text style={styles.countLabel}>{zoneInstances.length} placed</Text>
     </View>
   );
 
-  if (!dragAreaBackground) return body;
-
-  return (
-    <ImageBackground
-      source={{ uri: dragAreaBackground }}
-      style={styles.dragAreaBackground}
-      resizeMode="cover"
-    >
-      {body}
-    </ImageBackground>
-  );
+  return body;
 });
 
-function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+function createStyles(colors: ReturnType<typeof useTheme>['colors'], dark: boolean) {
+  const appearance = dndAppearance(dark);
   return StyleSheet.create({
-    dragAreaBackground: {
-      flexGrow: 1,
+    questionPanel: {
+      backgroundColor: appearance.panel,
+      borderRadius: 26,
+      borderWidth: 1,
+      borderColor: appearance.border,
+      padding: 24,
+      gap: 24,
     },
     container: {
       flexGrow: 1,
-      gap: spacing.md,
+      gap: spacing.lg,
       padding: spacing.md,
     },
     promptRow: {
-      flexDirection: 'row',
+      flexDirection: 'column',
       alignItems: 'flex-start',
       gap: spacing.sm,
     },
-    promptAvatar: {
-      width: 32,
-      height: 32,
-    },
-    promptBubble: {
-      flex: 1,
-      backgroundColor: '#fff',
-      borderRadius: radii.lg,
-      borderWidth: 2,
-      borderColor: colors.primary.light,
-      padding: spacing.sm,
-    },
-    promptBubbleChild: {
-      padding: spacing.md,
-      borderWidth: 3,
-    },
+    promptBubble: { alignSelf: 'stretch', paddingVertical: 4 },
+    promptBubbleChild: {},
     promptText: {
-      fontSize: typography.body,
-      color: colors.glassText.primary,
-      lineHeight: 26,
-    },
-    promptTextChild: {
-      fontFamily: fonts.display.bold,
-      fontSize: typography.headingLg,
-      lineHeight: 36,
+      fontFamily: fonts.display.medium,
+      fontSize: 23,
+      lineHeight: 31,
       textAlign: 'center',
+      color: appearance.text,
     },
+    promptTextChild: {},
     promptButtons: {
-      gap: spacing.xs,
+      flexDirection: 'row',
+      alignSelf: 'center',
+      gap: 12,
     },
     iconButton: {
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       borderRadius: radii.md,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.warning.light,
+      backgroundColor: appearance.control,
     },
     iconButtonDisabled: {
-      opacity: 0.4,
+      opacity: 0.45,
     },
     poolRow: {
+      paddingTop: 12,
+      paddingBottom: 24,
+      alignSelf: 'center',
+      maxWidth: 310,
+      width: '100%',
+      zIndex: 2,
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'center',
       gap: spacing.sm,
     },
     dropZone: {
-      flexGrow: 1,
       minHeight: 140,
       borderRadius: radii.lg,
       borderWidth: 2,
-      borderStyle: 'dashed',
-      borderColor: colors.surface.border,
+      borderStyle: 'dotted',
+      borderColor: appearance.accent,
       alignItems: 'center',
       justifyContent: 'center',
       overflow: 'hidden',
       padding: spacing.sm,
     },
-    dropZoneChild: {
-      borderWidth: 3,
-      borderColor: colors.primary.light,
-    },
+    dropZoneChild: {},
     dropZoneLabel: {
       fontSize: typography.small,
-      color: colors.text.muted,
+      color: appearance.muted,
     },
     zoneItems: {
       flexDirection: 'row',

@@ -1,3 +1,4 @@
+import { dndAppearance } from './dndAppearance';
 // dnd_build — build a word letter-by-letter (or syllable-by-syllable) by dragging tiles from
 // content.draggables into one blank per content.dropZones entry (dropZones[i] is blank i;
 // content.blanks[] carries the same position/correctDraggableId pairing but isn't needed for
@@ -23,12 +24,11 @@
 // deducts one point per wrong attempt from maxPoints (floored at 0).
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import { Image, ImageBackground, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Text } from '../../AppText';
 import { Lightbulb } from 'lucide-react-native';
-import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
-import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { usePlayback } from '../../../lib/useAudioPlayback';
 import { audioSourceKey, prepareAudio, type PlaybackStatus } from '../../../lib/audio';
 import { replayAudioSource } from '../../../lib/questionAudio';
@@ -51,11 +51,12 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
   { content, helpers, ageGroup, lang, disabled, onAnswer, onReadyChange }: DndBuildPatternProps,
   ref: Ref<QuestionPatternHandle>
 ) {
-  const { colors } = useTheme();
-  const styles = createStyles(colors);
+  const { colors, theme } = useTheme();
+  const styles = createStyles(colors, theme === 'dark');
+  const appearance = dndAppearance(theme === 'dark');
   const isChild = ageGroup === 'child';
   const { width: windowWidth } = useWindowDimensions();
-  const tileSize = isChild ? clampTileSize(windowWidth) : undefined;
+  const tileSize = clampTileSize(windowWidth);
   const playback = usePlayback();
   const playAsset = (url?: string) => { if (url) playback.play({ url }); };
   const itemAudioStatus = (item: IDraggable): PlaybackStatus => playback.sourceKey ===
@@ -201,82 +202,74 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
     playback.play({ url: item.audioUrl, text: item.label, language: lang });
   };
 
-  const dragAreaBackground = resolveAssetUrl(content.dragAreaImageUrl);
-  const wrongAvatarUrl = content.avatar
-    ? ASSETS.AVATARS.image(
-        content.avatar.avatarId,
-        content.tryAgainFeedback?.avatarEmotion ?? content.avatar.emotion
-      )
-    : undefined;
-  const promptAvatarUrl = content.avatar
-    ? ASSETS.AVATARS.image(content.avatar.avatarId, content.avatar.emotion)
-    : undefined;
   const promptAudio = replayAudioSource(content, lang);
   const promptText = content.avatar?.dialogue || (content.prompt?.startsWith('audio:')
     ? 'Listen to the question.' : content.prompt) || (promptAudio.url ? 'Listen to the question.' : undefined);
 
   const body = (
     <View style={styles.container}>
-      {promptText ? (
-        <View style={styles.promptRow}>
-          {content.avatar?.dialogue && promptAvatarUrl ? (
-            <Image source={{ uri: promptAvatarUrl }} style={styles.promptAvatar} resizeMode="contain" />
-          ) : null}
+      <View style={styles.questionPanel}>
+        {promptText ? (
+          <View style={styles.promptRow}>
 
-          <View style={[styles.promptBubble, isChild && styles.promptBubbleChild]}>
-            <Text style={[styles.promptText, isChild && styles.promptTextChild]}>{promptText}</Text>
-          </View>
-
-          <View style={styles.promptButtons}>
-            <AudioButton compact {...promptAudio} label="Replay question" />
-            <Pressable
-              onPress={useHint}
-              disabled={!hintAvailable}
-              style={[styles.iconButton, !hintAvailable && styles.iconButtonDisabled]}
-            >
-              <Lightbulb size={isChild ? 22 : 16} color={colors.warning.dark} />
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
-      <View style={styles.blanksRow}>
-        {dropZones.map((zone) => {
-          const placedId = placements[zone.id];
-          const placedItem = placedId ? orderedDraggables.find((d) => d.id === placedId) : undefined;
-          return (
-            <View
-              key={zone.id}
-              ref={(v) => {
-                if (v) zoneRefs.current.set(zone.id, v);
-                else zoneRefs.current.delete(zone.id);
-              }}
-              collapsable={false}
-              onLayout={() => measureZone(zone.id)}
-              style={[
-                styles.blank,
-                isChild && styles.blankChild,
-                wrongZoneId === zone.id && styles.blankWrong,
-                tileSize ? { width: tileSize, height: tileSize } : null,
-              ]}
-            >
-              {placedItem ? (
-                <DndTile
-                  key={`${genKey}-placed-${placedItem.id}`}
-                  item={placedItem}
-                  audioStatus={itemAudioStatus(placedItem)}
-                  size={tileSize}
-                  showLabel={!isChild && helpers.showItemLabels}
-                  draggable={false}
-                  isChild={isChild}
-                  onTap={() => handleRemove(zone.id)}
-                />
-              ) : (
-                <Text style={styles.blankLabel}>_</Text>
-              )}
+            <View style={[styles.promptBubble, isChild && styles.promptBubbleChild]}>
+              <Text style={[styles.promptText, isChild && styles.promptTextChild]}>{promptText}</Text>
             </View>
-          );
-        })}
+
+            <View style={styles.promptButtons}>
+              <AudioButton compact {...promptAudio} label="Replay question" style={styles.iconButton} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Show hint"
+                onPress={useHint}
+                disabled={!hintAvailable}
+                style={({ pressed }) => [styles.iconButton, !hintAvailable && styles.iconButtonDisabled, pressed && { transform: [{ scale: 0.94 }], opacity: 0.8 }]}
+              >
+                <Lightbulb size={20} color={appearance.accent} />
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        <View style={styles.blanksRow}>
+          {dropZones.map((zone) => {
+            const placedId = placements[zone.id];
+            const placedItem = placedId ? orderedDraggables.find((d) => d.id === placedId) : undefined;
+            return (
+              <View
+                key={zone.id}
+                ref={(v) => {
+                  if (v) zoneRefs.current.set(zone.id, v);
+                  else zoneRefs.current.delete(zone.id);
+                }}
+                collapsable={false}
+                onLayout={() => measureZone(zone.id)}
+                style={[
+                  styles.blank,
+                  isChild && styles.blankChild,
+                  wrongZoneId === zone.id && styles.blankWrong,
+                  { width: tileSize + 4, height: tileSize + 4 },
+                ]}
+              >
+                {placedItem ? (
+                  <DndTile
+                    key={`${genKey}-placed-${placedItem.id}`}
+                    item={placedItem}
+                    audioStatus={itemAudioStatus(placedItem)}
+                    size={tileSize}
+                    showLabel={!isChild && helpers.showItemLabels}
+                    draggable={false}
+                    isChild={isChild}
+                    onTap={() => handleRemove(zone.id)}
+                  />
+                ) : (
+                  <Text style={styles.blankLabel}>_</Text>
+                )}
+              </View>
+            );
+          })}
+        </View>
+
       </View>
 
       {playback.error ? <Text accessibilityRole="alert" style={{ color: colors.error.DEFAULT }}>{playback.error}</Text> : null}
@@ -306,82 +299,63 @@ export const DndBuildPattern = forwardRef(function DndBuildPattern(
         ))}
       </View>
 
-      {wrongZoneId && wrongAvatarUrl ? (
-        <Image source={{ uri: wrongAvatarUrl }} style={styles.wrongAvatar} resizeMode="contain" />
-      ) : null}
     </View>
   );
 
-  if (!dragAreaBackground) return body;
-
-  return (
-    <ImageBackground
-      source={{ uri: dragAreaBackground }}
-      style={styles.dragAreaBackground}
-      resizeMode="cover"
-    >
-      {body}
-    </ImageBackground>
-  );
+  return body;
 });
 
-function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+function createStyles(colors: ReturnType<typeof useTheme>['colors'], dark: boolean) {
+  const appearance = dndAppearance(dark);
   return StyleSheet.create({
-    dragAreaBackground: {
-      flexGrow: 1,
+    questionPanel: {
+      backgroundColor: appearance.panel,
+      borderRadius: 26,
+      borderWidth: 1,
+      borderColor: appearance.border,
+      padding: 24,
+      gap: 24,
     },
     container: {
       flexGrow: 1,
-      gap: spacing.md,
+      gap: spacing.lg,
       padding: spacing.md,
     },
     promptRow: {
-      flexDirection: 'row',
+      flexDirection: 'column',
       alignItems: 'flex-start',
       gap: spacing.sm,
     },
-    promptAvatar: {
-      width: 32,
-      height: 32,
-    },
-    promptBubble: {
-      flex: 1,
-      backgroundColor: '#fff',
-      borderRadius: radii.lg,
-      borderWidth: 2,
-      borderColor: colors.primary.light,
-      padding: spacing.sm,
-    },
-    promptBubbleChild: {
-      padding: spacing.md,
-      borderWidth: 3,
-    },
+    promptBubble: { alignSelf: 'stretch', paddingVertical: 4 },
+    promptBubbleChild: {},
     promptText: {
-      fontSize: typography.body,
-      color: colors.glassText.primary,
-      lineHeight: 26,
-    },
-    promptTextChild: {
-      fontFamily: fonts.display.bold,
-      fontSize: typography.headingLg,
-      lineHeight: 36,
+      fontFamily: fonts.display.medium,
+      fontSize: 23,
+      lineHeight: 31,
       textAlign: 'center',
+      color: appearance.text,
     },
+    promptTextChild: {},
     promptButtons: {
-      gap: spacing.xs,
+      flexDirection: 'row',
+      alignSelf: 'center',
+      gap: 12,
     },
     iconButton: {
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       borderRadius: radii.md,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.warning.light,
+      backgroundColor: appearance.control,
     },
     iconButtonDisabled: {
-      opacity: 0.4,
+      opacity: 0.45,
     },
     blanksRow: {
+      paddingVertical: spacing.lg,
+      borderRadius: radii.lg,
+      backgroundColor: appearance.panel,
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'center',
@@ -392,16 +366,12 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       height: 64,
       borderRadius: radii.md,
       borderWidth: 2,
-      borderStyle: 'dashed',
-      borderColor: colors.surface.border,
+      borderStyle: 'dotted',
+      borderColor: appearance.accent,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    blankChild: {
-      borderRadius: radii.lg,
-      borderWidth: 3,
-      borderColor: colors.primary.light,
-    },
+    blankChild: {},
     blankWrong: {
       borderColor: colors.error.DEFAULT,
       borderStyle: 'solid',
@@ -409,18 +379,19 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     blankLabel: {
       fontSize: typography.headingLg,
       fontWeight: '700',
-      color: colors.text.faint,
+      color: appearance.accent,
     },
     poolRow: {
+      paddingTop: 12,
+      paddingBottom: 24,
+      alignSelf: 'center',
+      maxWidth: 310,
+      width: '100%',
+      zIndex: 2,
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'center',
       gap: spacing.sm,
-    },
-    wrongAvatar: {
-      width: 72,
-      height: 72,
-      alignSelf: 'center',
     },
   });
 }

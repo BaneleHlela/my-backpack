@@ -1,3 +1,4 @@
+import { fonts } from '../../theme/fonts';
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
@@ -10,6 +11,7 @@ interface QuizActionButtonProps {
   disabled?: boolean;
   loading?: boolean;
   secondary?: boolean;
+  playful?: boolean;
   icon?: ReactNode;
   style?: StyleProp<ViewStyle>;
 }
@@ -21,12 +23,13 @@ export function QuizActionButton({
   disabled,
   loading,
   secondary,
+  playful,
   icon,
   style,
 }: QuizActionButtonProps) {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const unavailable = disabled || loading;
-  const foreground = secondary ? colors.text.primary : '#fff';
+  const foreground = playful && !secondary ? '#39230F' : secondary ? colors.text.primary : '#fff';
 
   return (
     <Pressable
@@ -41,13 +44,19 @@ export function QuizActionButton({
           backgroundColor: secondary ? colors.background : colors.primary.dark,
           borderColor: secondary ? colors.text.faint : colors.primary.dark,
         },
+        playful && {
+          borderRadius: 18,
+          minHeight: 54,
+          backgroundColor: secondary ? (theme === 'dark' ? '#25212F' : '#F7F1EA') : '#F5A340',
+          borderColor: secondary ? (theme === 'dark' ? '#40364F' : '#E9DED0') : '#E39332',
+        },
         style,
         pressed && styles.pressed,
         unavailable && styles.disabled,
       ]}
     >
       {loading ? <ActivityIndicator color={foreground} /> : icon}
-      <Text style={[styles.label, { color: foreground }]}>{label}</Text>
+      <Text style={[styles.label, playful && { fontFamily: fonts.display.medium, fontWeight: 'normal', fontSize: 18 }, { color: foreground }]}>{label}</Text>
     </Pressable>
   );
 }

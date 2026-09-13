@@ -727,6 +727,7 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
           ) : null}
           <View style={styles.bottomBar}>
             <QuizActionButton
+              playful={quiz.currentQuestion?.type.startsWith('dnd_')}
               label="Submit"
               loading={quiz.status === 'submitting'}
               disabled={!canSubmit}
@@ -736,6 +737,7 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
               style={styles.submitButton}
             />
             <QuizActionButton
+              playful={quiz.currentQuestion?.type.startsWith('dnd_')}
               label="Skip"
               secondary
               disabled={!canSkip}

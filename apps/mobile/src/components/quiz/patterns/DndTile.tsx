@@ -1,3 +1,5 @@
+import { fonts } from '../../../theme/fonts';
+import { dndTileColor } from './dndAppearance';
 // Shared draggable-tile primitive + small utilities for the DnD patterns beyond dnd_single —
 // dnd_build (multi-blank) and dnd_count (multi-item-per-zone) both need a tile that can be
 // dragged out of a pool and, once placed, TAPPED TO REMOVE itself back to the pool — the
@@ -10,11 +12,11 @@
 // gesture recipe extracted for reuse by the two new patterns, not a replacement.
 import { forwardRef, useImperativeHandle } from 'react';
 import type { Ref } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, View, StyleSheet } from 'react-native';
 import { Text } from '../../AppText';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import { radii, typography } from '@my-backpack/shared';
+import { radii } from '@my-backpack/shared';
 import type { IDraggable } from '@my-backpack/shared';
 import type { PlaybackStatus } from '../../../lib/audio';
 import { AudioIndicator } from '../../AudioButton';
@@ -36,7 +38,7 @@ export function shuffle<T>(items: T[]): T[] {
 // — same fixed clamp(56px, 18vw, 76px) DndSinglePattern uses (escalation comes from flex-wrap
 // laying more same-sized tiles across more rows, not from shrinking further per item).
 export function clampTileSize(windowWidth: number): number {
-  return Math.min(76, Math.max(56, windowWidth * 0.18));
+  return Math.min(86, Math.max(72, windowWidth * 0.22));
 }
 
 export interface Rect {
@@ -88,6 +90,7 @@ export const DndTile = forwardRef(function DndTile(
   const styles = createStyles(colors);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const active = useSharedValue(false);
   const scrollRef = useQuestionScrollRef();
 
   useImperativeHandle(ref, () => ({
@@ -102,6 +105,8 @@ export const DndTile = forwardRef(function DndTile(
   // compiling and bundling fine (only surfaces once the gesture actually fires — see
   // DndSinglePattern.tsx / docs/technical/mobile-architecture.md for where this was first found).
   const tapGesture = Gesture.Tap()
+    .onBegin(() => { active.value = true; })
+    .onFinalize(() => { active.value = false; })
     .maxDistance(8)
     .onEnd((_e, success) => {
       if (success) runOnJS(onTap)(item);
@@ -111,6 +116,7 @@ export const DndTile = forwardRef(function DndTile(
     .minDistance(8)
     .enabled(draggable && !disabled)
     .onStart(() => {
+      active.value = true;
       if (onDragStart) runOnJS(onDragStart)(item);
     })
     .onUpdate((e) => {
@@ -121,6 +127,7 @@ export const DndTile = forwardRef(function DndTile(
       if (onDropAttempt) runOnJS(onDropAttempt)(item, e.absoluteX, e.absoluteY);
     })
     .onFinalize(() => {
+      active.value = false;
       translateX.value = withSpring(0);
       translateY.value = withSpring(0);
     });
@@ -130,10 +137,12 @@ export const DndTile = forwardRef(function DndTile(
   const composedGesture = draggable ? Gesture.Race(tapGesture, panGesture) : tapGesture;
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
+    zIndex: active.value ? 20 : 0,
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: active.value ? 1.08 : 1 }],
   }));
 
-  const imageUrl = resolveAssetUrl(item.imageUrl);
+  const imageUrl = item.label?.trim() ? undefined : resolveAssetUrl(item.imageUrl);
+  const tileColor = dndTileColor(item.label || item.id);
 
   return (
     <GestureDetector gesture={composedGesture}>
@@ -141,18 +150,21 @@ export const DndTile = forwardRef(function DndTile(
         style={[
           styles.tile,
           isChild && styles.tileChild,
+          { borderColor: tileColor },
           size ? { width: size, height: size } : null,
           highlight && styles.tileHighlight,
           animatedStyle,
         ]}
       >
+        <View style={[styles.tileFace, { backgroundColor: tileColor }]}>
         {audioStatus !== 'idle' ? (
           <View pointerEvents="none" style={{ position: 'absolute', top: 3, right: 3, zIndex: 1 }}>
-            <AudioIndicator status={audioStatus} color={colors.primary.DEFAULT} size={14} />
+            <AudioIndicator status={audioStatus} color={tileColor === '#E8B92F' ? '#493510' : '#fff'} size={14} />
           </View>
         ) : null}
-        {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.tileImage} resizeMode="contain" /> : null}
-        {showLabel ? <Text style={styles.tileLabel}>{item.label}</Text> : null}
+          {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.tileImage} resizeMode="contain" /> : null}
+          {(showLabel || !imageUrl) && item.label ? <Text adjustsFontSizeToFit numberOfLines={2} style={[styles.tileLabel, tileColor === '#E8B92F' && { color: '#493510' }]}>{item.label}</Text> : null}
+        </View>
       </Animated.View>
     </GestureDetector>
   );
@@ -161,20 +173,22 @@ export const DndTile = forwardRef(function DndTile(
 function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
     tile: {
-      width: 64,
-      height: 64,
-      borderRadius: radii.md,
+      width: 78,
+      height: 82,
+      padding: 5,
+      borderRadius: 22,
+      borderWidth: 1.5,
+      borderStyle: 'dotted',
+      backgroundColor: 'transparent',
+    },
+    tileChild: {},
+    tileFace: {
+      flex: 1,
+      width: '100%',
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surface.glassStrong,
-      borderWidth: 1,
-      borderColor: colors.surface.border,
-    },
-    tileChild: {
-      borderRadius: radii.lg,
-      borderWidth: 3,
-      borderColor: colors.primary.light,
-      backgroundColor: '#fff',
+      padding: 4,
     },
     tileHighlight: {
       borderColor: colors.warning.DEFAULT,
@@ -185,9 +199,12 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       height: '70%',
     },
     tileLabel: {
-      fontSize: typography.body,
-      fontWeight: '700',
-      color: colors.glassText.primary,
+      paddingHorizontal: 6,
+      textAlign: 'center',
+      fontSize: 30,
+      fontFamily: fonts.display.semibold,
+      color: '#fff',
+      includeFontPadding: false,
     },
   });
 }

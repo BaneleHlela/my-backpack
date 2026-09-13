@@ -250,7 +250,6 @@ export async function seedEnglishVowelQuestions(nodeId: string, introLessonId: s
         const draggable: IDraggable = {
           id: `vowel-${dv.word}`,
           label: dv.letter,
-          imageUrl: `illustrations/draggables/alphabet/cartoon-grouped/letter-${dv.word}.png`,
         };
         if (variant.audioOn) draggable.audioUrl = dv.soundPath;
         return draggable;
@@ -265,7 +264,6 @@ export async function seedEnglishVowelQuestions(nodeId: string, introLessonId: s
         },
         draggables,
         dropZones: [{ id: 'zone-main', requiredDraggableIds: [`vowel-${v.word}`], requiredCount: 1 }],
-        dragAreaImageUrl: 'illustrations/drag-areas/26552.jpg',
         successFeedback: {
           text: v.successText,
           audioUrl: v.successAudioUrl,

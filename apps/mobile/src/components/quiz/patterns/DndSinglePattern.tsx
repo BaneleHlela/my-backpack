@@ -1,3 +1,5 @@
+import { dndAppearance } from './dndAppearance';
+import { dndTileColor } from './dndAppearance';
 // Ports apps/web's DndSinglePattern.tsx's behavior — not its library. Web uses @dnd-kit/core
 // (React-DOM-only). A compatibility spike installed react-native-reanimated-dnd (built on
 // Reanimated 4 + Gesture Handler, so it looked like a close match) and found a hard blocker:
@@ -21,12 +23,12 @@
 // the question right after), so it's not reproduced here.
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import { Image, ImageBackground, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Text } from '../../AppText';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Lightbulb } from 'lucide-react-native';
-import { ASSETS, lightColors, radii, spacing, typography } from '@my-backpack/shared';
+import { radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { usePlayback } from '../../../lib/useAudioPlayback';
@@ -62,7 +64,7 @@ function shuffle<T>(items: T[]): T[] {
 // fixed formula (not count-parameterized on web either — the escalation effect comes from
 // flex-wrap laying more same-sized tiles across more rows, not from shrinking further per item).
 function clampTileSize(windowWidth: number): number {
-  return Math.min(76, Math.max(56, windowWidth * 0.18));
+  return Math.min(86, Math.max(72, windowWidth * 0.22));
 }
 
 interface DraggableTileHandle {
@@ -97,10 +99,11 @@ const DraggableTile = forwardRef(function DraggableTile(
   }: DraggableTileProps,
   ref: Ref<DraggableTileHandle>
 ) {
-  const { colors } = useTheme();
-  const styles = createStyles(colors);
+  const { colors, theme } = useTheme();
+  const styles = createStyles(colors, theme === 'dark');
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const active = useSharedValue(false);
   const scrollRef = useQuestionScrollRef();
 
   useImperativeHandle(ref, () => ({
@@ -114,6 +117,8 @@ const DraggableTile = forwardRef(function DraggableTile(
   // setters, audio playback) must cross back via runOnJS, or it throws at runtime despite
   // compiling and bundling fine (this doesn't surface until the gesture actually fires).
   const tapGesture = Gesture.Tap()
+    .onBegin(() => { active.value = true; })
+    .onFinalize(() => { active.value = false; })
     .maxDistance(8)
     .onEnd((_e, success) => {
       if (success) runOnJS(onTapAudio)(item);
@@ -123,6 +128,7 @@ const DraggableTile = forwardRef(function DraggableTile(
     .minDistance(8)
     .enabled(!disabled)
     .onStart(() => {
+      active.value = true;
       runOnJS(onDragAudio)(item);
     })
     .onUpdate((e) => {
@@ -133,6 +139,7 @@ const DraggableTile = forwardRef(function DraggableTile(
       runOnJS(onDropAttempt)(item, e.absoluteX, e.absoluteY);
     })
     .onFinalize(() => {
+      active.value = false;
       translateX.value = withSpring(0);
       translateY.value = withSpring(0);
     });
@@ -142,10 +149,12 @@ const DraggableTile = forwardRef(function DraggableTile(
   const composedGesture = Gesture.Race(tapGesture, panGesture);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
+    zIndex: active.value ? 20 : 0,
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: active.value ? 1.08 : 1 }],
   }));
 
-  const imageUrl = resolveAssetUrl(item.imageUrl);
+  const imageUrl = item.label?.trim() ? undefined : resolveAssetUrl(item.imageUrl);
+  const tileColor = dndTileColor(item.label || item.id);
 
   return (
     <GestureDetector gesture={composedGesture}>
@@ -153,18 +162,21 @@ const DraggableTile = forwardRef(function DraggableTile(
         style={[
           styles.tile,
           isChild && styles.tileChild,
+          { borderColor: tileColor },
           size ? { width: size, height: size } : null,
           highlight && styles.tileHighlight,
           animatedStyle,
         ]}
       >
+        <View style={[styles.tileFace, { backgroundColor: tileColor }]}>
         {audioStatus !== 'idle' ? (
           <View pointerEvents="none" style={{ position: 'absolute', top: 3, right: 3, zIndex: 1 }}>
-            <AudioIndicator status={audioStatus} color={colors.primary.DEFAULT} size={14} />
+            <AudioIndicator status={audioStatus} color={tileColor === '#E8B92F' ? '#493510' : '#fff'} size={14} />
           </View>
         ) : null}
-        {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.tileImage} resizeMode="contain" /> : null}
-        {showLabel ? <Text style={styles.tileLabel}>{item.label}</Text> : null}
+          {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.tileImage} resizeMode="contain" /> : null}
+          {(showLabel || !imageUrl) && item.label ? <Text adjustsFontSizeToFit numberOfLines={2} style={[styles.tileLabel, tileColor === '#E8B92F' && { color: '#493510' }]}>{item.label}</Text> : null}
+        </View>
       </Animated.View>
     </GestureDetector>
   );
@@ -174,11 +186,12 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   { content, helpers, ageGroup, lang, disabled, onAnswer, onReadyChange }: DndSinglePatternProps,
   ref: Ref<QuestionPatternHandle>
 ) {
-  const { colors } = useTheme();
-  const styles = createStyles(colors);
+  const { colors, theme } = useTheme();
+  const styles = createStyles(colors, theme === 'dark');
+  const appearance = dndAppearance(theme === 'dark');
   const isChild = ageGroup === 'child';
   const { width: windowWidth } = useWindowDimensions();
-  const tileSize = isChild ? clampTileSize(windowWidth) : undefined;
+  const tileSize = clampTileSize(windowWidth);
   const playback = usePlayback();
   const playAsset = (url?: string) => { if (url) playback.play({ url }); };
   const itemAudioStatus = (item: IDraggable): PlaybackStatus => playback.sourceKey ===
@@ -325,38 +338,59 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   };
 
 
-  const dragAreaBackground = resolveAssetUrl(content.dragAreaImageUrl);
-  const dropZoneBackground = resolveAssetUrl(dropZone.imageUrl) ?? ASSETS.DROP_ZONES.CLASSROOM_BOARD;
-  const wrongAvatarUrl = content.avatar
-    ? ASSETS.AVATARS.image(
-        content.avatar.avatarId,
-        content.tryAgainFeedback?.avatarEmotion ?? content.avatar.emotion
-      )
-    : undefined;
   const promptAudio = replayAudioSource(content, lang);
   const promptText = content.avatar?.dialogue || (content.prompt?.startsWith('audio:')
     ? 'Listen to the question.' : content.prompt) || (promptAudio.url ? 'Listen to the question.' : undefined);
 
   const body = (
     <View style={styles.container}>
-      {promptText ? (
-        <View style={styles.promptRow}>
-          <View style={[styles.promptBubble, isChild && styles.promptBubbleChild]}>
-            <Text style={[styles.promptText, isChild && styles.promptTextChild]}>{promptText}</Text>
-          </View>
+      <View style={styles.questionPanel}>
+        {promptText ? (
+          <View style={styles.promptRow}>
+            <View style={[styles.promptBubble, isChild && styles.promptBubbleChild]}>
+              <Text style={[styles.promptText, isChild && styles.promptTextChild]}>{promptText}</Text>
+            </View>
 
-          <View style={styles.promptButtons}>
-            <AudioButton compact {...promptAudio} label="Replay question" />
-            <Pressable
-              onPress={useHint}
-              disabled={!hintAvailable}
-              style={[styles.iconButton, !hintAvailable && styles.iconButtonDisabled]}
-            >
-              <Lightbulb size={isChild ? 22 : 16} color={colors.warning.dark} />
-            </Pressable>
+            <View style={styles.promptButtons}>
+              <AudioButton compact {...promptAudio} label="Replay question" style={styles.iconButton} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Show hint"
+                onPress={useHint}
+                disabled={!hintAvailable}
+                style={({ pressed }) => [styles.iconButton, !hintAvailable && styles.iconButtonDisabled, pressed && { transform: [{ scale: 0.94 }], opacity: 0.8 }]}
+              >
+                <Lightbulb size={20} color={appearance.accent} />
+              </Pressable>
+            </View>
           </View>
+        ) : null}
+
+        <View
+          ref={dropZoneRef}
+          collapsable={false}
+          onLayout={measureDropZone}
+          style={[styles.dropZone, isChild && styles.dropZoneChild, wrongAttempt && styles.dropZoneWrong]}
+        >
+          {placedItem ? (
+            <DraggableTile
+              key={`${genKey}-placed-${placedItem.id}`}
+              item={placedItem}
+              audioStatus={itemAudioStatus(placedItem)}
+              size={tileSize}
+              showLabel={helpers.showItemLabels}
+              disabled
+              isChild={isChild}
+              onTapAudio={playItemAudio}
+              onDragAudio={playItemAudio}
+              onDropAttempt={() => {}}
+            />
+          ) : (
+            <Text style={styles.dropZoneLabel}>{dropZone.label ?? 'Drop here'}</Text>
+          )}
         </View>
-      ) : null}
+
+      </View>
 
       {playback.error ? <Text accessibilityRole="alert" style={{ color: colors.error.DEFAULT }}>{playback.error}</Text> : null}
       <View style={styles.poolRow}>
@@ -384,133 +418,91 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
         ))}
       </View>
 
-      <View
-        ref={dropZoneRef}
-        collapsable={false}
-        onLayout={measureDropZone}
-        style={[styles.dropZone, isChild && styles.dropZoneChild, wrongAttempt && styles.dropZoneWrong]}
-      >
-        <ImageBackground
-          source={{ uri: dropZoneBackground }}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-        />
-        {placedItem ? (
-          <DraggableTile
-            key={`${genKey}-placed-${placedItem.id}`}
-            item={placedItem}
-            audioStatus={itemAudioStatus(placedItem)}
-            size={tileSize}
-            showLabel={helpers.showItemLabels}
-            disabled
-            isChild={isChild}
-            onTapAudio={playItemAudio}
-            onDragAudio={playItemAudio}
-            onDropAttempt={() => {}}
-          />
-        ) : (
-          <Text style={styles.dropZoneLabel}>{dropZone.label ?? 'Drop here'}</Text>
-        )}
-      </View>
-
-      {wrongAttempt && wrongAvatarUrl ? (
-        <Image source={{ uri: wrongAvatarUrl }} style={styles.wrongAvatar} resizeMode="contain" />
-      ) : null}
     </View>
   );
 
-  if (!dragAreaBackground) return body;
-
-  return (
-    <ImageBackground
-      source={{ uri: dragAreaBackground }}
-      style={styles.dragAreaBackground}
-      resizeMode="cover"
-    >
-      {body}
-    </ImageBackground>
-  );
+  return body;
 });
 
-function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
+function createStyles(colors: ReturnType<typeof useTheme>['colors'], dark: boolean) {
+  const appearance = dndAppearance(dark);
   return StyleSheet.create({
-    dragAreaBackground: {
-      flexGrow: 1,
-      borderRadius: radii.md,
-      overflow: 'hidden',
+    questionPanel: {
+      backgroundColor: appearance.panel,
+      borderRadius: 26,
+      borderWidth: 1,
+      borderColor: appearance.border,
+      padding: 24,
+      gap: 24,
     },
     container: {
       flexGrow: 1,
-      gap: spacing.md,
+      gap: spacing.lg,
       padding: spacing.sm,
     },
     promptRow: {
-      flexDirection: 'row',
+      flexDirection: 'column',
       alignItems: 'flex-start',
       justifyContent: 'center',
       gap: spacing.sm,
     },
-    promptBubble: {
-      flex: 1,
-      backgroundColor: '#fff',
-      borderRadius: radii.lg,
-      borderWidth: 2,
-      borderColor: colors.primary.light,
-      padding: spacing.md,
-    },
-    promptBubbleChild: {
-      padding: spacing.md,
-      borderWidth: 3,
-    },
+    promptBubble: { alignSelf: 'stretch', paddingVertical: 4 },
+    promptBubbleChild: {},
     promptText: {
-      fontSize: typography.bodyChild,
-      lineHeight: 28,
-      color: lightColors.text.primary,
-    },
-    promptTextChild: {
-      fontFamily: fonts.display.bold,
-      fontSize: typography.headingLg,
-      lineHeight: 36,
+      fontFamily: fonts.display.medium,
+      fontSize: 23,
+      lineHeight: 31,
       textAlign: 'center',
-      color: lightColors.text.primary,
+      color: appearance.text,
     },
+    promptTextChild: {},
     promptButtons: {
-      gap: spacing.xs,
+      flexDirection: 'row',
+      alignSelf: 'center',
+      gap: 12,
     },
     iconButton: {
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       borderRadius: radii.md,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.warning.light,
+      backgroundColor: appearance.control,
       borderWidth: 1,
-      borderColor: colors.primary.light,
+      borderColor: appearance.border,
     },
     iconButtonDisabled: {
-      opacity: 0.4,
+      opacity: 0.45,
     },
     poolRow: {
+      paddingTop: 12,
+      paddingBottom: 24,
+      alignSelf: 'center',
+      maxWidth: 310,
+      width: '100%',
+      zIndex: 2,
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'center',
-      gap: spacing.sm,
+      gap: 16,
     },
     tile: {
-      width: 64,
-      height: 64,
-      borderRadius: radii.md,
+      width: 78,
+      height: 82,
+      padding: 5,
+      borderRadius: 22,
+      borderWidth: 1.5,
+      borderStyle: 'dotted',
+      backgroundColor: 'transparent',
+    },
+    tileChild: {},
+    tileFace: {
+      flex: 1,
+      width: '100%',
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surface.glassStrong,
-      borderWidth: 1,
-      borderColor: colors.surface.border,
-    },
-    tileChild: {
-      borderRadius: radii.lg,
-      borderWidth: 3,
-      borderColor: colors.primary.light,
-      backgroundColor: '#fff',
+      padding: 4,
     },
     tileHighlight: {
       borderColor: colors.warning.DEFAULT,
@@ -521,38 +513,33 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       height: '70%',
     },
     tileLabel: {
-      fontSize: typography.body,
-      fontWeight: '700',
-      color: colors.glassText.primary,
+      paddingHorizontal: 6,
+      textAlign: 'center',
+      fontSize: 30,
+      fontFamily: fonts.display.semibold,
+      color: '#fff',
+      includeFontPadding: false,
     },
     dropZone: {
-      minHeight: 160,
-      width: '100%',
+      minHeight: 90,
+      width: 96,
+      backgroundColor: appearance.slot,
+      alignSelf: 'center',
       borderRadius: radii.lg,
       borderWidth: 2,
-      borderStyle: 'dashed',
-      borderColor: colors.surface.border,
+      borderStyle: 'dotted',
+      borderColor: appearance.accent,
       alignItems: 'center',
       justifyContent: 'center',
-      overflow: 'hidden',
-      aspectRatio: 2 / 1,
       maxWidth: '100%',
     },
-    dropZoneChild: {
-      borderWidth: 3,
-      borderColor: colors.primary.light,
-    },
+    dropZoneChild: {},
     dropZoneWrong: {
       borderColor: colors.error.DEFAULT,
     },
     dropZoneLabel: {
       fontSize: typography.small,
-      color: colors.text.muted,
-    },
-    wrongAvatar: {
-      width: 72,
-      height: 72,
-      alignSelf: 'center',
+      color: appearance.muted,
     },
   });
 }
