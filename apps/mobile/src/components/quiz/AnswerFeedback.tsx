@@ -6,14 +6,13 @@
 // text only when feedback.audioUrl isn't set (that prerecorded clip wins instead).
 //
 // Feedback scrolls within the available safe-area height; the next/finish action stays visible.
-import { Image, Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Image, Modal, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '../AppText';
-import { CheckCircle2, SkipForward, Volume2, XCircle } from 'lucide-react-native';
+import { CheckCircle2, SkipForward, XCircle } from 'lucide-react-native';
 import { ASSETS, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IQuestionContent } from '@my-backpack/shared';
-import { playAudioUrl } from '../../lib/audio';
-import { resolveAssetUrl } from '../../lib/assetUrl';
+import { AudioButton } from '../AudioButton';
 import { fonts } from '../../theme/fonts';
 import { SpokenText } from './SpokenText';
 import { QuizActionButton } from './QuizActionButton';
@@ -115,21 +114,15 @@ export function AnswerFeedback({
                 {pointsAwarded} / {maxPoints} points
               </Text>
 
-              {!wasSkipped && feedback?.text ? (
+              {!wasSkipped && (feedback?.text || feedback?.audioUrl) ? (
                 feedback.audioUrl ? (
                   <View style={styles.feedbackTextRow}>
                     <Text style={styles.feedbackText}>{feedback.text}</Text>
-                    <Pressable
-                      onPress={() => playAudioUrl(resolveAssetUrl(feedback.audioUrl)!)}
-                      hitSlop={8}
-                      style={styles.audioButton}
-                    >
-                      <Volume2 size={18} color={colors.text.secondary} />
-                    </Pressable>
+                    <AudioButton compact url={feedback.audioUrl} label="Play feedback" />
                   </View>
                 ) : (
                   <SpokenText
-                    text={feedback.text}
+                    text={feedback.text ?? ''}
                     lang={lang}
                     textStyle={styles.feedbackText}
                     containerStyle={styles.spokenRow}
@@ -232,15 +225,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     spokenRow: {
       width: '100%',
       justifyContent: 'center',
-    },
-    audioButton: {
-      width: 44,
-      height: 44,
-      borderRadius: radii.sm,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: colors.text.faint,
     },
     correctAnswerText: {
       fontSize: typography.small,

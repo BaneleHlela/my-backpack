@@ -8,10 +8,10 @@ import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import type { Ref } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '../../AppText';
-import { Check, Volume2, X } from 'lucide-react-native';
+import { Check, X } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
-import { playAudioUrl } from '../../../lib/audio';
+import { AudioButton } from '../../AudioButton';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { SpokenText } from '../SpokenText';
 import { useTheme } from '../../../theme/ThemeContext';
@@ -58,31 +58,16 @@ export const TrueFalsePattern = forwardRef(function TrueFalsePattern(
     <View style={styles.wrapper}>
       <View style={styles.promptRow}>
         {audioPromptUrl ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Play question audio"
-            onPress={() => playAudioUrl(audioPromptUrl)}
-            style={styles.audioButton}
-          >
-            <Volume2 size={20} color={colors.text.primary} />
-          </Pressable>
+          <AudioButton url={audioPromptUrl} label="Play audio" />
         ) : (
           <SpokenText
             text={content.prompt ?? ''}
             lang={lang}
+            audioUrl={content.promptAudioUrl}
             textStyle={styles.prompt}
             containerStyle={styles.spokenPrompt}
           />
         )}
-        {content.promptAudioUrl ? (
-          <Pressable
-            onPress={() => playAudioUrl(resolveAssetUrl(content.promptAudioUrl)!)}
-            hitSlop={8}
-            style={styles.audioButton}
-          >
-            <Volume2 size={18} color={colors.text.secondary} />
-          </Pressable>
-        ) : null}
       </View>
 
       <Text style={styles.instruction}>Is this statement true or false?</Text>
@@ -136,15 +121,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     spokenPrompt: {
       flex: 1,
-    },
-    audioButton: {
-      width: 44,
-      height: 44,
-      borderRadius: radii.sm,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: colors.text.faint,
     },
     instruction: { fontSize: typography.small, color: colors.text.secondary, marginTop: spacing.sm },
     optionsRow: {

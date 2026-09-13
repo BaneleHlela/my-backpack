@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppState, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -28,12 +28,24 @@ import { LaunchScreen } from '../src/components/LaunchScreen';
 import { ScreenBackground } from '../src/components/ScreenBackground';
 import { PrimaryButton } from '../src/components/PrimaryButton';
 import { Text } from '../src/components/AppText';
+import { clearAudio, initializeAudio, initializeSpeech } from '../src/lib/audio';
 
 injectStore(store);
 
 void SplashScreen.preventAutoHideAsync();
 
 function AuthBootstrap() {
+  const pathname = usePathname();
+  useEffect(() => {
+    void initializeAudio().catch(() => {}); // The play control reports failures.
+    void initializeSpeech().catch(() => {});
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') clearAudio();
+    });
+    return () => { subscription.remove(); clearAudio(); };
+  }, []);
+  // Stack routes may stay mounted after navigation, so unmount cleanup alone is insufficient.
+  useEffect(() => () => clearAudio(), [pathname]);
   const dispatch = useDispatch<AppDispatch>();
   const isCheckingAuth = useSelector((state: RootState) => state.auth.isCheckingAuth);
   const bootstrapError = useSelector((state: RootState) => state.auth.bootstrapError);

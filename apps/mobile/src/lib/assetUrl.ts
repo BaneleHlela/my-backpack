@@ -5,6 +5,9 @@
 import { ASSETS } from '@my-backpack/shared';
 
 export function resolveAssetUrl(path?: string): string | undefined {
-  if (!path) return undefined;
-  return path.startsWith('http') ? path : `${ASSETS.GCS_BASE}/${path}`;
+  const value = path?.trim();
+  if (!value) return undefined;
+  if (value.startsWith('//')) return `https:${value}`;
+  if (/^(https?:|file:|content:|data:|blob:)/i.test(value)) return value;
+  return `${ASSETS.GCS_BASE}/${value.replace(/^\/+/, '')}`;
 }
