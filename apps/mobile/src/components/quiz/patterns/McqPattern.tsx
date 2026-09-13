@@ -17,10 +17,9 @@ import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import type { Ref } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '../../AppText';
-import { Volume2 } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import type { IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
-import { playAudioUrl } from '../../../lib/audio';
+import { AudioButton } from '../../AudioButton';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { SpokenText } from '../SpokenText';
 import { useTheme } from '../../../theme/ThemeContext';
@@ -78,27 +77,16 @@ export const McqPattern = forwardRef(function McqPattern(
   return (
     <View style={styles.wrapper}>
       {audioPromptUrl ? (
-        <Pressable onPress={() => playAudioUrl(audioPromptUrl)} style={styles.playAudioButton}>
-          <Volume2 size={16} color="#fff" />
-          <Text style={styles.playAudioButtonText}>Play audio</Text>
-        </Pressable>
+        <AudioButton url={audioPromptUrl} label="Play audio" />
       ) : (
         <View style={styles.promptRow}>
           <SpokenText
             text={content.prompt ?? ''}
             lang={lang}
+            audioUrl={content.promptAudioUrl}
             textStyle={styles.promptText}
             containerStyle={styles.spokenPrompt}
           />
-          {content.promptAudioUrl ? (
-            <Pressable
-              onPress={() => playAudioUrl(resolveAssetUrl(content.promptAudioUrl)!)}
-              hitSlop={8}
-              style={styles.audioButton}
-            >
-              <Volume2 size={16} color={colors.text.secondary} />
-            </Pressable>
-          ) : null}
         </View>
       )}
 
@@ -146,31 +134,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     spokenPrompt: {
       flex: 1,
-    },
-    audioButton: {
-      width: 44,
-      height: 44,
-      borderRadius: radii.sm,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: colors.text.faint,
-    },
-    playAudioButton: {
-      minHeight: 48,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: spacing.xs,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.sm,
-      borderRadius: radii.md,
-      backgroundColor: colors.primary.dark,
-    },
-    playAudioButtonText: {
-      fontSize: typography.small,
-      fontWeight: '700',
-      color: '#fff',
     },
     options: {
       gap: spacing.sm,

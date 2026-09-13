@@ -2,10 +2,10 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '../AppText';
 import { formatDistanceToNow } from 'date-fns';
-import { Volume2, Trash2, Brain, Clock3 } from 'lucide-react-native';
+import { Trash2, Brain, Clock3 } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../GlassCard';
-import { playAudioUrl } from '../../lib/audio';
+import { AudioButton } from '../AudioButton';
 import type { BucketTermEntryLite } from '../../features/vocab/vocabSlice';
 import { useTheme } from '../../theme/ThemeContext';
 
@@ -62,11 +62,7 @@ export function BucketEntryCard({ entry, onSelect, onRemove, isRemoving }: Bucke
             <View style={styles.titleRow}>
               <Text style={styles.word}>{term.word}</Text>
               {term.phonetic ? <Text style={styles.phonetic}>{term.phonetic}</Text> : null}
-              {term.audioUrl ? (
-                <Pressable onPress={() => playAudioUrl(term.audioUrl!)} hitSlop={8}>
-                  <Volume2 size={14} color={colors.primary.DEFAULT} />
-                </Pressable>
-              ) : null}
+              <AudioButton compact url={term.audioUrl} text={term.word} language="en-US" fallbackToSpeech label="Hear pronunciation" preload={false} />
             </View>
 
             <View style={styles.badgeRow}>

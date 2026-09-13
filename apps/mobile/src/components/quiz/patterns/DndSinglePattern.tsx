@@ -25,12 +25,14 @@ import { Image, ImageBackground, Pressable, StyleSheet, View, useWindowDimension
 import { Text } from '../../AppText';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import { Lightbulb, Volume2 } from 'lucide-react-native';
+import { Lightbulb } from 'lucide-react-native';
 import { ASSETS, lightColors, radii, spacing, typography } from '@my-backpack/shared';
 import type { AgeGroup, IDraggable, IQuestionContent, IQuestionHelpers } from '@my-backpack/shared';
-import { playAudioUrl } from '../../../lib/audio';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
-import { useSpeak } from '../../../lib/useSpeak';
+import { usePlayback } from '../../../lib/useAudioPlayback';
+import { audioSourceKey, prepareAudio, type PlaybackStatus } from '../../../lib/audio';
+import { replayAudioSource } from '../../../lib/questionAudio';
+import { AudioButton, AudioIndicator } from '../../AudioButton';
 import { useTheme } from '../../../theme/ThemeContext';
 import { useQuestionScrollRef } from '../QuestionScrollArea';
 import { fonts } from '../../../theme/fonts';
@@ -43,11 +45,6 @@ interface DndSinglePatternProps extends QuestionPatternReadyProps {
   lang: string;
   disabled?: boolean;
   onAnswer: (rawResponse: string) => void;
-}
-
-function playAsset(path?: string) {
-  const url = resolveAssetUrl(path);
-  if (url) playAudioUrl(url);
 }
 
 // Fisher-Yates — unbiased in-place shuffle, returns a new array.
@@ -73,6 +70,7 @@ interface DraggableTileHandle {
 }
 
 interface DraggableTileProps {
+  audioStatus?: PlaybackStatus;
   item: IDraggable;
   size?: number;
   showLabel: boolean;
@@ -92,6 +90,7 @@ const DraggableTile = forwardRef(function DraggableTile(
     highlight,
     disabled,
     isChild,
+    audioStatus = 'idle',
     onTapAudio,
     onDragAudio,
     onDropAttempt,
@@ -159,6 +158,11 @@ const DraggableTile = forwardRef(function DraggableTile(
           animatedStyle,
         ]}
       >
+        {audioStatus !== 'idle' ? (
+          <View pointerEvents="none" style={{ position: 'absolute', top: 3, right: 3, zIndex: 1 }}>
+            <AudioIndicator status={audioStatus} color={colors.primary.DEFAULT} size={14} />
+          </View>
+        ) : null}
         {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.tileImage} resizeMode="contain" /> : null}
         {showLabel ? <Text style={styles.tileLabel}>{item.label}</Text> : null}
       </Animated.View>
@@ -175,7 +179,14 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   const isChild = ageGroup === 'child';
   const { width: windowWidth } = useWindowDimensions();
   const tileSize = isChild ? clampTileSize(windowWidth) : undefined;
-  const { speak } = useSpeak(lang);
+  const playback = usePlayback();
+  const playAsset = (url?: string) => { if (url) playback.play({ url }); };
+  const itemAudioStatus = (item: IDraggable): PlaybackStatus => playback.sourceKey ===
+    audioSourceKey({ url: item.audioUrl, text: item.label, language: lang }) ? playback.status : 'idle';
+  useEffect(() => {
+    content.draggables?.slice(0, 4).forEach((item) => prepareAudio({ url: item.audioUrl }));
+    return playback.stop;
+  }, [content, playback.stop]);
 
   const dropZone = content.dropZones?.[0];
 
@@ -259,15 +270,6 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   const correctId = dropZone.requiredDraggableIds[0];
 
   const hintAvailable = helpers.hintsAllowed > 0 && hintsRemaining > 0 && hintButtonReady;
-  // Live TTS fills the gap when there's dialogue text but no recording — unlike web, this
-  // doesn't override a prerecorded dialogueAudioUrl when one exists (see replayPrompt below);
-  // mobile has no word-highlighting benefit to justify web's override of recorded audio.
-  const audioAvailable =
-    Boolean(content.avatar?.dialogueAudioUrl) ||
-    Boolean(content.avatar?.dialogue) ||
-    Boolean(content.promptAudioUrl) ||
-    Boolean(placedItem?.audioUrl);
-
   const measureDropZone = () => {
     dropZoneRef.current?.measureInWindow((x, y, width, height) => {
       dropZoneRectRef.current = { x, y, width, height };
@@ -277,8 +279,7 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
   // Ordinary fallback rule: prerecorded item.audioUrl wins when set (phonetically load-bearing,
   // e.g. isiZulu vowel/consonant recordings) — live TTS of item.label fills the gap when it isn't.
   const playItemAudio = (item: IDraggable) => {
-    if (item.audioUrl) playAsset(item.audioUrl);
-    else if (item.label) speak(item.label);
+    playback.play({ url: item.audioUrl, text: item.label, language: lang });
   };
 
   const handleDropAttempt = (item: IDraggable, absoluteX: number, absoluteY: number) => {
@@ -323,15 +324,6 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
     setTimeout(() => setHintActive(false), 2500);
   };
 
-  const replayPrompt = () => {
-    if (content.avatar?.dialogueAudioUrl) {
-      playAsset(content.avatar.dialogueAudioUrl);
-    } else if (content.avatar?.dialogue) {
-      speak(content.avatar.dialogue);
-    } else if (placedItem?.audioUrl) {
-      playAsset(placedItem.audioUrl);
-    }
-  };
 
   const dragAreaBackground = resolveAssetUrl(content.dragAreaImageUrl);
   const dropZoneBackground = resolveAssetUrl(dropZone.imageUrl) ?? ASSETS.DROP_ZONES.CLASSROOM_BOARD;
@@ -341,7 +333,9 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
         content.tryAgainFeedback?.avatarEmotion ?? content.avatar.emotion
       )
     : undefined;
-  const promptText = content.avatar?.dialogue ?? content.prompt;
+  const promptAudio = replayAudioSource(content, lang);
+  const promptText = content.avatar?.dialogue || (content.prompt?.startsWith('audio:')
+    ? 'Listen to the question.' : content.prompt) || (promptAudio.url ? 'Listen to the question.' : undefined);
 
   const body = (
     <View style={styles.container}>
@@ -352,17 +346,11 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
           </View>
 
           <View style={styles.promptButtons}>
-            <Pressable
-              onPress={replayPrompt}
-              disabled={!audioAvailable}
-              style={[styles.iconButton, styles.replayButton, !audioAvailable && styles.iconButtonDisabled]}
-            >
-              <Volume2 size={isChild ? 22 : 16} color={colors.warning.dark} />
-            </Pressable>
+            <AudioButton compact {...promptAudio} label="Replay question" />
             <Pressable
               onPress={useHint}
               disabled={!hintAvailable}
-              style={[styles.iconButton, styles.hintButton, !hintAvailable && styles.iconButtonDisabled]}
+              style={[styles.iconButton, !hintAvailable && styles.iconButtonDisabled]}
             >
               <Lightbulb size={isChild ? 22 : 16} color={colors.warning.dark} />
             </Pressable>
@@ -370,6 +358,7 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
         </View>
       ) : null}
 
+      {playback.error ? <Text accessibilityRole="alert" style={{ color: colors.error.DEFAULT }}>{playback.error}</Text> : null}
       <View style={styles.poolRow}>
         {poolItems.map((item) => (
           <DraggableTile
@@ -379,6 +368,7 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
               else tileRefs.current.delete(item.id);
             }}
             item={item}
+            audioStatus={itemAudioStatus(item)}
             size={tileSize}
             showLabel={!isChild && helpers.showItemLabels}
             highlight={hintActive && item.id === correctId}
@@ -409,6 +399,7 @@ export const DndSinglePattern = forwardRef(function DndSinglePattern(
           <DraggableTile
             key={`${genKey}-placed-${placedItem.id}`}
             item={placedItem}
+            audioStatus={itemAudioStatus(placedItem)}
             size={tileSize}
             showLabel={helpers.showItemLabels}
             disabled
@@ -499,8 +490,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
     iconButtonDisabled: {
       opacity: 0.4,
     },
-    replayButton: {},
-    hintButton: {},
     poolRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',

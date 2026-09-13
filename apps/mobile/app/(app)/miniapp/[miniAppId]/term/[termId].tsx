@@ -2,16 +2,15 @@
 // route (rather than inline state) — matches web's reasoning: linkable,
 // supports back navigation.
 import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../../../../../src/components/AppText';
 import { useLocalSearchParams } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { Volume2 } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { GlassCard } from '../../../../../src/components/GlassCard';
 import { DefinitionCard } from '../../../../../src/components/dictionary/DefinitionCard';
 import { Menubar } from '../../../../../src/components/Menubar';
-import { playAudioUrl } from '../../../../../src/lib/audio';
+import { AudioButton } from '../../../../../src/components/AudioButton';
 import { useSafeGoBack } from '../../../../../src/lib/navigation';
 import { clearActiveTerm, fetchTermDetail } from '../../../../../src/features/vocab/vocabSlice';
 import type { AppDispatch, RootState } from '../../../../../src/store/store';
@@ -53,11 +52,7 @@ export default function TermDetailScreen() {
                 <Text style={styles.word}>{activeTerm.term.word}</Text>
                 {activeTerm.term.phonetic ? <Text style={styles.phonetic}>{activeTerm.term.phonetic}</Text> : null}
               </View>
-              {activeTerm.term.audioUrl ? (
-                <Pressable onPress={() => playAudioUrl(activeTerm.term.audioUrl!)} hitSlop={8} style={styles.audioButton}>
-                  <Volume2 size={18} color={colors.primary.DEFAULT} />
-                </Pressable>
-              ) : null}
+              <AudioButton compact url={activeTerm.term.audioUrl} text={activeTerm.term.word} language="en-US" fallbackToSpeech label="Hear pronunciation" preload={true} />
             </View>
           </GlassCard>
 
@@ -117,15 +112,6 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
   phonetic: {
     fontSize: typography.body,
     color: colors.glassText.muted,
-  },
-  audioButton: {
-    flexShrink: 0,
-    width: 36,
-    height: 36,
-    borderRadius: radii.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface.glassSoft,
   },
   emptyText: {
     textAlign: 'center',

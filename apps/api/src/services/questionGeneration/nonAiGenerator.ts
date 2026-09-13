@@ -139,6 +139,7 @@ export function generateNonAiQuestions(
       source: 'auto',
       content: {
         prompt: 'Listen to the audio and type the word you hear.',
+        promptAudioUrl: term.audioUrl,
         correctAnswer: word,
         defaultHelpers: textHelpers,
       },

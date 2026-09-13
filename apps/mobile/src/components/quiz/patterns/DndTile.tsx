@@ -10,21 +10,17 @@
 // gesture recipe extracted for reuse by the two new patterns, not a replacement.
 import { forwardRef, useImperativeHandle } from 'react';
 import type { Ref } from 'react';
-import { Image, StyleSheet } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { Text } from '../../AppText';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { radii, typography } from '@my-backpack/shared';
 import type { IDraggable } from '@my-backpack/shared';
-import { playAudioUrl } from '../../../lib/audio';
+import type { PlaybackStatus } from '../../../lib/audio';
+import { AudioIndicator } from '../../AudioButton';
 import { resolveAssetUrl } from '../../../lib/assetUrl';
 import { useTheme } from '../../../theme/ThemeContext';
 import { useQuestionScrollRef } from '../QuestionScrollArea';
-
-export function playAsset(path?: string): void {
-  const url = resolveAssetUrl(path);
-  if (url) playAudioUrl(url);
-}
 
 // Fisher-Yates — unbiased in-place shuffle, returns a new array. Mirrors DndSinglePattern's.
 export function shuffle<T>(items: T[]): T[] {
@@ -59,6 +55,7 @@ export interface DndTileHandle {
 }
 
 export interface DndTileProps {
+  audioStatus?: PlaybackStatus;
   item: IDraggable;
   size?: number;
   showLabel: boolean;
@@ -80,6 +77,7 @@ export const DndTile = forwardRef(function DndTile(
     disabled,
     isChild,
     draggable,
+    audioStatus = 'idle',
     onTap,
     onDragStart,
     onDropAttempt,
@@ -148,6 +146,11 @@ export const DndTile = forwardRef(function DndTile(
           animatedStyle,
         ]}
       >
+        {audioStatus !== 'idle' ? (
+          <View pointerEvents="none" style={{ position: 'absolute', top: 3, right: 3, zIndex: 1 }}>
+            <AudioIndicator status={audioStatus} color={colors.primary.DEFAULT} size={14} />
+          </View>
+        ) : null}
         {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.tileImage} resizeMode="contain" /> : null}
         {showLabel ? <Text style={styles.tileLabel}>{item.label}</Text> : null}
       </Animated.View>

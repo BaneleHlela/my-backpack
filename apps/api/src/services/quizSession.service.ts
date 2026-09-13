@@ -1,4 +1,5 @@
 import { generateQuestionsForDefinition } from './questionGeneration';
+import { attachQuestionAudio } from './questionAudio.service';
 import { ensureFavorites } from '../modules/vocab/bucket.service';
 import { idList, playMode } from '../modules/vocab/bucket.validation';
 import QuizBucketPreference from '../models/learning/quizBucketPreference.model';
@@ -324,7 +325,7 @@ export async function createQuizSession(
   await session.save();
 
   const firstQuestion =
-    questionIds.length > 0 ? await Question.findById(questionIds[0]) : null;
+    questionIds.length > 0 ? await attachQuestionAudio(await Question.findById(questionIds[0])) : null;
 
   return { session, firstQuestion };
 }
@@ -452,7 +453,7 @@ export async function captureAnswer(
     (qId) => !answeredIds.includes(qId.toString())
   );
   const nextQuestion = nextQuestionId
-    ? await Question.findById(nextQuestionId)
+    ? await attachQuestionAudio(await Question.findById(nextQuestionId))
     : null;
 
   return {
