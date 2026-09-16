@@ -1,0 +1,42 @@
+name: Promote tested branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Already pushed and tested source branch
+        required: true
+        type: string
+      targets:
+        description: Comma-separated existing destination branches
+        required: true
+        default: develop,main
+        type: string
+      dry_run:
+        description: Check merges without pushing
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-branches
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Optional token when downstream push workflows must run.
+          token: ${{ secrets.BRANCH_SYNC_TOKEN || github.token }}
+      - name: Prepare all merges, then push together
+        env:
+          SOURCE_BRANCH: ${{ inputs.source }}
+          TARGET_BRANCHES: ${{ inputs.targets }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: python3 scripts/promote_branch.py
