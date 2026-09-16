@@ -27,7 +27,7 @@ import type {
 } from '@my-backpack/shared';
 import type { AxiosError } from 'axios';
 import axios from 'axios';
-import api, { refreshSession, finishPendingRefresh } from '../../lib/api';
+import api, { refreshSession, finishPendingRefresh, waitForServer } from '../../lib/api';
 import { getRefreshToken, saveRefreshToken, deleteRefreshToken } from '../../lib/secureStore';
 
 interface AuthState {
@@ -97,17 +97,20 @@ export const bootstrapAuth = createAsyncThunk(
   'auth/bootstrapAuth',
   async (_, { dispatch, rejectWithValue }) => {
     try {
+      // Wake the API before showing either the saved session or the login screen.
+      await waitForServer();
       const refreshToken = await getRefreshToken();
       if (!refreshToken) return false;
       dispatch(setRefreshToken(refreshToken));
       // Saves the renewed token and commits both tokens before profile requests.
       await refreshSession();
+      // A failed profile fetch must also reach the retry screen, not an empty route.
+      await Promise.all([dispatch(fetchActiveProfile()).unwrap(), dispatch(fetchProfiles()).unwrap()]);
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 401) return false;
       if (axios.isCancel(error)) return false;
-      return rejectWithValue('Unable to reconnect. Check your connection and try again.');
+      return rejectWithValue('Unable to reconnect. The server may still be starting. Check your internet connection and try again.');
     }
-    await Promise.all([dispatch(fetchActiveProfile()), dispatch(fetchProfiles())]);
     return true;
   }
 );

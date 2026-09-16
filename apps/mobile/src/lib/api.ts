@@ -5,6 +5,7 @@ import { AppState } from 'react-native';
 import type { AppStore } from '../store/store';
 import { logout, setSessionTokens } from '../features/auth/authSlice';
 import { saveRefreshToken, deleteRefreshToken } from './secureStore';
+import { waitForServerStartup } from './serverStartup';
 
 interface RetryableRequest extends InternalAxiosRequestConfig {
   _retry?: boolean;
@@ -15,11 +16,28 @@ let store: AppStore | undefined;
 export const injectStore = (appStore: AppStore) => {
   store = appStore;
 };
-console.log(process.env.EXPO_PUBLIC_API_URL);
+export function waitForServer(): Promise<void> {
+  const baseURL = process.env.EXPO_PUBLIC_API_URL;
+  if (!baseURL) return Promise.reject(new Error('The server address is missing. Please update the app.'));
+  const healthURL = new URL('/health', baseURL).toString();
+  return waitForServerStartup(async (timeout) => {
+    try {
+      const response = await axios.get(healthURL, { timeout });
+      // Render can return an HTML loading page with a successful HTTP status.
+      return response.data?.status === 'ok';
+    } catch (error) {
+      if (!axios.isAxiosError(error) || axios.isCancel(error)) throw error;
+      const status = error.response?.status;
+      if (status && status !== 408 && status !== 429 && status < 500) throw error;
+      return false;
+    }
+  });
+}
+
 const api = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL,
   headers: { 'X-Client-Type': 'mobile' },
-  timeout: 30000, // Allow for Render cold starts while keeping failures retryable.
+  timeout: 120000, // Also allow a cold start when returning after inactivity.
 });
 
 const session = createSessionRefresher(async () => {
@@ -33,7 +51,7 @@ const session = createSessionRefresher(async () => {
     const { data } = await axios.post<ApiResponse<RefreshResponse>>(
       `${process.env.EXPO_PUBLIC_API_URL}/auth/refresh`,
       { refreshToken: auth.refreshToken, accessToken: auth.accessToken ?? undefined },
-      { headers: { 'X-Client-Type': 'mobile' }, timeout: 30000 }
+      { headers: { 'X-Client-Type': 'mobile' }, timeout: 120000 }
     );
     if (!isCurrent()) throw new axios.CanceledError('Session changed');
     // Retain compatibility while the new API is being rolled out.
