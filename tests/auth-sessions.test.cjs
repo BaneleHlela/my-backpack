@@ -29,6 +29,7 @@ function loadSource(relativePath, mocks = {}) {
 }
 
 process.env.ACCESS_TOKEN_SECRET = 'test-only-access-secret';
+process.env.EXPO_PUBLIC_API_URL = 'https://api.example.test/api';
 process.env.REFRESH_TOKEN_SECRET = 'test-only-refresh-secret';
 const tokens = loadSource('apps/api/src/utils/jwt.ts');
 const errors = loadSource('apps/api/src/utils/AppError.ts');
@@ -146,6 +147,7 @@ function client(platform, initialSaved = 'original-refresh') {
   let saved = initialSaved;
   let impl;
   let refreshCalls = 0;
+  let healthHandler = async () => ({ data: { status: 'ok' } });
   const requests = [];
   const storage = {
     getRefreshToken: async () => saved,
@@ -158,6 +160,7 @@ function client(platform, initialSaved = 'original-refresh') {
   let requestHandler = async (config) => ({ data: { success: true, data: config.url === '/profiles' ? [] : { _id: 'profile' } }, status: 200, headers: {}, config });
   const axiosMock = {
     ...axios,
+    get: (...args) => healthHandler(...args),
     post: async (...args) => { refreshCalls++; return refreshHandler(...args); },
     create: (config) => axios.create({ ...config, adapter: async (request) => { requests.push(request); return requestHandler(request); } }),
   };
@@ -166,6 +169,7 @@ function client(platform, initialSaved = 'original-refresh') {
     default: { post: (...args) => impl.default.post(...args), get: (...args) => impl.default.get(...args) },
     refreshSession: (...args) => impl.refreshSession(...args),
     finishPendingRefresh: () => impl.finishPendingRefresh(),
+    waitForServer: () => impl.waitForServer(),
   };
   const actions = loadSource(`apps/${platform}/src/features/auth/authSlice.ts`, {
     [native ? '../../lib/api' : '../../lib/axios']: proxy,
@@ -177,6 +181,7 @@ function client(platform, initialSaved = 'original-refresh') {
     '@my-backpack/shared': shared,
     '../features/auth/authSlice': actions,
     './secureStore': storage,
+    './serverStartup': loadSource('apps/mobile/src/lib/serverStartup.ts'),
     'react-native': { AppState: appState },
   });
   impl.injectStore(store);
@@ -191,6 +196,7 @@ function client(platform, initialSaved = 'original-refresh') {
     saved: () => saved,
     calls: () => refreshCalls,
     onRefresh: (handler) => { refreshHandler = handler; },
+    onHealth: (handler) => { healthHandler = handler; },
     onRequest: (handler) => { requestHandler = handler; },
   };
 }
@@ -314,4 +320,36 @@ test('native guest signup stores the refresh token in memory as well as SecureSt
   assert.equal(c.saved(), 'guest-refresh');
   assert.equal(c.store.getState().auth.refreshToken, 'guest-refresh');
   assert.equal(c.store.getState().auth.isAuthenticated, true);
+});
+
+test('mobile startup stays loading until the server wakes, then restores the saved login', async () => {
+  const c = client('mobile');
+  let wake;
+  c.onHealth((url) => {
+    assert.equal(url, 'https://api.example.test/health');
+    return new Promise((resolve) => { wake = resolve; });
+  });
+  const starting = c.bootstrap();
+  await tick();
+  assert.equal(c.store.getState().auth.isCheckingAuth, true);
+  assert.equal(c.store.getState().auth.bootstrapError, null);
+  assert.equal(c.calls(), 0);
+  assert.equal(c.saved(), 'original-refresh');
+  wake({ data: { status: 'ok' } });
+  await starting;
+  assert.equal(c.store.getState().auth.isCheckingAuth, false);
+  assert.equal(c.store.getState().auth.isAuthenticated, true);
+});
+
+test('mobile profile loading failure shows a recoverable startup error', async () => {
+  const c = client('mobile');
+  c.onRequest(async (config) => { throw httpError(503, config); });
+  await c.bootstrap();
+  assert.equal(c.store.getState().auth.isCheckingAuth, false);
+  assert.ok(c.store.getState().auth.bootstrapError);
+  assert.equal(c.saved(), 'renewed-refresh');
+  c.onRequest(async (config) => ({ data: { data: config.url === '/profiles' ? [] : { _id: 'profile' } }, status: 200, headers: {}, config }));
+  await c.bootstrap();
+  assert.equal(c.store.getState().auth.bootstrapError, null);
+  assert.equal(c.store.getState().auth.activeProfile._id, 'profile');
 });

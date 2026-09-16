@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text } from './AppText';
 import Animated, {
@@ -35,10 +35,16 @@ const LOGO_SPARKLES: SparklePoint[] = [
 // wordmark, plus a 3-dot pulsing loader replacing the plain ActivityIndicator. Exported on its
 // own (without ScreenBackground) for routes that already render inside one — see LaunchScreen
 // below for the standalone version.
-export function LaunchScreenBody() {
+export function LaunchScreenBody({ waitingForServer = false }: { waitingForServer?: boolean }) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-
+  const [slowConnection, setSlowConnection] = useState(false);
+  useEffect(() => {
+    setSlowConnection(false);
+    if (!waitingForServer) return;
+    const timer = setTimeout(() => setSlowConnection(true), 8_000);
+    return () => clearTimeout(timer);
+  }, [waitingForServer]);
 
   return (
     <View style={styles.center}>
@@ -48,6 +54,13 @@ export function LaunchScreenBody() {
       </View>
       <Wordmark />
       <PulsingDots color={colors.primary.DEFAULT} />
+      {waitingForServer && (
+        <Text accessibilityLiveRegion="polite" style={styles.connectionMessage}>
+          {slowConnection
+            ? 'Our server may be waking up after inactivity. This can take a minute or two. Please keep the app open while we connect.'
+            : 'Connecting to My Backpack…'}
+        </Text>
+      )}
     </View>
   );
 }
@@ -152,10 +165,10 @@ function Dot({ color, delay }: { color: string; delay: number }) {
 // spinner-less image up with no sign of progress. Also reused by any other
 // route-level loading gate that isn't already inside a ScreenBackground
 // (see ProtectedRoute.tsx, profile-setup.tsx).
-export function LaunchScreen() {
+export function LaunchScreen({ waitingForServer = false }: { waitingForServer?: boolean }) {
   return (
     <ScreenBackground>
-      <LaunchScreenBody />
+      <LaunchScreenBody waitingForServer={waitingForServer} />
     </ScreenBackground>
   );
 }
@@ -174,6 +187,14 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       height: 120,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    connectionMessage: {
+      color: colors.text.primary,
+      textAlign: 'center',
+      paddingHorizontal: spacing.lg,
+      maxWidth: 360,
+      fontSize: 16,
+      lineHeight: 24,
     },
     wordmark: {
       fontFamily: fonts.display.bold,

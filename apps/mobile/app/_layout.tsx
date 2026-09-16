@@ -103,7 +103,7 @@ function AuthBootstrap() {
     return (
       <>
         <StatusBar style={statusBarStyle} />
-        <LaunchScreen />
+        <LaunchScreen waitingForServer={isCheckingAuth} />
       </>
     );
   }
