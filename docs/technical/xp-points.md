@@ -6,7 +6,7 @@ no balance to spend, leaderboard, level system, or retrospective award for old a
 ## Earning rules
 
 - One awarded mark is one base XP, including partial marks. Repeated practice earns base XP.
-- A completed Classic/ordinary quiz with every question recorded can earn a performance bonus:
+- A completed Classic/ordinary quiz with every question recorded and at least 10 answered or skipped questions can earn a performance bonus:
   75%–below 90%: 10%; 90%–below 100%: 20%; 100%: 25% of earned marks.
 - Only the highest tier applies. Compare the exact earned/available ratio, not the rounded
   percentage displayed on results. Round the bonus once with Math.round.

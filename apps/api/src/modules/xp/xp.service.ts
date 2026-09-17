@@ -39,6 +39,7 @@ export async function ensureSessionXp(session: IQuizSessionDocument): Promise<IQ
       earned: results.totalPointsAwarded,
       available: results.totalPointsAvailable,
       completed: session.status === 'completed',
+      recordedQuestionCount: results.answered + results.skipped,
       allQuestionsRecorded: results.answered + results.skipped === results.totalQuestions,
       playModeId: session.settings.playModeId,
       timeLimit: session.settings.timeLimit,

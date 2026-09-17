@@ -13,7 +13,7 @@ export interface XpAward {
   bonus: number;
   total: number;
   bonusRate: number;
-  bonusReason: 'performance' | 'already-earned-today' | 'below-threshold' | 'incomplete' | 'mode-ineligible';
+  bonusReason: 'performance' | 'already-earned-today' | 'below-threshold' | 'incomplete' | 'mode-ineligible' | 'too-few-questions';
 }
 
 export interface XpScopeTotal {

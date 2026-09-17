@@ -35,15 +35,15 @@ beforeEach(async () => {
 async function finished(overrides: Record<string, unknown> = {}) {
   return QuizSession.create({ profileId, miniAppId: contextId, quizId,
     xpContext: await resolveXpContext(contextId), xpTitle: 'Vowels',
-    questionIds: [new Types.ObjectId()], status: 'completed',
-    settings: { questionCount: 1, playModeId: 'classic' },
-    results: { totalQuestions: 1, answered: 1, skipped: 0, correct: 1,
+    questionIds: Array.from({ length: 10 }, () => new Types.ObjectId()), status: 'completed',
+    settings: { questionCount: 10, playModeId: 'classic' },
+    results: { totalQuestions: 10, answered: 10, skipped: 0, correct: 8,
       totalPointsAvailable: 20, totalPointsAwarded: 16, percentageScore: 80, timeTakenMs: 100 },
     completedAt: new Date('2026-09-17T12:00:00Z'), ...overrides });
 }
 
 test('inclusive thresholds, fractional marks, and rounding use the exact mark ratio', () => {
-  const xp = (earned: number, available = 100) => calculateXp({ earned, available, completed: true, allQuestionsRecorded: true });
+  const xp = (earned: number, available = 100) => calculateXp({ earned, available, completed: true, allQuestionsRecorded: true, recordedQuestionCount: 10 });
   assert.equal(xp(74.6).bonusRate, 0);
   assert.equal(xp(75).bonusRate, .1);
   assert.equal(xp(89.6).bonusRate, .1);
@@ -99,7 +99,7 @@ test('mini-app earnings roll up to their subject without inventing course owners
 
 test('abandoned and game modes retain base XP without performance bonuses', async () => {
   for (const playModeId of ['hearts', 'time_run', 'mastery', 'endless', 'perfect', 'survival', 'streak']) {
-    const s = await ensureSessionXp(await finished({ settings: { questionCount: 1, playModeId } }));
+    const s = await ensureSessionXp(await finished({ settings: { questionCount: 10, playModeId } }));
     assert.equal(s.results!.xp!.total, 16);
     assert.equal(s.results!.xp!.bonusReason, 'mode-ineligible');
   }
@@ -150,7 +150,7 @@ test('duplicate answer rows do not inflate marks; simultaneous completion awards
   const { session, answer } = await activeAttempt();
   await answer(0); await answer(0); await answer(1);
   const results = await Promise.all(Array.from({ length: 4 }, () => completeSession(session._id.toString(), profileId)));
-  assert.ok(results.every((r) => r.results!.totalPointsAwarded === 20 && r.results!.xp!.total === 25));
+  assert.ok(results.every((r) => r.results!.totalPointsAwarded === 20 && r.results!.xp!.total === 20));
   assert.equal(await XpAward.countDocuments(), 1);
 });
 
@@ -171,4 +171,21 @@ test('teacher-assigned modes are snapshotted on roadmap sessions', async () => {
   const { session } = await createQuizSession(profileId, quiz._id.toString(), { playModeId: 'classic' });
   assert.equal(session.settings.playModeId, 'hearts');
   assert.equal(session.xpContext!.contextType, 'course');
+});
+
+
+test('nine recorded questions get base only; ten including a skip qualify without consuming the bonus early', async () => {
+  const short = await finished();
+  short.results!.totalQuestions = 9;
+  short.results!.answered = 8;
+  short.results!.skipped = 1;
+  await short.save();
+  const shortResult = await ensureSessionXp(short);
+  assert.equal(shortResult.results!.xp!.total, 16);
+  assert.equal(shortResult.results!.xp!.bonusReason, 'too-few-questions');
+  const ten = await finished();
+  ten.results!.answered = 9;
+  ten.results!.skipped = 1;
+  await ten.save();
+  assert.equal((await ensureSessionXp(ten)).results!.xp!.bonus, 2);
 });

@@ -84,7 +84,7 @@ test('home, subjects, courses and mini-apps resolve independently; unknown is no
 
 const { calculateXp } = load('apps/api/src/modules/xp/xp.rules.ts');
 test('exact bonus thresholds, fractional credit, empty scores and one rounding step', () => {
-  const award = (earned: number, available = 100) => calculateXp({ earned, available, completed: true, allQuestionsRecorded: true });
+  const award = (earned: number, available = 100) => calculateXp({ earned, available, completed: true, allQuestionsRecorded: true, recordedQuestionCount: 10 });
   for (const [earned, rate] of [[74.6, 0], [75, .1], [89.6, .1], [90, .2], [99.6, .2], [100, .25]]) {
     assert.equal(award(earned).bonusRate, rate);
   }
@@ -93,7 +93,7 @@ test('exact bonus thresholds, fractional credit, empty scores and one rounding s
   assert.equal(award(0, 0).total, 0);
 });
 test('all special modes, timed quizzes, early completion and abandonment award base only', () => {
-  const input = { earned: 20, available: 20, completed: true, allQuestionsRecorded: true };
+  const input = { earned: 20, available: 20, completed: true, allQuestionsRecorded: true, recordedQuestionCount: 10 };
   for (const playModeId of ['hearts', 'time_run', 'mastery', 'endless', 'perfect', 'survival', 'streak']) {
     assert.equal(calculateXp({ ...input, playModeId }).total, 20);
   }
@@ -101,4 +101,17 @@ test('all special modes, timed quizzes, early completion and abandonment award b
   assert.equal(calculateXp({ ...input, allQuestionsRecorded: false }).total, 20);
   assert.equal(calculateXp({ ...input, completed: false }).total, 20);
   assert.equal(calculateXp({ ...input, playModeId: 'classic' }).total, 25);
+});
+
+
+test('bonus requires ten recorded questions, even for a perfect score', () => {
+  const input = { earned: 100, available: 100, completed: true, allQuestionsRecorded: true };
+  for (const recordedQuestionCount of [0, 1, 9]) {
+    const result = calculateXp({ ...input, recordedQuestionCount });
+    assert.equal(result.bonus, 0);
+    assert.equal(result.bonusReason, 'too-few-questions');
+  }
+  for (const recordedQuestionCount of [10, 11]) {
+    assert.equal(calculateXp({ ...input, recordedQuestionCount }).bonus, 25);
+  }
 });

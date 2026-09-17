@@ -105,7 +105,7 @@ export function XpChip({ context }: { context?: XpContext | null }) {
                 <Text style={styles.description}>{award.contextName} · {formatXp(award.base)} marks + {formatXp(award.bonus)} bonus</Text>
               </View>)}
             </View>}
-            <Text style={styles.description}>1 mark = 1 XP. Scores of 75%, 90%, and 100% earn 10%, 20%, and 25% bonuses on completed Classic quizzes. One bonus per quiz each day (UTC). Practice always earns base XP.</Text>
+            <Text style={styles.description}>1 mark = 1 XP. Scores of 75%, 90%, and 100% earn 10%, 20%, and 25% bonuses on completed Classic quizzes with at least 10 answered or skipped questions. One bonus per quiz each day (UTC). Practice always earns base XP.</Text>
             <Text style={styles.description}>Subject, course, and mini-app figures show where your total was earned. They are not extra awards.</Text>
           </ScrollView>
         </View>

@@ -5,6 +5,7 @@ export function calculateXp(input: {
   available: number;
   completed: boolean;
   allQuestionsRecorded: boolean;
+  recordedQuestionCount: number;
   playModeId?: string;
   timeLimit?: number;
 }): XpAward {
@@ -14,6 +15,8 @@ export function calculateXp(input: {
   if (!input.completed || !input.allQuestionsRecorded) bonusReason = 'incomplete';
   else if ((input.playModeId && input.playModeId !== 'classic') || (input.timeLimit ?? 0) > 0) {
     bonusReason = 'mode-ineligible';
+  } else if (input.recordedQuestionCount < 10) {
+    bonusReason = 'too-few-questions';
   } else if (input.available > 0) {
     // Do not use the rounded display percentage: 74.6% must not qualify for 75%.
     const ratio = base / input.available;

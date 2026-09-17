@@ -56,6 +56,7 @@ export function QuizResults({
         <Text style={styles.subText}>{results.xp.base} marks + {results.xp.bonus} performance bonus</Text>
         {results.xp.bonusReason === 'already-earned-today' && <Text style={styles.subText}>Today's bonus for this quiz is already earned. All practice marks still count.</Text>}
         {results.xp.bonusReason === 'mode-ineligible' && <Text style={styles.subText}>This mode earns base XP. Performance bonuses apply to Classic quizzes.</Text>}
+        {results.xp.bonusReason === 'too-few-questions' && <Text style={styles.subText}>Base XP saved. Bonuses require at least 10 answered or skipped questions.</Text>}
         {results.xp.bonusReason === 'incomplete' && <Text style={styles.subText}>Base XP saved. Finish every question for a performance bonus.</Text>}
       </View>}
 

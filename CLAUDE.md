@@ -11,7 +11,7 @@ at their own speed and are alerted when they are test-ready.
 ## XP (September 2026)
 
 Profile-scoped XP now uses earned quiz marks plus a once-per-quiz-per-UTC-day performance
-bonus (75%: 10%, 90%: 20%, 100%: 25%). Classic fully completed attempts qualify; other modes
+bonus (75%: 10%, 90%: 20%, 100%: 25%). Classic fully completed attempts with at least 10 answered or skipped questions qualify; other modes
 and abandoned attempts retain base marks. New sessions snapshot their Course/MiniApp and
 Subject ownership. A unique session award ledger provides totals and duplicate protection.
 Mobile Menubar and quiz headers show contextual XP and a tappable breakdown. Peanuts remain
