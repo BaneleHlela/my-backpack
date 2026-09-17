@@ -8,7 +8,9 @@
 // peanuts reward system" note), so there is nothing real to display yet. The profile avatar IS
 // functional — tapping it opens `ProfileSwitcherModal`, this app's port of apps/web's
 // `ProfileSwitcher.tsx` (switch profile / add profile / sign out), and shows a real DiceBear
-// image (see `Avatar`/`lib/avatar.ts`) instead of a plain initials circle.
+// image (see `Avatar`/`lib/avatar.ts`) instead of a plain initials circle. The avatar wrapper is
+// measured in window coordinates when pressed so the switcher can line up with the account
+// control instead of using a fixed screen inset.
 //
 // `label`/`onBackPress` are optional so a screen with no natural "back" destination (e.g.
 // home.tsx, the subjects list) can render just the right-hand stat/avatar cluster — the empty
@@ -19,14 +21,14 @@
 // the app's display font (see ../theme/fonts.ts), now that it's loaded app-wide.
 // `textTransform: 'uppercase'` still does the case conversion so callers can keep passing
 // natural-case labels (e.g. "Home", subjectName) unchanged.
-import { useState } from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import { Text } from './AppText';
 import { useSelector } from 'react-redux';
-import { ChevronLeft, Gem, Nut } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { Avatar } from './Avatar';
-import { ProfileSwitcherModal } from './ProfileSwitcherModal';
+import { ProfileSwitcherModal, type ProfileSwitcherAnchor } from './ProfileSwitcherModal';
 import type { RootState } from '../store/store';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts } from '../theme/fonts';
@@ -49,7 +51,25 @@ export function Menubar({ label, onBackPress, style }: MenubarProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const activeProfile = useSelector((state: RootState) => state.auth.activeProfile);
+  const { width: windowWidth } = useWindowDimensions();
+  const accountAnchorRef = useRef<View>(null);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [switcherAnchor, setSwitcherAnchor] = useState<ProfileSwitcherAnchor | null>(null);
+
+  const openSwitcher = () => {
+    if (!accountAnchorRef.current) {
+      setSwitcherOpen(true);
+      return;
+    }
+
+    accountAnchorRef.current.measureInWindow((x, y, width) => {
+      setSwitcherAnchor({
+        top: y,
+        right: Math.max(spacing.md, windowWidth - (x + width)),
+      });
+      setSwitcherOpen(true);
+    });
+  };
 
   return (
     <View style={[styles.container, style]}>
@@ -74,18 +94,24 @@ export function Menubar({ label, onBackPress, style }: MenubarProps) {
           <Text style={styles.statText}>{XP_PLACEHOLDER}</Text>
         </View>
         {activeProfile ? (
-          <Pressable onPress={() => setSwitcherOpen(true)} hitSlop={8}>
-            <Avatar
-              displayName={activeProfile.displayName}
-              ageGroup={activeProfile.ageGroup}
-              avatarUrl={activeProfile.avatarUrl}
-              size={36}
-            />
-          </Pressable>
+          <View ref={accountAnchorRef} collapsable={false}>
+            <Pressable onPress={openSwitcher} hitSlop={8}>
+              <Avatar
+                displayName={activeProfile.displayName}
+                ageGroup={activeProfile.ageGroup}
+                avatarUrl={activeProfile.avatarUrl}
+                size={36}
+              />
+            </Pressable>
+          </View>
         ) : null}
       </View>
 
-      <ProfileSwitcherModal visible={switcherOpen} onClose={() => setSwitcherOpen(false)} />
+      <ProfileSwitcherModal
+        visible={switcherOpen}
+        anchor={switcherAnchor}
+        onClose={() => setSwitcherOpen(false)}
+      />
     </View>
   );
 }
