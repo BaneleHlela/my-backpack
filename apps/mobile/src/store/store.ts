@@ -1,3 +1,4 @@
+import xpReducer from '../features/xp/xpSlice';
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from '../features/auth/authSlice';
 import contentReducer from '../features/content/contentSlice';
@@ -10,6 +11,7 @@ import aiChatReducer from '../features/aiChat/aiChatSlice';
 export const store = configureStore({
   reducer: {
     auth: authReducer,
+    xp: xpReducer,
     content: contentReducer,
     vocab: vocabReducer,
     roadmap: roadmapReducer,

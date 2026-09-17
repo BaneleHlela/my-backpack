@@ -51,6 +51,14 @@ export function QuizResults({
       </Text>
       {banner ? <Text style={styles.banner}>{banner}</Text> : null}
 
+      {results.xp && <View style={styles.xpCard} accessibilityLiveRegion="polite">
+        <Text style={styles.xpTotal}>+{results.xp.total} XP earned</Text>
+        <Text style={styles.subText}>{results.xp.base} marks + {results.xp.bonus} performance bonus</Text>
+        {results.xp.bonusReason === 'already-earned-today' && <Text style={styles.subText}>Today's bonus for this quiz is already earned. All practice marks still count.</Text>}
+        {results.xp.bonusReason === 'mode-ineligible' && <Text style={styles.subText}>This mode earns base XP. Performance bonuses apply to Classic quizzes.</Text>}
+        {results.xp.bonusReason === 'incomplete' && <Text style={styles.subText}>Base XP saved. Finish every question for a performance bonus.</Text>}
+      </View>}
+
       <View style={styles.statsRow}>
         <View style={styles.statBox}>
           <Text style={styles.statLabel}>Answered</Text>
@@ -59,7 +67,7 @@ export function QuizResults({
           </Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.statLabel}>Points</Text>
+          <Text style={styles.statLabel}>Marks</Text>
           <Text style={styles.statValue}>
             {results.totalPointsAwarded}/{results.totalPointsAvailable}
           </Text>
@@ -126,6 +134,9 @@ function createStyles(colors: ReturnType<typeof useTheme>['colors']) {
       padding: spacing.xl,
       alignItems: 'center',
     },
+    xpCard: { width: '100%', alignItems: 'center', padding: spacing.md, marginTop: spacing.md,
+      borderRadius: radii.lg, backgroundColor: colors.surface.glassSoft, borderWidth: 1, borderColor: colors.primary.DEFAULT },
+    xpTotal: { fontFamily: fonts.display.bold, fontSize: typography.headingLg, color: colors.primary.DEFAULT },
     trophy: {
       marginBottom: spacing.sm,
     },

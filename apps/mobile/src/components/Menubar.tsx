@@ -3,12 +3,8 @@
 // during the Course & Topic redesign research): a back chevron + caps label on the left, and a
 // Peanuts / XP / profile-avatar cluster on the right.
 //
-// Peanuts and XP are shown as fixed placeholders (not wired to real data) — the reward system
-// exists in the data model but the service layer isn't built yet (see root CLAUDE.md's "XP and
-// peanuts reward system" note), so there is nothing real to display yet. The profile avatar IS
-// functional — tapping it opens `ProfileSwitcherModal`, this app's port of apps/web's
-// `ProfileSwitcher.tsx` (switch profile / add profile / sign out), and shows a real DiceBear
-// image (see `Avatar`/`lib/avatar.ts`) instead of a plain initials circle.
+// XP is profile-scoped and follows the current screen. Peanuts remain inactive.
+// The avatar opens the profile switcher.
 //
 // `label`/`onBackPress` are optional so a screen with no natural "back" destination (e.g.
 // home.tsx, the subjects list) can render just the right-hand stat/avatar cluster — the empty
@@ -23,7 +19,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Text } from './AppText';
 import { useSelector } from 'react-redux';
-import { ChevronLeft, Gem, Nut } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import { radii, spacing, typography } from '@my-backpack/shared';
 import { Avatar } from './Avatar';
 import { ProfileSwitcherModal } from './ProfileSwitcherModal';
@@ -31,7 +27,7 @@ import type { RootState } from '../store/store';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts } from '../theme/fonts';
 import PeanutIcon from '../../assets/icons/peanut.svg';
-import XPIcon from '../../assets/icons/xp.svg';
+import { XpChip } from './XpChip';
 
 interface MenubarProps {
   label?: string;
@@ -39,9 +35,7 @@ interface MenubarProps {
   style?: StyleProp<ViewStyle>;
 }
 
-// Fixed placeholders — see module comment above.
-const PEANUTS_PLACEHOLDER = '2.4k';
-const XP_PLACEHOLDER = '82.04k';
+
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
@@ -65,14 +59,11 @@ export function Menubar({ label, onBackPress, style }: MenubarProps) {
       )}
 
       <View style={styles.rightContent}>
-        <View style={styles.statChip}>
-          <PeanutIcon />
-          <Text style={styles.statText}>{PEANUTS_PLACEHOLDER}</Text>
+        <View style={[styles.statChip, { opacity: 0.45 }]} accessible accessibilityLabel="Peanuts inactive">
+          <PeanutIcon width={22} height={22} />
+          <Text style={styles.statText}>—</Text>
         </View>
-        <View style={styles.statChip}>
-          <XPIcon />
-          <Text style={styles.statText}>{XP_PLACEHOLDER}</Text>
-        </View>
+        <XpChip />
         {activeProfile ? (
           <Pressable onPress={() => setSwitcherOpen(true)} hitSlop={8}>
             <Avatar

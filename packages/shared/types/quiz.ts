@@ -49,6 +49,7 @@ export interface IQuiz {
 }
 
 export interface SessionResults {
+  xp?: import('./xp').XpAward;
   totalQuestions: number;
   answered: number;
   skipped: number;
@@ -60,6 +61,7 @@ export interface SessionResults {
 }
 
 export interface IQuizSession {
+  xpContext?: import('./xp').XpContext;
   _id: string;
   profileId: string;
   miniAppId: string;

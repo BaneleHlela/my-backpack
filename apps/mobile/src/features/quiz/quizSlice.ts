@@ -79,6 +79,7 @@ interface QuizState {
   lastAnswer: LastAnswer | null;
   progress: QuizProgress;
   results: SessionResults | null;
+  xpContext: import('@my-backpack/shared').XpContext | null;
   error: string | null;
   feedbackMode: FeedbackMode;
   answeredQuestions: AnsweredQuestionSummary[];
@@ -93,6 +94,7 @@ const initialState: QuizState = {
   lastAnswer: null,
   progress: { answered: 0, total: 0, correct: 0 },
   results: null,
+  xpContext: null,
   error: null,
   feedbackMode: 'immediate',
   answeredQuestions: [],
@@ -100,7 +102,7 @@ const initialState: QuizState = {
 };
 
 interface StartSessionResult {
-  session: { _id: string; questionIds: string[]; settings: { feedbackMode: FeedbackMode } };
+  session: { xpContext?: import('@my-backpack/shared').XpContext; _id: string; questionIds: string[]; settings: { feedbackMode: FeedbackMode } };
   firstQuestion: IQuestion | null;
 }
 
@@ -317,6 +319,7 @@ const quizSlice = createSlice({
         isAnyOf(startQuizItemSession.fulfilled, startMiniAppQuizSession.fulfilled),
         (state, action) => {
           state.sessionId = action.payload.session._id;
+          state.xpContext = action.payload.session.xpContext ?? null;
           state.currentQuestion = action.payload.firstQuestion;
           state.pendingNextQuestion = null;
           state.lastAnswer = null;

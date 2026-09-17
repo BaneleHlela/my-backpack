@@ -8,6 +8,15 @@ at their own speed and are alerted when they are test-ready.
 
 ---
 
+## XP (September 2026)
+
+Profile-scoped XP now uses earned quiz marks plus a once-per-quiz-per-UTC-day performance
+bonus (75%: 10%, 90%: 20%, 100%: 25%). Classic fully completed attempts qualify; other modes
+and abandoned attempts retain base marks. New sessions snapshot their Course/MiniApp and
+Subject ownership. A unique session award ledger provides totals and duplicate protection.
+Mobile Menubar and quiz headers show contextual XP and a tappable breakdown. Peanuts remain
+inactive. Read [docs/technical/xp-points.md](docs/technical/xp-points.md) before changing rewards.
+
 ## Dictionary buckets (September 2026)
 
 Dictionary buckets are now plural. Each profile/dictionary has a permanent Favorites header;
@@ -2428,8 +2437,8 @@ my-backpack/
   specific definition being tested
 - Sound/phonics "terms" (vowels, syllables, CVC words) are Term documents —
   they use the same adaptive learning system as vocab terms
-- XP and peanuts reward system exists in the data model 
-  but the service layer is not yet built
+- XP is implemented from earned quiz marks plus performance bonuses; peanuts remain inactive.
+  See docs/technical/xp-points.md for ledger, daily limits, scopes, and rollout.
 - Test readiness scoring is designed but not yet built
 - Quiz items on `RoadmapNode.items[]` reference a `Quiz` (mode:'fixed') directly by itemId —
   never wrap a quiz in a Lesson document; Lessons are pure study material (resources[]) only

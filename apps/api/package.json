@@ -15,7 +15,9 @@
     "migrate:quiz-modes-pool": "ts-node src/seed/migrations/2026-08-quiz-modes-pool.ts",
     "migrate:multiple-buckets": "ts-node --ignore-diagnostics 5107 src/seed/migrations/2026-09-multiple-buckets.ts",
     "test:buckets": "ts-node --transpile-only --ignore-diagnostics 5107 src/tests/buckets.integration.test.ts",
-    "test:bucket-unit": "ts-node --transpile-only --ignore-diagnostics 5107 src/tests/buckets.unit.test.ts"
+    "test:bucket-unit": "ts-node --transpile-only --ignore-diagnostics 5107 src/tests/buckets.unit.test.ts",
+    "test:xp": "ts-node --transpile-only --ignore-diagnostics 5107 src/tests/xp.integration.test.ts",
+    "test:xp-state": "ts-node --transpile-only --ignore-diagnostics 5107 src/tests/xp.state.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",

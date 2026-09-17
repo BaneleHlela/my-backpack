@@ -1,3 +1,5 @@
+import xpRouter from './modules/xp/xp.routes';
+import XpAward from './models/learning/xpAward.model';
 // Express app entry point — wires up all middleware, routes, and connects to DB
 import 'dotenv/config';
 import express, { Application, Request, Response, NextFunction } from 'express';
@@ -88,6 +90,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/profiles', profileRouter);
 app.use('/api/vocab', vocabRouter);
 app.use('/api/quiz', quizRouter);
+app.use('/api/xp', xpRouter);
 app.use('/api/content', contentRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/roadmap', roadmapRouter);
@@ -124,7 +127,9 @@ app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
 const PORT = parseInt(process.env.PORT ?? '5000', 10);
 
 connectDB()
-  .then(() => {
+  .then(async () => {
+    // The daily bonus limit requires this unique index before accepting requests.
+    await XpAward.createIndexes();
     app.listen(PORT, () => {
       console.log(`API server running on port ${PORT}`);
     });

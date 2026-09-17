@@ -12,6 +12,7 @@
 // 'questionIds' is the ordered list the session was built with; individual AnswerRecords
 // link back to this session via sessionId.
 import mongoose, { Document, Schema, Model, Types } from 'mongoose';
+import type { XpAward, XpContext } from '@my-backpack/shared';
 import type { FeedbackMode } from './quiz.model';
 
 export type SessionStatus = 'active' | 'completed' | 'abandoned';
@@ -30,6 +31,7 @@ export interface ISessionSettings {
 }
 
 export interface ISessionResults {
+  xp?: XpAward;
   totalQuestions: number;
   answered: number;
   skipped: number;
@@ -49,6 +51,8 @@ export interface IQuizSessionDocument extends Document {
   // receives a resolved quizId regardless of entry point (roadmap item, Dictionary/pool default
   // quiz, or a direct retake). Lets a session be traced back to its Quiz/Topic for Quiz History.
   quizId?: Types.ObjectId;
+  xpContext?: XpContext;
+  xpTitle?: string;
   status: SessionStatus;
   questionIds: Types.ObjectId[];
   settings: ISessionSettings;
@@ -83,6 +87,7 @@ const sessionSettingsSchema = new Schema<ISessionSettings>(
 
 const sessionResultsSchema = new Schema<ISessionResults>(
   {
+    xp: { type: Schema.Types.Mixed },
     totalQuestions: { type: Number, required: true },
     answered: { type: Number, required: true },
     skipped: { type: Number, required: true },
@@ -100,6 +105,8 @@ const quizSessionSchema = new Schema<IQuizSessionDocument>(
     profileId: { type: Schema.Types.ObjectId, ref: 'Profile', required: true },
     miniAppId: { type: Schema.Types.ObjectId, ref: 'MiniApp', required: true },
     quizId: { type: Schema.Types.ObjectId, ref: 'Quiz' },
+    xpContext: { type: Schema.Types.Mixed },
+    xpTitle: { type: String },
     status: {
       type: String,
       enum: ['active', 'completed', 'abandoned'],

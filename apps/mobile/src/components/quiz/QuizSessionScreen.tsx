@@ -1,3 +1,4 @@
+import { XpChip } from '../XpChip';
 // Shared quiz-taking screen — question loop (answer -> feedback -> advance) through to
 // results. Extracted from what was inline in app/quiz/[itemId].tsx once a second entry point
 // (Dictionary's "Take Quiz", app/quiz/dictionary/[miniAppId].tsx) needed the identical
@@ -598,6 +599,7 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
         <Text style={styles.headerTitle} numberOfLines={1}>
           {title}
         </Text>
+        <XpChip context={quiz.xpContext} />
         <Pressable
           onPress={goBack}
           hitSlop={8}
@@ -704,8 +706,7 @@ export function QuizSessionScreen({ session, playMode }: QuizSessionScreenProps)
             {session.source === 'roadmapItem' && itemCompletion?.nodeCompleted ? (
               <View style={styles.nodeCompleteBanner}>
                 <Text style={styles.nodeCompleteText}>
-                  Node complete! +{itemCompletion.rewards?.xp ?? 0} XP, +
-                  {itemCompletion.rewards?.peanuts ?? 0} peanuts
+                  Topic complete!
                 </Text>
               </View>
             ) : null}

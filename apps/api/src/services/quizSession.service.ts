@@ -1,3 +1,4 @@
+import { ensureSessionXp, resolveXpContext } from '../modules/xp/xp.service';
 import { generateQuestionsForDefinition } from './questionGeneration';
 import { attachQuestionAudio } from './questionAudio.service';
 import { ensureFavorites } from '../modules/vocab/bucket.service';
@@ -272,7 +273,7 @@ export async function createQuizSession(
   if (!quiz || !quiz.isActive) throw new Error('Quiz not found');
 
   const settings: ISessionSettings = {
-    playModeId: playMode(overrideSettings?.playModeId),
+    playModeId: (quiz.mode === 'fixed' ? quiz.assignedPlayMode?.id : undefined) ?? playMode(overrideSettings?.playModeId),
     bucketIds: overrideSettings?.bucketIds,
     questionCount: overrideSettings?.questionCount ?? quiz.settings.questionCount,
     timeLimit: overrideSettings?.timeLimit ?? quiz.settings.timeLimit,
@@ -317,6 +318,8 @@ export async function createQuizSession(
     profileId,
     miniAppId: quiz.miniAppId,
     quizId: quiz._id,
+    xpContext: await resolveXpContext(quiz.miniAppId.toString()),
+    xpTitle: quiz.title,
     status: 'active',
     questionIds,
     settings,
@@ -340,6 +343,10 @@ export async function captureAnswer(
   if (!session) throw new Error('Active session not found');
   if (!session.questionIds.some((id) => id.toString() === data.questionId)) {
     throw new AppError('This question is not part of the current quiz.', 400);
+  }
+
+  if (await AnswerRecord.exists({ sessionId, profileId, questionId: data.questionId })) {
+    throw new AppError('This question has already been answered.', 409);
   }
 
   const question = await Question.findById(data.questionId);
@@ -471,16 +478,27 @@ export async function completeSession(
   sessionId: string,
   profileId: string
 ): Promise<IQuizSessionDocument> {
-  const session = await QuizSession.findOne({ _id: sessionId, profileId });
+  let session = await QuizSession.findOne({ _id: sessionId, profileId });
   if (!session) throw new Error('Session not found');
-  if (session.status === 'completed') return session;
+  if (session.status !== 'active') return ensureSessionXp(session);
 
-  const answerRecords = await AnswerRecord.find({ sessionId, profileId });
+  // The first persisted answer per question wins. Retries cannot inflate marks or XP.
+  const records = await AnswerRecord.find({ sessionId, profileId }).sort({ answeredAt: 1, _id: 1 });
+  const validIds = new Set(session.questionIds.map(String));
+  const seen = new Set<string>();
+  const answerRecords = records.filter((answer) => {
+    const id = answer.questionId.toString();
+    if (!validIds.has(id) || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 
   const answered = answerRecords.filter((a) => !a.wasSkipped && !a.wasTimedOut).length;
   const skipped = answerRecords.filter((a) => a.wasSkipped || a.wasTimedOut).length;
   const correct = answerRecords.filter((a) => a.isCorrect).length;
-  const totalPointsAvailable = answerRecords.reduce((s, a) => s + a.maxPoints, 0);
+  const unanswered = await Question.find({ _id: { $in: session.questionIds.filter((id) => !seen.has(id.toString())) } }).select('maxPoints');
+  const totalPointsAvailable = answerRecords.reduce((s, a) => s + a.maxPoints, 0)
+    + unanswered.reduce((s, q) => s + q.maxPoints, 0);
   const totalPointsAwarded = answerRecords.reduce((s, a) => s + a.pointsAwarded, 0);
   const percentageScore =
     totalPointsAvailable > 0
@@ -499,10 +517,18 @@ export async function completeSession(
     timeTakenMs,
   };
 
-  session.status = 'completed';
-  session.results = results;
-  session.completedAt = new Date();
-  await session.save();
+  const completed = await QuizSession.findOneAndUpdate(
+    { _id: sessionId, profileId, status: 'active' },
+    { $set: { status: 'completed', results, completedAt: new Date() } },
+    { new: true }
+  );
+  if (!completed) {
+    const settled = await QuizSession.findOne({ _id: sessionId, profileId });
+    if (!settled) throw new Error('Session not found');
+    return ensureSessionXp(settled);
+  }
+  await ensureSessionXp(completed);
+  session = completed;
 
   // Count new masteries achieved during this session
   const adaptive = await AdaptiveProfile.findOne({ profileId });
@@ -564,15 +590,27 @@ export async function abandonSession(
   sessionId: string,
   profileId: string
 ): Promise<IQuizSessionDocument> {
-  const session = await QuizSession.findOne({ _id: sessionId, profileId, status: 'active' });
-  if (!session) throw new Error('Active session not found');
+  let session = await QuizSession.findOne({ _id: sessionId, profileId });
+  if (!session) throw new Error('Session not found');
+  if (session.status !== 'active') return ensureSessionXp(session);
 
-  const answerRecords = await AnswerRecord.find({ sessionId, profileId });
+  // The first persisted answer per question wins. Retries cannot inflate marks or XP.
+  const records = await AnswerRecord.find({ sessionId, profileId }).sort({ answeredAt: 1, _id: 1 });
+  const validIds = new Set(session.questionIds.map(String));
+  const seen = new Set<string>();
+  const answerRecords = records.filter((answer) => {
+    const id = answer.questionId.toString();
+    if (!validIds.has(id) || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 
   const answered = answerRecords.filter((a) => !a.wasSkipped && !a.wasTimedOut).length;
   const skipped = answerRecords.filter((a) => a.wasSkipped || a.wasTimedOut).length;
   const correct = answerRecords.filter((a) => a.isCorrect).length;
-  const totalPointsAvailable = answerRecords.reduce((s, a) => s + a.maxPoints, 0);
+  const unanswered = await Question.find({ _id: { $in: session.questionIds.filter((id) => !seen.has(id.toString())) } }).select('maxPoints');
+  const totalPointsAvailable = answerRecords.reduce((s, a) => s + a.maxPoints, 0)
+    + unanswered.reduce((s, q) => s + q.maxPoints, 0);
   const totalPointsAwarded = answerRecords.reduce((s, a) => s + a.pointsAwarded, 0);
   const percentageScore =
     totalPointsAvailable > 0
@@ -580,8 +618,7 @@ export async function abandonSession(
       : 0;
   const timeTakenMs = answerRecords.reduce((s, a) => s + a.timeToAnswerMs, 0);
 
-  session.status = 'abandoned';
-  session.results = {
+  const results: ISessionResults = {
     totalQuestions: session.questionIds.length,
     answered,
     skipped,
@@ -591,10 +628,14 @@ export async function abandonSession(
     percentageScore,
     timeTakenMs,
   };
-  session.completedAt = new Date();
-  await session.save();
-
-  return session;
+  const abandoned = await QuizSession.findOneAndUpdate(
+    { _id: sessionId, profileId, status: 'active' },
+    { $set: { status: 'abandoned', results, completedAt: new Date() } },
+    { new: true }
+  );
+  const settled = abandoned ?? await QuizSession.findOne({ _id: sessionId, profileId });
+  if (!settled) throw new Error('Session not found');
+  return ensureSessionXp(settled);
 }
 
 // Returns a session document. Throws if not found or not owned by this profile.
