@@ -12,7 +12,7 @@
 // Fully self-contained: creates its own terms/definitions and the questions that use them.
 // Idempotent — re-running updates existing records instead of creating duplicates. dnd_single
 // questions are upserted on Question.seedKey rather than {termId, type}, since each vowel now
-// has 12 dnd_single questions (6 variants x 2 occurrences), not one.
+// has 24 dnd_single questions (6 variants x 2 occurrences x 2 prompt styles), not one.
 import { Types } from 'mongoose';
 import Term from '../../../models/apps/language/vocabulary/term.model';
 import Definition from '../../../models/apps/language/vocabulary/definition.model';
@@ -228,7 +228,7 @@ export async function seedEnglishVowelQuestions(nodeId: string, introLessonId: s
     );
   }
 
-  // dnd_single questions — 6 variants x 10 questions (5 vowels cycled twice) each.
+  // Each variant has 10 written prompts paired with 10 listening prompts.
   let totalDndQuestions = 0;
   const quizIds: string[] = [];
 
@@ -298,6 +298,37 @@ export async function seedEnglishVowelQuestions(nodeId: string, introLessonId: s
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
       questionIds.push(dndQuestion._id.toString());
+
+      // Pair every written-letter question with the same answer/options presented by audio.
+      // Stable keys preserve question identity on subsequent seed runs.
+      const listeningSeedKey = `${seedKey}-listen`;
+      const listeningContent: IQuestionContent = {
+        ...dndContent,
+        promptAudioUrl: v.soundPath,
+        avatar: {
+          avatarId: 'miss-tutor',
+          dialogue: 'Select the sound you hear.',
+          dialogueAudioUrl: v.soundPath,
+          emotion: 'smiling',
+        },
+      };
+      const listeningQuestion = await Question.findOneAndUpdate(
+        { seedKey: listeningSeedKey },
+        {
+          seedKey: listeningSeedKey,
+          termId,
+          definitionId,
+          miniAppId: phonicsCourse._id,
+          type: 'dnd_single',
+          maxPoints: 4,
+          pointsCanBePartial: false,
+          source: 'manual',
+          isGeneric: true,
+          content: listeningContent,
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+      questionIds.push(listeningQuestion._id.toString());
     }
 
     const quizTitle = `English Vowels — ${variant.quizTitle}`;
@@ -340,6 +371,6 @@ export async function seedEnglishVowelQuestions(nodeId: string, introLessonId: s
   });
 
   console.log(
-    `  Seeded ${vowelData.length} vowels (mcq_audio) + ${QUIZ_VARIANTS.length} quiz variants x 10 dnd_single = ${totalDndQuestions} questions`
+    `  Seeded ${vowelData.length} vowels (mcq_audio) + ${QUIZ_VARIANTS.length} quiz variants x 20 dnd_single = ${totalDndQuestions} questions`
   );
 }

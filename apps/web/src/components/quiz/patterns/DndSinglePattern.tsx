@@ -296,7 +296,10 @@ export default function DndSinglePattern({
   };
 
   const replayPrompt = () => {
-    if (content.avatar?.dialogue) {
+    if (content.promptAudioUrl) {
+      stopDialogueSpeech();
+      playAudio(content.promptAudioUrl);
+    } else if (content.avatar?.dialogue) {
       stopDialogueSpeech();
       startDialogueSpeech();
     } else if (placedItem) {
